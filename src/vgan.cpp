@@ -43,7 +43,7 @@ int main(int argc, char *argv[]) {
     }
 
 
-    if(string(argv[1]) == "version"){cerr << "vgan version 1.0.0 (Mele)" << endl; return 0;}
+    if(string(argv[1]) == "version"){cerr << "vgan version 1.0.0 (Mela)" << endl; return 0;}
 
     else if(string(argv[1]) == "duprm"){
         Dup_Remover dup_remover;
