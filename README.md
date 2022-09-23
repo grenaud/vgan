@@ -201,7 +201,7 @@ The output file for HaploCart's optional posterior probability estimation is a T
 ### HaploCart Notes
 
 - HaploCart will make a prediction on any sample for which at least one read maps. It is up to the user to apply appropriate filters to HaploCart results.
-If your input data is especially sparse please run with the -p flag and treat the predictions judiciously. 
+If your input data is especially sparse please check the clade-level posterior probabilities and treat the predictions judiciously. 
 
 - Although the HaploCart inference algorithm is deterministic, we rely upon VG Giraffe for mapping and we have noticed a degree of stochasticity in the mapping procedure. 
   Therefore in some edge cases there may be a (very slight) difference in output with different runs on the same sample. Unfortunately Giraffe has no random seed, so we cannot provide one either.
