@@ -93,6 +93,17 @@ This is likely to be a permissions issue. Please run the above command as a root
 If the build has been successful, the executable will be found in the bin folder.
 
 
+### Docker container
+
+First pull the latest image, for example if the latest image is 1.0.0 you would do:
+```
+docker pull gabrielreno/vganv1.0.0:latest
+```
+Then run vgan as such:
+```
+docker run gabrielreno/vganv1.0.0:latest ../bin/vgan
+```
+
 ### Potential Issues
 
 vgan requires VG as a dependency. If there are issues with making vg please see https://github.com/vgteam/vg for further documentation. vg requires several packages to install. 
