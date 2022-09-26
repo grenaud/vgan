@@ -119,6 +119,8 @@ In this case please make vg manually:
 ```
 cd ../dep/vg && ./source_me.sh && make 
 ``` 
+And then try again making vgan.
+
 
 If your system is complaining that it cannot find package XYZ in the pkg-config search path, you 
 need to modify your PKG_CONFIG_PATH environment variable. First find the location of your pkg-config files by running 
