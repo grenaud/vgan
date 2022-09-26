@@ -56,7 +56,7 @@ FLAGS_DYNAMIC = -L../dep/boost_1_61_0 haplocart_functions.o vgan.o update_likeli
 autocomp:
 	source ../tools/autocomp.bash
 
-#.NOTPARALLEL: hcfiles libgab
+.NOTPARALLEL: hcfiles libgab
 
 ${VGDIR}:
 	rm -rf ${VGDIR} && git clone --recursive --depth 10 -j ${NPROCS} https://github.com/vgteam/vg.git ${VGDIR}
