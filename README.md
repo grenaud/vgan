@@ -108,6 +108,18 @@ docker run gabrielreno/vganv1.0.0:latest ../bin/vgan
 
 vgan requires VG as a dependency. If there are issues with making vg please see https://github.com/vgteam/vg for further documentation. vg requires several packages to install. 
 
+If you are on a WSL subsystem you may get the following error message:
+
+```
+make: *** [Makefile:65: vgmade] Error 2
+```
+
+In this case please make vg manually:
+
+```
+cd ../dep/vg && ./source_me.sh && make 
+``` 
+
 If your system is complaining that it cannot find package XYZ in the pkg-config search path, you 
 need to modify your PKG_CONFIG_PATH environment variable. First find the location of your pkg-config files by running 
 
