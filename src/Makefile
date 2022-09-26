@@ -64,7 +64,7 @@ ${VGDIR}:
 ${VGDIR}include/vg/vg.pb.h vgmade: ${VGDIR}
 	(cd ${VGDIR} && git checkout de51eb534394bb93a406baa809ac079ed2223eeb && . ./source_me.sh && ${MAKE} -j ${NPROCS}) && touch vgmade
 
-hcfiles hcfilesmade: vgmade
+hcfiles hcfilesmade: libgabmade vgmade
 	wget -nc -l1 --recursive --no-parent -P ../share/ ftp://ftp.healthtech.dtu.dk:/public/haplocart/hcfiles/ && \
         mv -fv ../share/ftp.healthtech.dtu.dk/public/haplocart/hcfiles/* ../share/hcfiles && rm -rf ../share/ftp.healthtech.dtu.dk && touch hcfilesmade
 
