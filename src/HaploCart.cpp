@@ -30,7 +30,6 @@ const string Haplocart::usage() const{
 		  "\n\nExamples:\n"+
 		  "\n\tvgan Haplocart --hc-files /home/username/share/hcfiles/ -f myfasta.fa\n"+
 		  "\n\tvgan Haplocart --hc-files /home/username/share/hcfiles/ -fq1 seqreads_fwd.fq.gz -fq2 seqreads_rev.fq.gz\n"+
-		  
                   "\n\n"+
                   "Options:\n\n"+
                   "  Algorithm parameters\n"+
@@ -49,7 +48,7 @@ const string Haplocart::usage() const{
                   "  \t"+"-z"+ "\t\t\t\t" + "Temporary directory (default: /tmp/)\n" +
                   "  Non-algorithm parameters\n"+
                   "  \t"+"-j" + "\t\t\t\t"+ "Output JSON file of alignments \n" +
-                  "  \t"+"-np" + "\t\t\t\t"+ "Output JSON file of alignments \n" +
+                  "  \t"+"-np" + "\t\t\t\t"+ "Do not compute clade-level posterior probabilities \n" +
                   "  \t"+"-t" + "\t\t\t\t"+ "Number of threads (-t -1 for all available)\n" +
                   "  \t"+"-q" + "\t\t\t\t"+ "Quiet mode\n"
 		  );
