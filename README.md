@@ -59,7 +59,13 @@ export PATH="$HOME/bin:$PATH"
 or add this line at the bottom of your $HOME/.bashrc to permanently add ```$HOME/bin/```  to your path.
 
 
+### Bioconda
 
+Install conda (https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) and bioconda (https://bioconda.github.io/) and type the following:
+
+```
+ conda  install -c bioconda  vgan
+````
 
 ### Building vgan from source
 
