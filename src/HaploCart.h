@@ -47,7 +47,7 @@ const vector<long double> update(const int i, const map<const string, int> &pang
                            const AlignmentInfo* read_info, vector<long double> log_likelihood_vec, const vector<double> &qscore_vec,
                            const vector<double> &mappabilities, const int nbpaths, const bool quiet, bool use_background_error_prob,
                            double background_error_prob, const vector<double> &incorrect_mapping_vec, int n_reads,
-                           const int minidconst, const bool is_consensus_fasta, const int n_threads, const bdsg::ODGI &graph) noexcept;
+                           const int minid, const bool is_consensus_fasta, const int n_threads, const bdsg::ODGI &graph) noexcept;
 
 // Process mapping
 
