@@ -28,8 +28,8 @@ const string Haplocart::usage() const{
     return string(string("") + "vgan haplocart [options]"+
                   "\n\nHaplocart predicts the mitochondrial haplogroup for reads originating from an uncontaminated modern human sample."+
 		  "\n\nExamples:\n"+
-		  "\n\tvgan Haplocart --hc-files /home/username/share/hcfiles/ -f myfasta.fa\n"+
-		  "\n\tvgan Haplocart --hc-files /home/username/share/hcfiles/ -fq1 seqreads_fwd.fq.gz -fq2 seqreads_rev.fq.gz\n"+
+		  "\n\tvgan haplocart --hc-files /home/username/share/hcfiles/ -f myfasta.fa\n"+
+		  "\n\tvgan haplocart --hc-files /home/username/share/hcfiles/ -fq1 seqreads_fwd.fq.gz -fq2 seqreads_rev.fq.gz\n"+
                   "\n\n"+
                   "Options:\n\n"+
                   "  Algorithm parameters\n"+
