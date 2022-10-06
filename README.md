@@ -24,7 +24,7 @@ Otherwise, just leave the executable where it is or copy it in a bin/ directory 
 
 ```
 mkdir -P $HOME/bin/
-sudo cp vgan $HOME/bin/
+cp vgan $HOME/bin/
 ```
 
 Step 2: Download HaploCart graph files. If you have root access please run
