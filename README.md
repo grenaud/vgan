@@ -1,3 +1,4 @@
+[![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/vgan/README.html)
 # vgan
 
 vgan is a suite of tools for mitochondrial pangenomics. We currently support two subcommands: Haplocart (for modern human mtDNA haplogroup classification)
