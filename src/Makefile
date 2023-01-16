@@ -59,10 +59,11 @@ autocomp:
 .NOTPARALLEL: hcfiles libgab
 
 ${VGDIR}:
-	rm -rf ${VGDIR} && git clone --recursive --depth 10 -j ${NPROCS} https://github.com/vgteam/vg.git ${VGDIR}
+	rm -rf ${VGDIR} && git clone --recurse-submodules -j ${NPROCS} https://github.com/vgteam/vg.git ${VGDIR}
 
 ${VGDIR}include/vg/vg.pb.h vgmade: ${VGDIR}
-	(cd ${VGDIR} && git checkout de51eb534394bb93a406baa809ac079ed2223eeb && . ./source_me.sh && ${MAKE} -j ${NPROCS}) && touch vgmade
+	(touch vgmade && cd ${VGDIR} && git checkout de51eb534394bb93a406baa809ac079ed2223eeb \
+         && git submodule update --init --recursive && . ./source_me.sh && ${MAKE} -j ${NPROCS})
 
 hcfiles hcfilesmade: libgabmade vgmade
 	wget -nc -l1 --recursive --no-parent -P ../share/ ftp://ftp.healthtech.dtu.dk:/public/haplocart/hcfiles/ && \
@@ -74,7 +75,7 @@ hcfiles hcfilesmade: libgabmade vgmade
 libgab libgabmade: vgmade
 	rm -rf ../lib/libgab/
 	git clone --recursive https://github.com/grenaud/libgab.git ../lib/libgab/
-	(cd ../lib/libgab/ && ${MAKE} -j ${NPROCS} && ${MAKE} -j ${NPROCS} -C gzstream/) && touch libgabmade
+	(touch libgabmade && cd ../lib/libgab/ && ${MAKE} -j ${NPROCS} && ${MAKE} -j ${NPROCS} -C gzstream/)
 
 static:	libgabmade ${VGAN_PREREQS}
 	${CXX} -o ${BIN_DIR}vgan $(FLAGS_STATIC)
