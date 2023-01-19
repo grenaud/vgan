@@ -54,16 +54,16 @@ RUN apt-get -qq install -y \
 #RUN dpkg -i /tmp/bwa.deb
 
 
-RUN wget -O vgan-main.zip https://github.com/grenaud/vgan/archive/refs/tags/v1.0.0.zip
+RUN wget -O vgan-main.zip https://github.com/grenaud/vgan/archive/refs/tags/v1.0.2.zip
 
 RUN unzip vgan-main.zip -d /vgan
 WORKDIR /vgan/
 RUN pwd
 RUN ls
-WORKDIR /vgan/vgan-1.0.0/
+WORKDIR /vgan/vgan-1.0.2/
 RUN pwd
 RUN ls
-WORKDIR /vgan/vgan-1.0.0/src/
+WORKDIR /vgan/vgan-1.0.2/src/
 RUN pwd
 RUN ls
 RUN make
