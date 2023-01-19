@@ -98,13 +98,13 @@ If the build has been successful, the executable will be found in the bin folder
 
 ### Docker container
 
-First pull the latest image, for example if the latest image is 1.0.0 you would do:
+First pull the latest image, for example if the latest image is 1.0.2 you would do:
 ```
-docker pull gabrielreno/vganv1.0.0:latest
+docker pull gabrielreno/vganv1.0.2:latest
 ```
 Then run vgan as such:
 ```
-docker run gabrielreno/vganv1.0.0:latest ../bin/vgan
+docker run gabrielreno/vganv1.0.2:latest ../bin/vgan
 ```
 
 ### Potential Issues
