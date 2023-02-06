@@ -80,7 +80,10 @@ libgab libgabmade: vgmade
 static:	libgabmade ${VGAN_PREREQS}
 	${CXX} -o ${BIN_DIR}vgan $(FLAGS_STATIC)
 
-vgan: libgabmade hcfilesmade ${VGAN_PREREQS}
+version.h:
+	./get_version.sh
+
+vgan: version.h libgabmade hcfilesmade ${VGAN_PREREQS}
 	${MAKE} autocomp && ${CXX} -o ${BIN_DIR}vgan $(FLAGS_DYNAMIC)
 
 clean:
