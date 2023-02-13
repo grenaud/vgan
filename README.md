@@ -11,7 +11,7 @@ vgan is supported for use on Linux systems.
 
 ### Release build
 
-The easiest way to run vgan is to download the static binary. 
+The easiest way to run vgan is to download the static binary from the latest release (https://github.com/grenaud/vgan/tags) 
 
 Step 1: Download the static binary
 
