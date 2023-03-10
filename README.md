@@ -96,6 +96,23 @@ This is likely to be a permissions issue. Please run the above command as a root
 If the build has been successful, the executable will be found in the bin folder.
 
 
+### Unit tests
+To build our unit tests please clone our repository and run
+
+```
+make test
+```
+
+In the src directory. This will generate an executable called 'test' in the bin directory.
+
+To run HaploCart tests please run
+
+```
+./../bin/test --run_test=haplocart
+```
+
+If all tests pass, HaploCart is working. If not please send us an email or post an issue on Github.
+
 ### Docker container
 
 First pull the latest image, for example if the latest image is 1.0.2 you would do:
@@ -107,47 +124,6 @@ Then run vgan as such:
 docker run gabrielreno/vganv1.0.2:latest ../bin/vgan
 ```
 
-### Potential Issues
-
-vgan requires VG as a dependency. If there are issues with making vg please see https://github.com/vgteam/vg for further documentation. vg requires several packages to install. 
-
-If you are on a WSL subsystem you may get the following error message:
-
-```
-make: *** [Makefile:65: vgmade] Error 2
-```
-
-In this case please make vg manually:
-
-```
-cd ../dep/vg && ./source_me.sh && make 
-``` 
-And then try again making vgan.
-
-
-If your system is complaining that it cannot find package XYZ in the pkg-config search path, you 
-need to modify your PKG_CONFIG_PATH environment variable. First find the location of your pkg-config files by running 
-
-```
-find / -iname 'XYZ.pc' 2>/dev/null
-```
-
-Then, set 
-
-```
-export PKG_CONFIG_PATH=[PATH TO PKG-CONFIG FILES]
-```
-
-Also, you may see the error "cc1plus: error: bad value (‘tigerlake’) for ‘-march=’ switch"
-
-If this happens please run:
-
-```
-sudo apt install gcc-10 g++-10
-sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100 --slave /usr/bin/g++ g++ /usr/bin/g++-10 --slave /usr/bin/gcov gcov /usr/bin/gcov-10
-sudo update-alternatives --config gcc
-make clean && make
-```
 ## HaploCart
 
 HaploCart performs maximum likelihood estimation to predict the mitochondrial haplogroup for reads 
