@@ -230,7 +230,7 @@ const int Haplocart::run(int argc, char *argv[], const string &cwdProg){
     if (fastq1filename == "" && fastq2filename != "") {throw std::runtime_error("[HaploCart] Error, cannot invoke -fq2 without -fq1");}
     if (dump_json && jsonfilename == "") {throw(std::runtime_error("[HaploCart] Error, cannot invoke -j without -jf"));}
     if (!compute_posteriors && posteriorfilename != "/dev/stdout"){throw std::runtime_error("[HaploCart] Error, cannot invoke -pf without -p");}
-    if (fastafilename.ends_with(".fq") && (!quiet)){cerr << "[HaploCart] Warning, input file is named like a FASTQ but the FASTA flag (-f) was invoked" << endl;}
+    if (fastafilename.ends_with(".fq")){throw runtime_error("[HaploCart] Warning, input file is named like a FASTQ but the FASTA flag (-f) was invoked");}
 
     if(!hcfiledirspecified){
 	hcfiledir  =  cwdProg +  hcfiledir;

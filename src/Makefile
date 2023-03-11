@@ -9,6 +9,8 @@ VGAN_PREREQS = haplocart_functions.o vgan.o update_likelihood.o ../lib/libgab/li
         ${VGDIR}obj/subcommand/gamsort_main.o ${VGDIR}obj/subcommand/gbwt_main.o ${VGDIR}obj/subcommand/subcommand.o \
         ${VGDIR}obj/config/allocator_config_jemalloc.o ${VGDIR}obj/subcommand/filter_main.o ${VGDIR}obj/subcommand/view_main.o
 
+TEST_PREREQS =  test.o #${VGAN_PREREQS}
+
 # https://stackoverflow.com/questions/2527496/how-can-i-write-a-makefile-to-auto-detect-and-parallelize-the-build-with-gnu-mak
 NPROCS:=$(shell grep -c ^processor /proc/cpuinfo)
 
@@ -49,6 +51,8 @@ FLAGS_DYNAMIC = -L../dep/boost_1_61_0 haplocart_functions.o vgan.o update_likeli
                 -lfreetype -lpng16 -lxcb-shm -lxcb-render -lXext -lX11 -lxcb -lXau -lXdmcp -ljansson -latomic -lsublinearLS "-Wl,-rpath,"../dep/vg/"lib" -rdynamic \
                 -ldwfl -ldwelf -lelf -lebl "-lboost_program_options""" -lzstd -lbz2 -llzma -lprotobuf -pthread -lz -Wl,-Bdynamic -lpthread -lm
 
+FLAGS_TEST =    test.o $(filter-out vgan.o, ${FLAGS_DYNAMIC}) -lboost_unit_test_framework
+
  all:	vgan hcfiles
 
 .PHONY:	all clean autocomp libgab static hcfiles
@@ -62,7 +66,8 @@ ${VGDIR}:
 	rm -rf ${VGDIR} && git clone --recurse-submodules -j ${NPROCS} https://github.com/vgteam/vg.git ${VGDIR}
 
 ${VGDIR}include/vg/vg.pb.h vgmade: ${VGDIR}
-	(touch vgmade && cd ${VGDIR} && git checkout de51eb534394bb93a406baa809ac079ed2223eeb \
+	touch vgmade
+	(cd ${VGDIR} && git checkout de51eb534394bb93a406baa809ac079ed2223eeb \
          && git submodule update --init --recursive && . ./source_me.sh && ${MAKE} -j ${NPROCS})
 
 hcfiles hcfilesmade: libgabmade vgmade
@@ -80,12 +85,15 @@ libgab libgabmade: vgmade
 static:	libgabmade ${VGAN_PREREQS}
 	${CXX} -o ${BIN_DIR}vgan $(FLAGS_STATIC)
 
-version.h:
-	./get_version.sh
+#version.h:
+#	./get_version.sh
 
-vgan: version.h libgabmade hcfilesmade ${VGAN_PREREQS}
+vgan: libgabmade hcfilesmade ${VGAN_PREREQS}
 	${MAKE} autocomp && ${CXX} -o ${BIN_DIR}vgan $(FLAGS_DYNAMIC)
 
+test: ${TEST_PREREQS}
+	${MAKE} autocomp && ${CXX} -o ${BIN_DIR}test $(FLAGS_TEST)
+
 clean:
-	rm -f *.o && rm -f ../bin/*
+	rm -f *.o && rm -f ../bin/* && rm -f ../test/output_files/*
 

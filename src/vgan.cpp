@@ -12,7 +12,7 @@
 #include "preflight.hpp"
 #include "config/allocator_config.hpp"
 #include "io/register_libvg_io.hpp"
-#include "version.h"
+//#include "version.h"
 
 #define VERBOSE
 #define ADDDATA
@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
     }
 
 
-    if(string(argv[1]) == "version"){    cout<<"vgan version: "<<VERSION<<endl; return 0; }
+    //if(string(argv[1]) == "version"){    cout<<"vgan version: "<<VERSION<<endl; return 0; }
 
     else if(string(argv[1]) == "duprm"){
         Dup_Remover dup_remover;
