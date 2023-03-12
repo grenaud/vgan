@@ -1,0 +1,22 @@
+#target_graph.fa is a random set of sequences
+vg construct  -M target_graph.fa > target_graph.vg
+
+#snarls
+vg snarls target_graph.vg  > target_graph.snarls
+
+#creating gfa 
+vg view target_graph.vg > target_graph.gfa 
+
+#creating gbwt and gg
+vg gbwt  -o target_graph.gbwt -g target_graph.gg -G target_graph.gfa 
+
+#distance file
+vg index  -s target_graph.snarls -j target_graph.dist target_graph.vg  
+
+#minimizer
+vg minimizer -g target_graph.gbwt -i target_graph.min -k 20  -w 10 target_graph.vg  
+
+
+#giraffe
+vg giraffe  -f test_reads.fq.gz -H target_graph.gbwt  -x target_graph.vg  -d target_graph.dist -m target_graph.min -g target_graph.gg > test_reads.gam 
+

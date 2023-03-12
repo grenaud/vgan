@@ -1,0 +1,70 @@
+H	VN:Z:1.0
+S	5	AATAATTAG
+S	16	T
+S	20	CGTCGGTGTACAAATAATTGTCAACAGACCGT
+S	12	A
+S	24	TT
+S	28	GC
+S	8	CC
+S	17	C
+S	23	AA
+S	19	N
+S	22	TG
+S	6	G
+S	11	GGG
+S	9	GCTACGATGGATGAGTCT
+S	14	TCGACCAAGAACCGCAAGA
+S	3	GCCA
+S	29	TG
+S	7	GA
+S	25	TTGAAAATGGTACCA
+S	4	GGTTGAATCCGCATTT
+S	15	T
+S	21	CG
+S	2	CGGATATAAAC
+S	10	A
+S	18	G
+S	13	TGGAGCGCGCCCCATTTATACCGTGAGTAGGG
+S	26	GCATCTTCGGGCGGTCTCAATCAAGCATGG
+S	27	ATTACGG
+P	seq_1	2+,4+,6+,7+,9+,11+,13+,14+,16+,18+,20+,21+,22+,23+,25+,26+,27+,28+	*
+P	seq_2	2+,3+,4+,6+,7+,9+,10+,12+,13+,14+,16+,18+,20+,21+,22+,24+,25+,26+,27+,29+	*
+P	seq_3	2+,3+,4+,6+,7+,9+,11+,13+,14+,15+,16+,19+,20+,21+,26+,27+,29+	*
+P	seq_4	2+,3+,4+,5+,6+,8+,9+,11+,13+,14+,16+,18+,20+,21+,22+,24+,25+,26+,27+,29+	*
+P	seq_5	2+,3+,4+,6+,7+,9+,11+,13+,14+,16+,17+,20+,21+,22+,24+,25+,26+	*
+L	5	+	6	+	*
+L	16	+	17	+	*
+L	16	+	18	+	*
+L	16	+	19	+	*
+L	20	+	21	+	*
+L	12	+	13	+	*
+L	24	+	25	+	*
+L	8	+	9	+	*
+L	17	+	20	+	*
+L	23	+	25	+	*
+L	19	+	20	+	*
+L	22	+	23	+	*
+L	22	+	24	+	*
+L	6	+	7	+	*
+L	6	+	8	+	*
+L	11	+	13	+	*
+L	9	+	10	+	*
+L	9	+	11	+	*
+L	14	+	15	+	*
+L	14	+	16	+	*
+L	3	+	4	+	*
+L	7	+	9	+	*
+L	25	+	26	+	*
+L	4	+	5	+	*
+L	4	+	6	+	*
+L	15	+	16	+	*
+L	21	+	22	+	*
+L	21	+	26	+	*
+L	2	+	3	+	*
+L	2	+	4	+	*
+L	10	+	12	+	*
+L	18	+	20	+	*
+L	13	+	14	+	*
+L	26	+	27	+	*
+L	27	+	28	+	*
+L	27	+	29	+	*
