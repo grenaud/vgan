@@ -3,6 +3,7 @@
 #include "Dup_Remover.h"
 #include "HaploCart.h"
 #include "readGAM.h"
+#include "Euka.h"
 #include <boost/test/unit_test.hpp>
 #include <boost/test/tools/output_test_stream.hpp>
 #include "crash.hpp"
@@ -13,13 +14,6 @@
 #include "bdsg/odgi.hpp"
 #define PRINTVEC(v) for (int i=0; i<20; ++i){cerr << v[i] << '\t';}cerr << endl << endl;
 using namespace vg;
-
-struct Fixture {
-  Fixture() {
-    boost::unit_test::unit_test_log.set_threshold_level(boost::unit_test::log_messages);
-  }
-};
-
 
 bool is_convertible_to_double(const std::string& str) {
     try {
@@ -34,6 +28,69 @@ bool is_convertible_to_double(const std::string& str) {
     }
 }
 
+// Gam2Prof
+std::pair<double, double> load_gam2prof(const std::string& filename)
+{
+    std::ifstream file(filename);
+    std::string line;
+    std::vector<std::vector<double>> data;
+
+    while (std::getline(file, line)) {
+        std::istringstream iss(line);
+        std::string field;
+        std::vector<double> row;
+
+        while (std::getline(iss, field, '\t')) {
+            if (!is_convertible_to_double(field)){continue;}
+            row.push_back(std::stod(field));
+        }
+
+        data.push_back(row);
+    }
+
+    double gam2prof_2nd_row_6th_col = data[1][5];
+    double gam2prof_22nd_row_7th_col = data[21][6];
+
+    //std::cerr << "gam2prof_2nd_row_6th_col: " << gam2prof_2nd_row_6th_col << std::endl;
+    //std::cerr << "gam2prof_22nd_row_7th_col: " << gam2prof_22nd_row_7th_col << std::endl;
+
+    return std::make_pair(gam2prof_2nd_row_6th_col, gam2prof_22nd_row_7th_col);
+}
+
+struct Fixture {
+  Fixture() {
+    boost::unit_test::unit_test_log.set_threshold_level(boost::unit_test::log_messages);
+  }
+};
+
+
+// Euka
+pair<vector<string>, vector<vector<double>>> load_detected_taxa_file(const string &detected_file_path){
+    vector<string> taxa_names;
+    vector<vector<double>> abundance_estimates;
+    ifstream tsv_file(detected_file_path);
+    string line;
+    getline(tsv_file, line); // skip header line
+
+    while (getline(tsv_file, line)) {
+        stringstream ss(line);
+        string taxa_name;
+        string detected;
+        int number_of_reads;
+        double proportion_estimate;
+        double ci85_lower;
+        double ci85_upper;
+        double ci95_lower;
+        double ci95_upper;
+
+        ss >> taxa_name >> detected >> number_of_reads >> proportion_estimate >> ci85_lower >> ci85_upper >> ci95_lower >> ci95_upper;
+        if (taxa_name == ""){continue;}
+        taxa_names.push_back(taxa_name);
+        abundance_estimates.push_back(vector<double>{proportion_estimate, ci85_lower, ci85_upper, ci95_lower, ci95_upper});
+    }
+ return make_pair(taxa_names, abundance_estimates);
+
+                                                         }
 
 // HaploCart
 const string get_haplocart_pred(const string &output_path) {
@@ -247,6 +304,18 @@ hc->run(arguments.size(), argvtopass, getCWD(".")+"bin/");
 
 BOOST_AUTO_TEST_SUITE(haplocart)
 
+BOOST_AUTO_TEST_CASE(fq_single_zipped)
+{
+  Haplocart hc;
+  const string cwdProg = getFullPath(getCWD("."));
+  const string input_path = cwdProg + "test/input_files/Q1_1.fq.gz";
+  const string output_path = cwdProg + "test/output_files/Q1.txt";
+  hc_run_fq_single(input_path, output_path, & hc, false);
+  BOOST_ASSERT(get_haplocart_pred(output_path) == "Q1");
+  BOOST_CHECK_EQUAL(get_sample_name(output_path), "Q1_1.fq.gz");
+}
+
+
 BOOST_AUTO_TEST_CASE(multifasta)
 {
   Haplocart hc;
@@ -345,18 +414,6 @@ BOOST_AUTO_TEST_CASE(fq_single_rcrs)
   hc_run_fq_single(input_path, output_path, & hc, false);
   BOOST_CHECK_EQUAL(get_haplocart_pred(output_path), "H2a2a1");
   BOOST_CHECK_EQUAL(get_sample_name(output_path), "rCRS.fq");
-}
-
-
-BOOST_AUTO_TEST_CASE(fq_single_zipped)
-{
-  Haplocart hc;
-  const string cwdProg = getFullPath(getCWD("."));
-  const string input_path = cwdProg + "test/input_files/Q1_1.fq.gz";
-  const string output_path = cwdProg + "test/output_files/Q1.txt";
-  hc_run_fq_single(input_path, output_path, & hc, false);
-  BOOST_ASSERT(get_haplocart_pred(output_path) == "Q1");
-  BOOST_CHECK_EQUAL(get_sample_name(output_path), "Q1_1.fq.gz");
 }
 
 BOOST_AUTO_TEST_CASE(fq_single_rsrs)
@@ -666,4 +723,178 @@ BOOST_AUTO_TEST_CASE(minus_strand_softclip)
 /// END TESTING GRAPH RECONSTRUCTION ///
 BOOST_AUTO_TEST_SUITE_END()
 
+///////////////////////////////////////////// TEST EUKA //////////////////////////////////////////////////////////
+
+BOOST_AUTO_TEST_SUITE(euka)
+
+
+                 ////////////// Output sanity checks //////////////////////
+
+void run_detect_correct_taxa_no_damage(Euka* ek){
+vector<string> euka_argvec;
+euka_argvec.emplace_back("vgan");
+euka_argvec.emplace_back("euka");
+euka_argvec.emplace_back("-fq1");
+euka_argvec.emplace_back(getCWD(".")+"bin/" + "../test/input_files/euka/three_none_100.fq.gz");
+euka_argvec.emplace_back("-t");
+euka_argvec.emplace_back("-1");
+euka_argvec.emplace_back("-o");
+euka_argvec.emplace_back(getCWD(".")+"bin/" + "../test/output_files/euka/three_none_100");
+
+char** argvtopass = new char*[euka_argvec.size()];
+for (int i=0;i<euka_argvec.size();i++) {
+                   argvtopass[i] = const_cast<char*>(euka_argvec[i].c_str());
+                                       }
+
+ek->run(euka_argvec.size(), argvtopass, getCWD(".")+"bin/");
+                                                  }
+
+BOOST_AUTO_TEST_CASE(detect_correct_taxa_no_damage){
+
+Euka ek;
+run_detect_correct_taxa_no_damage(&ek);
+
+auto [taxa_names, abundance_estimates] = load_detected_taxa_file(getCWD(".")+"bin/" + "../test/output_files/euka/three_none_100_detected.tsv");
+
+assert(taxa_names[0] == "Bovidae");
+assert(taxa_names[1] == "Myotis");
+assert(taxa_names[2] == "Ursidae");
+assert(abundance_estimates[0][0] >= 0.01 && abundance_estimates[0][0] <= 0.05);
+assert(abundance_estimates[1][0] >= 0.2 && abundance_estimates[1][0] <= 0.3);
+assert(abundance_estimates[2][0] >= 0.68 && abundance_estimates[2][0] <= 0.78);
+                                                   }
+
+
+BOOST_AUTO_TEST_CASE(detect_correct_taxa_mid_damage){
+Euka ek;
+vector<string> euka_argvec;
+euka_argvec.emplace_back("vgan");
+euka_argvec.emplace_back("euka");
+euka_argvec.emplace_back("-fq1");
+euka_argvec.emplace_back(getCWD(".") +"bin/" + "../test/input_files/euka/three_dmid_100.fq.gz");
+euka_argvec.emplace_back("-t");
+euka_argvec.emplace_back("-1");
+euka_argvec.emplace_back("-o");
+euka_argvec.emplace_back(getCWD(".") +"bin/" + "../test/output_files/euka/three_dmid_100");
+
+char** argvtopass = new char*[euka_argvec.size()];
+for (int i=0;i<euka_argvec.size();i++) {
+                   argvtopass[i] = const_cast<char*>(euka_argvec[i].c_str());
+                                       }
+ek.run(euka_argvec.size(), argvtopass, getCWD(".")+"bin/");
+
+auto [taxa_names, abundance_estimates] = load_detected_taxa_file(getCWD(".")+"bin/" + "../test/output_files/euka/three_dmid_100_detected.tsv");
+
+BOOST_ASSERT(taxa_names[0] == "Bovidae");
+BOOST_ASSERT(taxa_names[1] == "Myotis");
+BOOST_ASSERT(taxa_names[2] == "Ursidae");
+
+BOOST_ASSERT(abundance_estimates[0][0] >= 0.01 && abundance_estimates[0][0] <= 0.05);
+BOOST_ASSERT(abundance_estimates[1][0] >= 0.2 && abundance_estimates[1][0] <= 0.3);
+BOOST_ASSERT(abundance_estimates[2][0] >= 0.68 && abundance_estimates[2][0] <= 0.78);
+
+                                                   }
+
+BOOST_AUTO_TEST_CASE(detect_correct_taxa_high_damage){
+Euka ek;
+vector<string> euka_argvec;
+euka_argvec.emplace_back("vgan");
+euka_argvec.emplace_back("euka");
+euka_argvec.emplace_back("-fq1");
+euka_argvec.emplace_back(getCWD(".") + "bin/" +"../test/input_files/euka/three_dhigh_100.fq.gz");
+euka_argvec.emplace_back("-t");
+euka_argvec.emplace_back("-1");
+euka_argvec.emplace_back("-o");
+euka_argvec.emplace_back(getCWD(".")+"bin/" + "../test/output_files/euka/three_dhigh_100");
+
+char** argvtopass = new char*[euka_argvec.size()];
+for (int i=0;i<euka_argvec.size();i++) {
+                   argvtopass[i] = const_cast<char*>(euka_argvec[i].c_str());
+                                       }
+ek.run(euka_argvec.size(), argvtopass, getCWD(".")+"bin/");
+
+auto [taxa_names, abundance_estimates] = load_detected_taxa_file(getCWD(".") +"bin/" + "../test/output_files/euka/three_dhigh_100_detected.tsv");
+
+BOOST_ASSERT(taxa_names[0] == "Bovidae");
+BOOST_ASSERT(taxa_names[1] == "Myotis");
+BOOST_ASSERT(taxa_names[2] == "Ursidae");
+
+BOOST_ASSERT(abundance_estimates[0][0] >= 0.01 && abundance_estimates[0][0] <= 0.05);
+BOOST_ASSERT(abundance_estimates[1][0] >= 0.2 && abundance_estimates[1][0] <= 0.3);
+BOOST_ASSERT(abundance_estimates[2][0] >= 0.68 && abundance_estimates[2][0] <= 0.78);
+                                                   }
+
+BOOST_AUTO_TEST_CASE(detect_formicidae){
+Euka ek;
+vector<string> euka_argvec;
+euka_argvec.emplace_back("vgan");
+euka_argvec.emplace_back("euka");
+euka_argvec.emplace_back("-fq1");
+euka_argvec.emplace_back(getCWD(".") + "test/input_files/euka/formicidae.fq.gz");
+euka_argvec.emplace_back("-t");
+euka_argvec.emplace_back("-1");
+euka_argvec.emplace_back("-o");
+euka_argvec.emplace_back(getCWD(".") + "test/output_files/euka/formicidae");
+euka_argvec.emplace_back("--minBins");
+euka_argvec.emplace_back("2");
+
+char** argvtopass = new char*[euka_argvec.size()];
+for (int i=0;i<euka_argvec.size();i++) {
+                   argvtopass[i] = const_cast<char*>(euka_argvec[i].c_str());
+                                       }
+ek.run(euka_argvec.size(), argvtopass, getCWD(".")+"bin/");
+
+auto [taxa_names, abundance_estimates] = load_detected_taxa_file(getCWD(".") + "bin/" +"../test/output_files/euka/formicidae_detected.tsv");
+cerr << abundance_estimates[0][0] << " " << taxa_names[0] << endl;
+BOOST_ASSERT(abundance_estimates[0][0] == 1);
+BOOST_ASSERT(taxa_names[0] == "Formicidae");
+
+                                    }
+
+BOOST_AUTO_TEST_CASE(detect_formicidae2){
+Euka ek;
+vector<string> euka_argvec;
+euka_argvec.emplace_back("vgan");
+euka_argvec.emplace_back("euka");
+euka_argvec.emplace_back("-fq1");
+euka_argvec.emplace_back(getCWD(".") + "test/input_files/euka/formicidae.fq.gz");
+euka_argvec.emplace_back("-t");
+euka_argvec.emplace_back("-1");
+euka_argvec.emplace_back("-o");
+euka_argvec.emplace_back(getCWD(".") + "test/output_files/euka/formicidae2");
+euka_argvec.emplace_back("--entropy");
+euka_argvec.emplace_back("0.9");
+
+char** argvtopass = new char*[euka_argvec.size()];
+for (int i=0;i<euka_argvec.size();i++) {
+                   argvtopass[i] = const_cast<char*>(euka_argvec[i].c_str());
+                                       }
+ek.run(euka_argvec.size(), argvtopass, getCWD(".")+"bin/");
+
+auto [taxa_names, abundance_estimates] = load_detected_taxa_file(getCWD(".")+"bin/" + "../test/output_files/euka/formicidae2_detected.tsv");
+
+BOOST_ASSERT(abundance_estimates[0][0] == 1);
+BOOST_ASSERT(taxa_names[0] == "Formicidae");
+
+                                    }
+
+               ////////////// End output sanity checks //////////////////////
+
+
+BOOST_AUTO_TEST_CASE(load) {
+    const string path_support_path = "../share/euka_dir/euka_db_graph_path_supports";
+    const string clade_info_path = "../share/euka_dir/euka_db.clade";
+    const string clade_chunk_path = "../share/euka_dir/euka_db.bins";
+
+    Euka ek;
+    auto clade_info = ek.load_clade_info(clade_info_path, 5);
+    auto path_supports = ek.load_path_supports_Euka(path_support_path);
+    auto bins = ek.load_clade_chunks(clade_chunk_path);
+    BOOST_ASSERT(clade_info->size() > 0);
+    BOOST_ASSERT(path_supports.size() > 0);
+    BOOST_ASSERT(bins.size() > 0);
+                           }
+
+BOOST_AUTO_TEST_SUITE_END()
+//////////////////////////////////////////// END TEST EUKA ///////////////////////////////////////////////////////
 

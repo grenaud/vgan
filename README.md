@@ -1,8 +1,7 @@
 [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/vgan/README.html)
 # vgan
 
-vgan is a suite of tools for mitochondrial pangenomics. We currently support two subcommands: Haplocart (for modern human mtDNA haplogroup classification)
-and duprm (for PCR duplicate removal from GAM files). The underlying data structure is the VG graph (see https://github.com/vgteam/vg).
+vgan is a suite of tools for pangenomics. We currently support two main subcommands: Haplocart (for modern human mtDNA haplogroup classification) and euka (for bilaterian abundance estimation of sedimentary aDNA). The underlying data structure is the VG graph (see https://github.com/vgteam/vg).
 
 ## Installation:
 
@@ -11,7 +10,7 @@ vgan is supported for use on Linux systems.
 
 ### Release build
 
-The easiest way to run vgan is to download the static binary from the latest release (https://github.com/grenaud/vgan/tags) 
+The easiest way to run vgan is to download the static binary. 
 
 Step 1: Download the static binary
 
@@ -28,24 +27,50 @@ mkdir -P $HOME/bin/
 cp vgan $HOME/bin/
 ```
 
-Step 2: Download HaploCart graph files. If you have root access please run
+Step 2: Mark the binary executable:
 
+```
+chmod +x vgan
+```
+
+Step 3: Download the required graph files. If you have root access please run
+
+For HaploCart:
 ```
 sudo mkdir -p /usr/bin/share/hcfiles/
 sudo wget -nc -l1 --recursive --no-parent -P /usr/bin/share/ ftp://ftp.healthtech.dtu.dk:/public/haplocart/hcfiles/
 ```
 
+For euka:
+```
+sudo mkdir -p /usr/bin/share/euka_files/
+sudo wget -nc -l1 --recursive --no-parent -P /usr/bin/share/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/
+```
+
 If you do not have root access, you can download them in the directory of your choice but for ease, you can download them to a share directory in your home folder:
 
+For HaploCart:
 ```
 mkdir -P $HOME/share/
 mkdir -P $HOME/share/hcfiles/
 wget -nc -l1 --recursive --no-directories --no-parent -P $HOME/share/hcfiles/ ftp://ftp.healthtech.dtu.dk:/public/haplocart/hcfiles/
 ```
+For euka:
+```
+mkdir -P $HOME/share/
+mkdir -P $HOME/share/euka_files/
+wget -nc -l1 --recursive --no-directories --no-parent -P $HOME/share/euka_files/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/
+```
 
-Alternatively, you can install the HaploCart graph files elsewhere and specify them using:
+Alternatively, you can install the graph files elsewhere and specify them using:
+
+For HaploCart:
 ```
 vgan haplocart --hc-files 
+```
+For euka:
+```
+vgan euka --euka_dir
 ```
 
 After this please add the ```$HOME/bin/``` directory to your path.  
@@ -58,10 +83,10 @@ or add this line at the bottom of your $HOME/.bashrc to permanently add ```$HOME
 
 ### Bioconda
 
-Install conda (https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) and bioconda (https://bioconda.github.io/) and type the following:
+Install Conda (https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) and Bioconda (https://bioconda.github.io/) and type the following:
 
 ```
- conda  install -c bioconda  vgan
+ conda  install -c bioconda vgan
 ````
 
 ### Building vgan from source
@@ -84,7 +109,7 @@ sudo apt-get  install wget
 vgan requires vg https://github.com/vgteam/vg. vg requires several packages to be installed, please refer to the README in vg. 
 
 ```
-git clone --depth 1 https://github.com/grenaud/vgan.git
+git clone https://github.com/grenaud/vgan.git
 cd vgan/src && make
 ```
 
@@ -95,23 +120,19 @@ This is likely to be a permissions issue. Please run the above command as a root
 
 If the build has been successful, the executable will be found in the bin folder.
 
-
-### Unit tests
-To build our unit tests please clone our repository and run
+If you build from source, you can download the requisite files for HaploCart with 
 
 ```
-make test
+make hcfilesmade
 ```
 
-In the src directory. This will generate an executable called 'test' in the bin directory.
-
-To run HaploCart tests please run
+and for euka:
 
 ```
-./../bin/test --run_test=haplocart
+make eukafilesmade
 ```
 
-If all tests pass, HaploCart is working. If not please send us an email or post an issue on Github.
+from the src directory
 
 ### Docker container
 
@@ -123,6 +144,10 @@ Then run vgan as such:
 ```
 docker run gabrielreno/vganv1.0.2:latest ../bin/vgan
 ```
+
+### Potential Issues
+
+vgan requires VG as a dependency. If there are issues with making vg please see https://github.com/vgteam/vg for further documentation. vg requires several packages to install. 
 
 ## HaploCart
 
@@ -219,14 +244,142 @@ vgan duprm removes PCR duplicate reads from a (SORTED!) GAM file. Usage is simpl
 vgan duprm [sorted_in.gam] > [out.gam]
 ```
 
+## euka 
+
+euka is a tool to characterize ancient environmental DNA samples for arthropodic and tetrapodic mitochondrial DNA. The foundation of this tool is a curated database of complete mitochondrial genomes sorted into taxonomic groups and built into a variation graph reference structure. euka takes FASTQ input files and maps the file against our reference graph structure.  We use an ancient-aware maximum-likelihood framework to analyse our mapping results on a per fragment basis. Additionally, we filter on mapping quality and coverage evenness across the pangenome graph of a taxa. 
+
+### Usage
+
+For merged or single-end FASTQ (gzipped okay):
+```
+./vgan euka -fq1 [FASTQ file]
+```
+Please note that if you would like to input multiple FASTQ file, we encourage the use of file descriptors:
+```
+./vgan euka -fq1 <(zcat [FASTQ file1] [FASTQ file2] [FASTQ file3] ...)
+```
+For paired-end FASTQ (gzipped okay):
+```
+./vgan euka -fq1 [FASTQ file] -fq2 [FASTQ file]
+```
+
+For incorporation of ancient damage profiles during the maximum likelihood estimation: 
+```
+./vgan euka -fq1 [FASTQ file] --deam5p [5end.prof] --deam3p [3end.prof]
+```
+
+For user specific MCMC runs:
+```
+./vgan euka -fq1 [FASTQ file] -iter [INT] -burnin [INT]
+```
+
+For additional output options:
+```
+./vgan euka -fq1 [FASTQ file] --outFrag --outGroup [Taxa name]
+```
+Please note that the Taxa name provided to the ```--outGroup``` argument must be a taxon defined in euka's database. 
+
+### euka filter options:
+euka has four filter options to modify the stringency of taxa detection. We always recommend to have a first look at your samples with the default parameters. These parameters have been thoroughly tested to provide confident abundance estimations. However, to detect more divergent taxa (for example Formicidae), it may be necessary to adjust the filter parameters. Furthermore, we want to highlight that the reference genomes for many arthropodic species have low-complexity reference genomes and are more prone to spurious alignments. Even with our standard parameter filters, we can see more false-positive detections for these taxa, and results should always be evaluated carefully. Our ~/vgan/share/euka_dir/euka_db.bins file lists every taxa in our database with their respective bins (for our coverage estimation). The file shows the Node ID range for each bin and the calculated entropy score for this bin.   
+
+Example for incorporation of lower-entropy regions in the mitogenome: 
+```
+./vgan euka -fq1 [FASTQ file] --entropy 1.13 --minBins 3 
+```
+
+Example for more conservative parameter settings: 
+```
+./vgan euka -fq1 [FASTQ file] --minMQ 40 --minFrag 20
+```
+
+
+### euka Options: 
+A list of all of eukas options:
+
+<pre>
+  Input options:
+                --euka_dir [STR]        euka database location (default: current working directory)
+                --dbprefix [STR]        database prefix name (defualt: euka_db)
+                -fq1 [STR]              Input FASTQ file (for merged and single-end reads)
+                -fq2 [STR]              Second input FASTQ file (for paired-end reads)
+                -i                      Paired-end reads are interleaved (default: false)
+                -o [STR]                Output file prefix (default: euka_output)
+                -t                      Number of threads (-1 for all available)
+                -Z                      Temporary directory (default: /tmp)
+
+Filter options:
+                --minMQ [INT]           Set the mapping quality minimum for a fragment (default: 29)
+                --minFrag [INT]         Minimum amount of fragments that need to map to a group (default: 10)
+                --entropy [double]      Minimum entropy score for a bin to be considered (default: 1.17)
+                --minBins [INT]         Minimum number of bins that need to be available for a group (default: 6)
+
+Damage options:
+                --deam5p                [.prof] 5p deamination frequency for eukaryotic species (default: no damage)
+                --deam3p                [.prof] 3p deamination frequency for eukaryotic species (default: no damage)
+                -l [INT]                Set length for substitution matrix (default: 5)
+                --out_dir [STR]         Path for output prof-file (default: current working directory)
+
+Markov chain Monte Carlo options:
+                --no-mcmc               The MCMC does not run (default: false)
+                --iter [INT]            Define the number of iterartions for the MCMC (default: 10000)
+                --burnin [INT]          Define the burnin period for the MCMC (default: 100)
+
+Additional output option:
+                --outFrag               Outputs a file with all read names per taxonomic group (default: false)
+                --outGroup [string]     Outputs all information about a taxonmic group of interest (default: empty)
+</pre>  
+
+
+### euka output files:
+euka's default output consists of four TSV files:
+
+The abundance and the detected TSV file consists of the following columns:
+``` 
+| Taxa | detected | Number of reads | proportion estimate | 85% CI lower bound | 85% CI upper bound | 95% CI lower bound | 95% CI upper bound |
+```
+The abundance file will list all availabe taxa, while the detected file will only list taxa that have passed all of euka's detection filters.
+
+There are multiple ways to visualise eukas output. To make sure the provided scripts work, we recommend installing the provided conda environment:
+```
+conda env create -f ~/vgan/tools/euka.yml
+```
+Or make sure the following packages are installed for python ete3, csv and argparse; for R, you will need the libraries ggplot2 and ggpubr. 
+
+You have the option to visualize these two files with a taxonomic tree using the provided Python script (make sure Python is in your path):
+``` 
+python ~/vgan/tools/make_tree_from_ouput.py [output file prefix]_abundance.tsv
+python ~/vgan/tools/make_tree_from_ouput.py [output file prefix]_detected.tsv 
+```
+
+The coverage file consists of all detected taxa and their corresponding number of bins. It shows the number of reads sorted into each bin. The coverage TSV file is used by our plotting script to show for a barplot.
+
+The inSize file provides a list of all fragment sizes for each taxa. It is used by our plotting script to create a histogram of the fragment length distribution.
+
+For each detected taxa we estimate a damage profile in a .prof file. These files are used as input for the damage estimation plots in our plotting script. 
+Additionally, we provide an average damage profile for the 5’ end and the 3’ end that can be directly inputted into our damage model options ``` --deam5p ``` and ``` --deam3p ```.
+
+To visualize detected taxa you can use the following provided script:
+``` 
+~/vgan/tools/visualize_detected_taxa.sh [output file prefix] 
+```
+To visualize only a specific detected taxon please use: 
+```
+Rscript plot_taxon.R [output file prefix] [taxon name]
+```
+
+### euka notes:
+- We recommend to run euka first with standard parameters and no incorporated damage profiles.
+- Further, we encourage the use of all available input files for one ecological site. Especially with ancient environmental DNA samples where read counts/abundances are extremely low euka will have difficulties “detecting” a taxa if, for example, only one sequencing lane is provided. 
+
+## General notes:
+- Please be aware that the multithreading for paired-end input files does not work with the vg version we use. However, from our experience, vg giraffe often reverts to mapping single-end, which is multi-threaded. 
+
 ## Support:
 
-vgan is actively supported and maintained.
+Vgan is actively supported and maintained.
 If you discover an issue with the program, please submit a bug report on Github or send an email. 
 
-Contact:
+Contact:<br>
 
-  Haplocart: jdru@dtu.dk or gabriel.reno@gmail.com
-
-
-
+  Haplocart: jdru@dtu.dk or gabriel.reno@gmail.com<br>
+  euka: navo@dtu.dk or gabriel.reno@gmail.com

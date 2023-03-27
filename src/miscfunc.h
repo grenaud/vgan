@@ -3,6 +3,26 @@
 #define MAX2(a,b) (((a)>(b))?(a):(b))
 #define probably_true(x) __builtin_expect(!!(x), 1)
 
+//Taken from: https://stackoverflow.com/questions/11964552/finding-quartiles
+template <typename T1, typename T2> typename T1::value_type quant(const T1 &x, T2 q)
+{
+    assert(q >= 0.0 && q <= 1.0);
+    
+    const auto n  = x.size();
+    const auto id = (n - 1) * q;
+    const auto lo = floor(id);
+    const auto hi = ceil(id);
+    const auto qs = x[lo];
+    const auto h  = (id - lo);
+    
+    return (1.0 - h) * qs + h * x[hi];
+}
+
+constexpr double logit(const double like_rato){
+    double p = 1 / (1 + (exp(-(like_rato -1))/1));
+    return p;
+}
+
 typedef struct {
     long double s[12];
  } substitutionRates;
