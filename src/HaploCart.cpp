@@ -28,14 +28,14 @@ const string Haplocart::usage() const{
     return string(string("") + "vgan haplocart [options]"+
                   "\n\nHaplocart predicts the mitochondrial haplogroup for reads originating from an uncontaminated modern human sample."+
 		  "\n\nExamples:\n"+
-		  "\n\tvgan haplocart --hc-files /home/username/share/hcfiles/ -f myfasta.fa\n"+
-		  "\n\tvgan haplocart --hc-files /home/username/share/hcfiles/ -fq1 seqreads_fwd.fq.gz -fq2 seqreads_rev.fq.gz\n"+
+		  "\n\tvgan haplocart --hc-files /home/username/share/vgan/hcfiles/ -f myfasta.fa\n"+
+		  "\n\tvgan haplocart --hc-files /home/username/share/vgan/hcfiles/ -fq1 seqreads_fwd.fq.gz -fq2 seqreads_rev.fq.gz\n"+
                   "\n\n"+
                   "Options:\n\n"+
                   "  Algorithm parameters\n"+
                   "  \t"+"-e [FLOAT]" + "\t\t\t"+ "Background error probability for FASTA input (default 0.0001)\n" +
                   "  Input/Output\n"+
-                  "  \t"+"--hc-files [STR]" + "\t\t" + "HaploCart graph directory location (default: \"../share/hcfiles/\")\n" +
+                  "  \t"+"--hc-files [STR]" + "\t\t" + "HaploCart graph directory location (default: \"../share/vgan/hcfiles/\")\n" +
                   "  \t"+"-f [STR]" + "\t\t\t" + "FASTA consensus input file\n" +
                   "  \t"+"-fq1 [STR]" + "\t\t\t" + "FASTQ input file\n" +
                   "  \t"+"-fq2 [STR]" + "\t\t\t" + "FASTQ second input file (for paired-end reads)\n" +
@@ -77,7 +77,7 @@ const int Haplocart::run(int argc, char *argv[], const string &cwdProg){
     bool invoked_samplename = false;
     string posteriorfilename = "/dev/stdout";
     bool   hcfiledirspecified = false;
-    string hcfiledir = "../share/hcfiles/";
+    string hcfiledir = "../share/vgan/hcfiles/";
     double background_error_prob = 0.0001;
     string gamfilename, fastafilename, fastq1filename, fastq2filename, samplename, jsonfilename;
     string outputfilename = "/dev/stdout";

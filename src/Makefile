@@ -112,12 +112,12 @@ ${VGDIR}include/vg/vg.pb.h vgmade: ${VGDIR}
 	(cd ${VGDIR} &&. ./source_me.sh && ${MAKE} -j ${NPROCS} && touch vgmade)
 
 hcfiles hcfilesmade: vgmade
-	wget -nc -l1 --recursive --no-parent -P ../share/ ftp://ftp.healthtech.dtu.dk:/public/haplocart/hcfiles/ && \
-        mv -fv ../share/ftp.healthtech.dtu.dk/public/haplocart/hcfiles/* ../share/hcfiles && rm -rf ../share/ftp.healthtech.dtu.dk && touch hcfilesmade
+	wget -nc -l1 --recursive --no-parent -P ../share/vgan/ ftp://ftp.healthtech.dtu.dk:/public/haplocart/hcfiles/ && \
+        mv -fv ../share/vgan/ftp.healthtech.dtu.dk/public/haplocart/hcfiles/* ../share/vgan/hcfiles && rm -rf ../share/vgan/ftp.healthtech.dtu.dk && touch hcfilesmade
 
-euka_files eukafilesmade: vgmade
-	wget -nc -l1 --recursive --no-parent -P ../share/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/ && \
-	mv -fv ../share/ftp.healthtech.dtu.dk/public/euka_files/* ../share/euka_dir && rm -rf ../share/ftp.healthtech.dtu.dk && touch eukafilesmade
+eukafiles eukafilesmade: vgmade
+	wget -nc -l1 --recursive --no-parent -P ../share/vgan/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/ && \
+	mv -fv ../share/vgan/ftp.healthtech.dtu.dk/public/euka_files/* ../share/vgan/euka_dir && rm -rf ../share/vgan/ftp.healthtech.dtu.dk && touch eukafilesmade
 
 ../lib/libgab/libgab.a: libgabmade
 	echo ""

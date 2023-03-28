@@ -37,29 +37,29 @@ Step 3: Download the required graph files. If you have root access please run
 
 For HaploCart:
 ```
-sudo mkdir -p /usr/bin/share/hcfiles/
-sudo wget -nc -l1 --recursive --no-parent -P /usr/bin/share/ ftp://ftp.healthtech.dtu.dk:/public/haplocart/hcfiles/
+sudo mkdir -p /usr/bin/share/vgan/hcfiles/
+sudo wget -nc -l1 --recursive --no-parent -P /usr/bin/share/vgan/ ftp://ftp.healthtech.dtu.dk:/public/haplocart/hcfiles/
 ```
 
 For euka:
 ```
-sudo mkdir -p /usr/bin/share/euka_files/
-sudo wget -nc -l1 --recursive --no-parent -P /usr/bin/share/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/
+sudo mkdir -p /usr/bin/share/vgan/euka_files/
+sudo wget -nc -l1 --recursive --no-parent -P /usr/bin/share/vgan/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/
 ```
 
 If you do not have root access, you can download them in the directory of your choice but for ease, you can download them to a share directory in your home folder:
 
 For HaploCart:
 ```
-mkdir -P $HOME/share/
-mkdir -P $HOME/share/hcfiles/
-wget -nc -l1 --recursive --no-directories --no-parent -P $HOME/share/hcfiles/ ftp://ftp.healthtech.dtu.dk:/public/haplocart/hcfiles/
+mkdir -P $HOME/share/vgan/
+mkdir -P $HOME/share/vgan/hcfiles/
+wget -nc -l1 --recursive --no-directories --no-parent -P $HOME/share/vgan/hcfiles/ ftp://ftp.healthtech.dtu.dk:/public/haplocart/hcfiles/
 ```
 For euka:
 ```
-mkdir -P $HOME/share/
-mkdir -P $HOME/share/euka_files/
-wget -nc -l1 --recursive --no-directories --no-parent -P $HOME/share/euka_files/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/
+mkdir -P $HOME/share/vgan/
+mkdir -P $HOME/share/vgan/euka_files/
+wget -nc -l1 --recursive --no-directories --no-parent -P $HOME/share/vgan/euka_files/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/
 ```
 
 Alternatively, you can install the graph files elsewhere and specify them using:
@@ -284,7 +284,7 @@ If you specify the ```--outFrag``` option you will be provided with a list of al
 less -S [output file prefix]_FragNames.tsv | sed '[row number]!d' | sed 's/\t/\n/g' | seqtk subseq [FASTQ input file] - > output.fq
 ```
 ### euka filter options:
-euka has four filter options to modify the stringency of taxa detection. We always recommend to have a first look at your samples with the default parameters. These parameters have been thoroughly tested to provide confident abundance estimations. However, to detect more divergent taxa (for example Formicidae), it may be necessary to adjust the filter parameters. Furthermore, we want to highlight that the reference genomes for many arthropodic species have low-complexity reference genomes and are more prone to spurious alignments. Even with our standard parameter filters, we can see more false-positive detections for these taxa, and results should always be evaluated carefully. Our ~/vgan/share/euka_dir/euka_db.bins file lists every taxa in our database with their respective bins (for our coverage estimation). The file shows the Node ID range for each bin and the calculated entropy score for this bin.
+euka has four filter options to modify the stringency of taxa detection. We always recommend to have a first look at your samples with the default parameters. These parameters have been thoroughly tested to provide confident abundance estimations. However, to detect more divergent taxa (for example Formicidae), it may be necessary to adjust the filter parameters. Furthermore, we want to highlight that the reference genomes for many arthropodic species have low-complexity reference genomes and are more prone to spurious alignments. Even with our standard parameter filters, we can see more false-positive detections for these taxa, and results should always be evaluated carefully. Our ~/vgan/share/vgan/euka_dir/euka_db.bins file lists every taxa in our database with their respective bins (for our coverage estimation). The file shows the Node ID range for each bin and the calculated entropy score for this bin.
 
 
 Example for incorporation of lower-entropy regions in the mitogenome: 
