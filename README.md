@@ -1,7 +1,7 @@
 [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/vgan/README.html)
 # vgan
 
-vgan is a suite of tools for pangenomics. We currently support two main subcommands: Haplocart (for modern human mtDNA haplogroup classification) and euka (for bilaterian abundance estimation of sedimentary aDNA). The underlying data structure is the VG graph (see https://github.com/vgteam/vg).
+vgan is a suite of tools for pangenomics. We currently support two main subcommands: Haplocart (for modern human mtDNA haplogroup classification) and euka (for bilaterian abundance estimation of ancient environmental DNA). The underlying data structure is the VG graph (see https://github.com/vgteam/vg).
 
 ## Installation:
 
