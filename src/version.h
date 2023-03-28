@@ -1,1 +1,1 @@
-#define VERSION "NA"
+#define VERSION "v1.0.2"

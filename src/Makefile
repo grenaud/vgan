@@ -95,7 +95,7 @@ FLAGS_DYNAMIC = -L../dep/boost_1_61_0 compute_init_vec.o MCMC.o haplocart_functi
 		-lfreetype -lpng16 -lxcb-shm -lxcb-render -lXext -lX11 -lxcb -lXau -lXdmcp -ljansson -latomic -lsublinearLS "-Wl,-rpath,"../dep/vg/"lib" -rdynamic \
 		-ldwfl -ldwelf -lelf -lebl "-lboost_program_options""" -lzstd -lbz2 -llzma -lprotobuf -pthread -lz -Wl,-Bdynamic -lpthread -lm
 
- all:	vgan test version_chmod #hcfiles eukafiles 
+ all:	vgan test  #hcfiles eukafiles 
 
 .PHONY:	all clean autocomp libgab static hcfiles eukafiles
 
@@ -127,16 +127,16 @@ libgab libgabmade: vgmade
 	git clone --recursive https://github.com/grenaud/libgab.git ../lib/libgab/
 	(cd ../lib/libgab/ && ${MAKE} -j ${NPROCS} && ${MAKE} -j ${NPROCS} -C gzstream/) && touch libgabmade
 
-static:	vgmade libgabmade ${VGAN_PREREQS}
+static:	version.h vgmade libgabmade ${VGAN_PREREQS}
 	${CXX} -o ${BIN_DIR}vgan $(FLAGS_STATIC)
 
 version_chmod: version.h
 	chmod +x get_version.sh
 
-version.h:
+version.h: version_chmod 
 	./get_version.sh
 
-vgan: vgmade libgabmade ${VGAN_PREREQS} version_chmod 
+vgan: version.h vgmade libgabmade ${VGAN_PREREQS}
 	${MAKE} autocomp && ${CXX} -o ${BIN_DIR}vgan $(FLAGS_DYNAMIC)
 
 test: ${TEST_PREREQS}
