@@ -14,6 +14,8 @@
 #include "config/allocator_config.hpp"
 #include "io/register_libvg_io.hpp"
 #include "gam2prof.h" // Mikkel code
+#include "version.h"
+
 //#include "gam2prof.cpp" //Mikkel code
 
 #define VERBOSE
@@ -63,7 +65,7 @@ int main(int argc, char *argv[]) {
     }
 
 
-    if(string(argv[1]) == "version"){cerr << "vgan version 2.0 (Mirtillo)" << endl; return 0;}
+    if(string(argv[1]) == "version"){cerr << "vgan "<<VERSION << endl; return 0;}
 
     else if(string(argv[1]) == "euka"){
         Euka  euka_;
