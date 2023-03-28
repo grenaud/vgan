@@ -279,8 +279,13 @@ For additional output options:
 ```
 Please note that the Taxa name provided to the ```--outGroup``` argument must be a taxon defined in euka's database. 
 
+If you specify the ```--outFrag``` option you will be provided with a list of all read names that map to one taxon. To extract these reads for further downstream analysis you can use the following command:
+```
+less -S [output file prefix]_FragNames.tsv | sed '[row number]!d' | sed 's/\t/\n/g' | seqtk subseq [FASTQ input file] - > output.fq
+```
 ### euka filter options:
-euka has four filter options to modify the stringency of taxa detection. We always recommend to have a first look at your samples with the default parameters. These parameters have been thoroughly tested to provide confident abundance estimations. However, to detect more divergent taxa (for example Formicidae), it may be necessary to adjust the filter parameters. Furthermore, we want to highlight that the reference genomes for many arthropodic species have low-complexity reference genomes and are more prone to spurious alignments. Even with our standard parameter filters, we can see more false-positive detections for these taxa, and results should always be evaluated carefully. Our ~/vgan/share/euka_dir/euka_db.bins file lists every taxa in our database with their respective bins (for our coverage estimation). The file shows the Node ID range for each bin and the calculated entropy score for this bin.   
+euka has four filter options to modify the stringency of taxa detection. We always recommend to have a first look at your samples with the default parameters. These parameters have been thoroughly tested to provide confident abundance estimations. However, to detect more divergent taxa (for example Formicidae), it may be necessary to adjust the filter parameters. Furthermore, we want to highlight that the reference genomes for many arthropodic species have low-complexity reference genomes and are more prone to spurious alignments. Even with our standard parameter filters, we can see more false-positive detections for these taxa, and results should always be evaluated carefully. Our ~/vgan/share/euka_dir/euka_db.bins file lists every taxa in our database with their respective bins (for our coverage estimation). The file shows the Node ID range for each bin and the calculated entropy score for this bin.
+
 
 Example for incorporation of lower-entropy regions in the mitogenome: 
 ```
@@ -372,7 +377,11 @@ Rscript plot_taxon.R [output file prefix] [taxon name]
 - Further, we encourage the use of all available input files for one ecological site. Especially with ancient environmental DNA samples where read counts/abundances are extremely low euka will have difficulties “detecting” a taxa if, for example, only one sequencing lane is provided. 
 
 ## General notes:
-- Please be aware that the multithreading for paired-end input files does not work with the vg version we use. However, from our experience, vg giraffe often reverts to mapping single-end, which is multi-threaded. 
+- Please be aware that the multithreading for paired-end input files does not work with the vg version we use. However, from our experience, vg giraffe often reverts to mapping single-end, which is multi-threaded. If you have paired-end reads please consider merging them or concatenate them with a file descriptor:
+```
+vgan euka -fq1 <(zcat reads1.fq.gz reads2.fq.gz) -t 30 
+
+```
 
 ## Support:
 

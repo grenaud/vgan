@@ -103,7 +103,7 @@ const string Euka::usage() const{
                   "\t\t"+""  +"" +"-i"   +"\t\t\t" + "Paired-end reads are interleaved (default: false)"+"\n"+
                   //"\t\t"+""  +"" +"-g"   +"\t\t" + "GAM input file"+"\n"+ 
                   "\t\t"+""  +"" +"-o [STR]"   +"\t\t" + "Output file prefix (default: euka_output) "+"\n"+
-                  "\t\t"+""  +"" +"-t"   +"\t\t\t" + "Number of threads (-1 for all available)"+"\n"+
+                  "\t\t"+""  +"" +"-t"   +"\t\t\t" + "Number of threads (-1 for all available), only for merged and single-end reads"+"\n"+
                   "\t\t"+""  +"" +"-Z"   +"\t\t\t" + "Temporary directory (default: /tmp)"+"\n"+
                   "\n"+
                   "Filter options:\n"+
