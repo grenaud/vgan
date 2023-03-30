@@ -376,6 +376,29 @@ Rscript plot_taxon.R [output file prefix] [taxon name]
 - We recommend to run euka first with standard parameters and no incorporated damage profiles.
 - Further, we encourage the use of all available input files for one ecological site. Especially with ancient environmental DNA samples where read counts/abundances are extremely low euka will have difficulties “detecting” a taxa if, for example, only one sequencing lane is provided. 
 
+## Unit tests:
+
+We provide comprehensive unit tests for our main subcommands (HaploCart and Euka). These are built on the Boost Test Suite. Running the tests requires building vgan from source because it involves compiling a separate executable. To run the unit tests, please run
+
+```
+make test
+./../bin/test --run_test
+```
+
+You can also run subcommand-specific tests:
+
+```
+make test
+./../bin/test --run_test=haplocart
+```
+
+or
+
+```
+make test
+./../bin/test --run_test=euka
+```
+
 ## General notes:
 - Please be aware that the multithreading for paired-end input files does not work with the vg version we use. However, from our experience, vg giraffe often reverts to mapping single-end, which is multi-threaded. If you have paired-end reads please consider merging them or concatenate them with a file descriptor:
 ```
