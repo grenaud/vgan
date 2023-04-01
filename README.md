@@ -87,12 +87,13 @@ Install Conda (https://docs.conda.io/projects/conda/en/latest/user-guide/install
 
 ```
  conda  install -c bioconda vgan
-````
+```
 
 To use euka from bioconda, it is necessary to download eukas graph files externally with the following command:
 ```
-wget -nc -l1 --recursive --no-directories --no-parent -P $HOME/share/vgan/euka_files/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/
+wget -nc -l1 --recursive --no-directories --no-parent -P ./euka_files/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/
 ```
+When calling the euka command, please make sure to add ```--euka_dir``` option with the correct input path to the euka_files directory.
 eukas associated graph files have a size of 11Gb; please make sure that enough space is available when downloading. 
 
 ### Building vgan from source
