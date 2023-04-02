@@ -286,4 +286,4 @@ dependencies:
   - zstd=1.5.2=h6239696_4
   - pip:
     - ete3==3.0.0b35
-prefix: /home/bfj994/miniconda3/envs/euka
+prefix: /miniconda3/envs/euka
