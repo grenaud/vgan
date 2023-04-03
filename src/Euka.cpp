@@ -109,7 +109,7 @@ const string Euka::usage() const{
                   "Filter options:\n"+
                   "\t\t"+""  +"" +"--minMQ [INT]"    +"\t\t"      +"Set the mapping quality minimum for a fragment (default: 29)"+"\n"+
                   "\t\t"+""  +"" +"--minFrag [INT]"    +"\t\t"      +"Minimum amount of fragments that need to map to a group (default: 10)"+"\n"+
-                  "\t\t"+""  +"" +"--entropy [double]"    +"\t\t"      +"Minimum entropy score for a bin to be considered (default: 1.17)"+"\n"+
+                  "\t\t"+""  +"" +"--entropy [double]"    +"\t"      +"Minimum entropy score for a bin to be considered (default: 1.17)"+"\n"+
                   "\t\t"+""  +"" +"--minBins [INT]"    +"\t\t"      +"Minimum number of bins that need to be available for a group (default: 6)"+"\n"+
                   "\n"+
                   "Damage options:"+"\n"+
@@ -125,7 +125,7 @@ const string Euka::usage() const{
                   "\n"+
                   "Additional output option:\n"+
                   "\t\t"+""  +"" +"--outFrag"     +"\t\t"   +"Outputs a file with all read names per taxonomic group (default: false)"+"\n"
-                  "\t\t"+""  +"" +"--outGroup [string]"     +"\t\t"   +"Outputs all information about a taxonmic group of interest (default: empty)"+"\n"
+                  "\t\t"+""  +"" +"--outGroup [STR]"     +"\t"   +"Outputs all information about a taxonmic group of interest (default: empty)"+"\n"
 
                   //"\t"+"-b" + "\t\t\t"+"Produce binary compressed output       (default: "+booleanAsString(uncompressed)+")\n"+
 		  ""
@@ -827,11 +827,11 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
         cerr << '\n';
         cerr << "You have two options to visualize euka’s output. All scripts necessary for the visualization can be found in vgan/tools/." << endl; 
         cerr << '\n';
-        cerr << '\t' << '\t' << "1) "+cwdProg+"../tools/visualize_detected_taxa.sh ./"+ outputfilename << endl;
+        cerr << '\t' << '\t' << "1) "+cwdProg+"visualize_detected_taxa.sh ./"+ outputfilename << endl;
         cerr << '\n';
         cerr << "This will provide you with a summary plot of each detected taxa, including their damage profiles, estimated coverage across the pangenome graph and fragment length distribution." << endl;
         cerr << '\n';
-        cerr << '\t' << '\t' << "2) python "+cwdProg+"../tools/make_tree_from_output.py ./" +outputfilename+"_abundance.tsv or python "+cwdProg+"../tools/make_tree_from_output.py ./"+outputfilename+"_detected.tsv" << endl; 
+        cerr << '\t' << '\t' << "2) python "+cwdProg+"make_tree_from_output.py ./" +outputfilename+"_abundance.tsv or python "+cwdProg+"make_tree_from_output.py ./"+outputfilename+"_detected.tsv" << endl; 
         cerr << '\n';
         cerr << "These two commands will plot a taxonomic tree with all (./"+outputfilename+"_abundance.tsv) taxa or only the detected (./" +outputfilename+"_detected.tsv) taxa." << endl; 
 
@@ -1122,11 +1122,11 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
         cerr << '\n';
         cerr << "You have two options to visualize euka’s output. All scripts necessary for the visualization can be found in vgan/tools/." << endl; 
         cerr << '\n';
-        cerr << '\t' << '\t' << "1) "+cwdProg+"../tools/visualize_detected_taxa.sh "+ file_in_dir << endl;
+        cerr << '\t' << '\t' << "1) "+cwdProg+"visualize_detected_taxa.sh "+ file_in_dir << endl;
         cerr << '\n';
         cerr << "This will provide you with a summary plot of each detected taxa, including their damage profiles, estimated coverage across the pangenome graph and fragment length distribution." << endl;
         cerr << '\n';
-        cerr << '\t' << '\t' << "2) python "+cwdProg+"../tools/make_tree_from_output.py " +file_in_dir+"_abundance.tsv or python "+cwdProg+"../tools/make_tree_from_output.py " +file_in_dir+"_detected.tsv" << endl; 
+        cerr << '\t' << '\t' << "2) python "+cwdProg+"make_tree_from_output.py " +file_in_dir+"_abundance.tsv or python "+cwdProg+"make_tree_from_output.py " +file_in_dir+"_detected.tsv" << endl; 
         cerr << '\n';
         cerr << "These two commands will plot a taxonomic tree with all ("+file_in_dir+"_abundance.tsv) taxa or only the detected ("+file_in_dir+"_detected.tsv) taxa." << endl; 
 
