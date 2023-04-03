@@ -1,7 +1,7 @@
 [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/vgan/README.html)
 # vgan
 
-vgan is a suite of tools for pangenomics. We currently support two main subcommands: Haplocart (for modern human mtDNA haplogroup classification) and euka (for bilaterian abundance estimation of sedimentary aDNA). The underlying data structure is the VG graph (see https://github.com/vgteam/vg).
+vgan is a suite of tools for pangenomics. We currently support two main subcommands: Haplocart (for modern human mtDNA haplogroup classification) and euka (for bilaterian abundance estimation of ancient environmental DNA). The underlying data structure is the VG graph (see https://github.com/vgteam/vg).
 
 ## Installation:
 
@@ -37,29 +37,29 @@ Step 3: Download the required graph files. If you have root access please run
 
 For HaploCart:
 ```
-sudo mkdir -p /usr/bin/share/hcfiles/
-sudo wget -nc -l1 --recursive --no-parent -P /usr/bin/share/ ftp://ftp.healthtech.dtu.dk:/public/haplocart/hcfiles/
+sudo mkdir -p /usr/bin/share/vgan/hcfiles/
+sudo wget -nc -l1 --recursive --no-parent -P /usr/bin/share/vgan/ ftp://ftp.healthtech.dtu.dk:/public/haplocart/hcfiles/
 ```
 
 For euka:
 ```
-sudo mkdir -p /usr/bin/share/euka_files/
-sudo wget -nc -l1 --recursive --no-parent -P /usr/bin/share/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/
+sudo mkdir -p /usr/bin/share/vgan/euka_files/
+sudo wget -nc -l1 --recursive --no-parent -P /usr/bin/share/vgan/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/
 ```
 
 If you do not have root access, you can download them in the directory of your choice but for ease, you can download them to a share directory in your home folder:
 
 For HaploCart:
 ```
-mkdir -P $HOME/share/
-mkdir -P $HOME/share/hcfiles/
-wget -nc -l1 --recursive --no-directories --no-parent -P $HOME/share/hcfiles/ ftp://ftp.healthtech.dtu.dk:/public/haplocart/hcfiles/
+mkdir -P $HOME/share/vgan/
+mkdir -P $HOME/share/vgan/hcfiles/
+wget -nc -l1 --recursive --no-directories --no-parent -P $HOME/share/vgan/hcfiles/ ftp://ftp.healthtech.dtu.dk:/public/haplocart/hcfiles/
 ```
 For euka:
 ```
-mkdir -P $HOME/share/
-mkdir -P $HOME/share/euka_files/
-wget -nc -l1 --recursive --no-directories --no-parent -P $HOME/share/euka_files/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/
+mkdir -P $HOME/share/vgan/
+mkdir -P $HOME/share/vgan/euka_files/
+wget -nc -l1 --recursive --no-directories --no-parent -P $HOME/share/vgan/euka_files/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/
 ```
 
 Alternatively, you can install the graph files elsewhere and specify them using:
@@ -87,7 +87,14 @@ Install Conda (https://docs.conda.io/projects/conda/en/latest/user-guide/install
 
 ```
  conda  install -c bioconda vgan
-````
+```
+
+To use euka from bioconda, it is necessary to download eukas graph files externally with the following command:
+```
+wget -nc -l1 --recursive --no-directories --no-parent -P ./euka_files/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/
+```
+When calling the euka command, please make sure to add ```--euka_dir``` option with the correct input path to the euka_files directory.
+eukas associated graph files have a size of 11Gb; please make sure that enough space is available when downloading. 
 
 ### Building vgan from source
 
@@ -284,7 +291,7 @@ If you specify the ```--outFrag``` option you will be provided with a list of al
 less -S [output file prefix]_FragNames.tsv | sed '[row number]!d' | sed 's/\t/\n/g' | seqtk subseq [FASTQ input file] - > output.fq
 ```
 ### euka filter options:
-euka has four filter options to modify the stringency of taxa detection. We always recommend to have a first look at your samples with the default parameters. These parameters have been thoroughly tested to provide confident abundance estimations. However, to detect more divergent taxa (for example Formicidae), it may be necessary to adjust the filter parameters. Furthermore, we want to highlight that the reference genomes for many arthropodic species have low-complexity reference genomes and are more prone to spurious alignments. Even with our standard parameter filters, we can see more false-positive detections for these taxa, and results should always be evaluated carefully. Our ~/vgan/share/euka_dir/euka_db.bins file lists every taxa in our database with their respective bins (for our coverage estimation). The file shows the Node ID range for each bin and the calculated entropy score for this bin.
+euka has four filter options to modify the stringency of taxa detection. We always recommend to have a first look at your samples with the default parameters. These parameters have been thoroughly tested to provide confident abundance estimations. However, to detect more divergent taxa (for example Formicidae), it may be necessary to adjust the filter parameters. Furthermore, we want to highlight that the reference genomes for many arthropodic species have low-complexity reference genomes and are more prone to spurious alignments. Even with our standard parameter filters, we can see more false-positive detections for these taxa, and results should always be evaluated carefully. Our ~/vgan/share/vgan/euka_dir/euka_db.bins file lists every taxa in our database with their respective bins (for our coverage estimation). The file shows the Node ID range for each bin and the calculated entropy score for this bin.
 
 
 Example for incorporation of lower-entropy regions in the mitogenome: 
@@ -375,6 +382,29 @@ Rscript plot_taxon.R [output file prefix] [taxon name]
 ### euka notes:
 - We recommend to run euka first with standard parameters and no incorporated damage profiles.
 - Further, we encourage the use of all available input files for one ecological site. Especially with ancient environmental DNA samples where read counts/abundances are extremely low euka will have difficulties “detecting” a taxa if, for example, only one sequencing lane is provided. 
+
+## Unit tests:
+
+We provide comprehensive unit tests for our main subcommands (HaploCart and Euka). These are built on the Boost Test Suite. Running the tests requires building vgan from source because it involves compiling a separate executable. To run the unit tests, please run
+
+```
+make test
+./../bin/test --run_test
+```
+
+You can also run subcommand-specific tests:
+
+```
+make test
+./../bin/test --run_test=haplocart
+```
+
+or
+
+```
+make test
+./../bin/test --run_test=euka
+```
 
 ## General notes:
 - Please be aware that the multithreading for paired-end input files does not work with the vg version we use. However, from our experience, vg giraffe often reverts to mapping single-end, which is multi-threaded. If you have paired-end reads please consider merging them or concatenate them with a file descriptor:

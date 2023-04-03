@@ -20,7 +20,7 @@ const string Gam2prof::usage() const{
 
         "\n\n"+
         "Input options:\n"+
-        "\t"+""  +"" +"--euka_dir [STR]" + "\t" + "Euka database location (default: \"../share/euke_dir/\")\n"+  
+        "\t"+""  +"" +"--euka_dir [STR]" + "\t" + "Euka database location (default: \"../share/vgan/euka_dir/\")\n"+  
         "\t"+""  +"" +"--dbprefix [STR]" + "\t" + "Database prefix name (defualt: all)\n"+
         "\t"+""  +"" +"-l [INT]"          +"\t\t" + "Set length for substitution matrix (default: 5)"+"\n"+ 
         "\t"+""  +"" +"-out_dir [STR]"    +"\t\t" + "Path for output prof-file(s) (default: current location, '/dev/stdout' for stdout)"+"\n"+ 
@@ -41,7 +41,7 @@ const int Gam2prof::run(int argc, char *argv[], const string cwdProg){
 
     // Check option
     bool euka_dirspecified = false; 
-    string euka_dir = "../share/euka_dir/"; 
+    string euka_dir = "../share/vgan/euka_dir/"; 
     string dbprefix = "all";
     int lengthToProf = 5;
     string prof_out_file_path = cwdProg;

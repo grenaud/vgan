@@ -331,15 +331,15 @@ BOOST_AUTO_TEST_CASE(multifasta)
 BOOST_AUTO_TEST_CASE(load)
 {
   Haplocart hc;
-  const vector<vector<bool>> path_supports = hc.load_path_supports(getCWD(".")+"/share/hcfiles/");
+  const vector<vector<bool>> path_supports = hc.load_path_supports(getCWD(".")+"/share/vgan/hcfiles/");
   BOOST_CHECK_EQUAL(path_supports.size(), 11825);
-  const vector<double> mappabilities = hc.load_mappabilities(getCWD(".")+"/share/hcfiles/");
+  const vector<double> mappabilities = hc.load_mappabilities(getCWD(".")+"/share/vgan/hcfiles/");
   for (double x : mappabilities) {BOOST_CHECK_EQUAL((x <= 1 && x >= 0), true);}
-  const vector<string> paths = hc.load_paths(getCWD(".")+"/share/hcfiles/");
+  const vector<string> paths = hc.load_paths(getCWD(".")+"/share/vgan/hcfiles/");
   BOOST_CHECK_EQUAL(paths.size(), 5179);
-  const map<string, vector<string>> parents = hc.load_parents(getCWD(".")+"/share/hcfiles/");
+  const map<string, vector<string>> parents = hc.load_parents(getCWD(".")+"/share/vgan/hcfiles/");
   BOOST_CHECK_EQUAL(parents.size(), 5437);
-  const map<string, vector<string>> children = hc.load_children(getCWD(".")+"/share/hcfiles/");
+  const map<string, vector<string>> children = hc.load_children(getCWD(".")+"/share/vgan/hcfiles/");
   BOOST_CHECK_EQUAL(children.size(), 5438);
 }
 
@@ -347,7 +347,7 @@ BOOST_AUTO_TEST_CASE(check_nodevec)
 {
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD(".")+"bin/");
-  const auto [nodevec, minid, graph] = hc.readPathHandleGraph(cwdProg+"../share/hcfiles/graph.og", 1, cwdProg + "../share/hcfiles/");
+  const auto [nodevec, minid, graph] = hc.readPathHandleGraph(cwdProg+"../share/vgan/hcfiles/graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
   BOOST_ASSERT(!nodevec.empty());
   for (int i = 0; i < nodevec.size(); ++i){
       BOOST_ASSERT(nodevec.at(i)->seq.size() <= 8);
@@ -358,10 +358,10 @@ BOOST_AUTO_TEST_CASE(check_nodevec)
 BOOST_AUTO_TEST_CASE(check_graph)
 {
  Haplocart hc;
- const vector<string> paths = hc.load_paths(getCWD(".")+"/share/hcfiles/");
+ const vector<string> paths = hc.load_paths(getCWD(".")+"/share/vgan/hcfiles/");
  bdsg::ODGI graph;
  const string cwdProg = getFullPath(getCWD(".")+"bin/");
- graph.deserialize(cwdProg+"../share/hcfiles/graph.og");
+ graph.deserialize(cwdProg+"../share/vgan/hcfiles/graph.og");
  const int minid = graph.min_node_id();
  const int maxid = graph.max_node_id();
  const int nodecount = graph.get_node_count();
@@ -584,7 +584,7 @@ BOOST_AUTO_TEST_CASE(plus_strand_perfect_match)
     auto read_info = readGAM((cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str(), false, false, "/dev/null", "");
     const auto path = read_info->at(0)->path;
     Haplocart hc;
-    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/hcfiles/");
+    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
     auto [nodevector, minid, graph] = pathhandlegraphtuple;
     auto ret_tuple = reconstruct_graph_sequence(graph, path, read_info->at(0)->seq);
     auto [graph_seq, read_seq, mppg_sizes] = ret_tuple;
@@ -598,7 +598,7 @@ BOOST_AUTO_TEST_CASE(plus_strand_mismatch)
     auto read_info = readGAM((cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str(), false, false, "/dev/null", "");
     const auto path = read_info->at(1)->path;
     Haplocart hc;
-    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/hcfiles/");
+    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
     auto [nodevector, minid, graph] = pathhandlegraphtuple;
     auto ret_tuple = reconstruct_graph_sequence(graph, path, read_info->at(1)->seq);
     auto [graph_seq, read_seq, mppg_sizes] = ret_tuple;
@@ -613,7 +613,7 @@ BOOST_AUTO_TEST_CASE(plus_strand_insert_in_read)
     const auto path = read_info->at(2)->path;
     cerr << "algnvector size: " << read_info->size() << endl;
     Haplocart hc;
-    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/hcfiles/");
+    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
     auto [nodevector, minid, graph] = pathhandlegraphtuple;
     auto ret_tuple = reconstruct_graph_sequence(graph, path, read_info->at(2)->seq);
     auto [graph_seq, read_seq, mppg_sizes] = ret_tuple;
@@ -627,7 +627,7 @@ BOOST_AUTO_TEST_CASE(plus_strand_deletion_in_read)
     auto read_info = readGAM((cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str(), false, false, "/dev/null", "");
     const auto path = read_info->at(3)->path;
     Haplocart hc;
-    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/hcfiles/");
+    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
     auto [nodevector, minid, graph] = pathhandlegraphtuple;
     auto ret_tuple = reconstruct_graph_sequence(graph, path, read_info->at(3)->seq);
     auto [graph_seq, read_seq, mppg_sizes] = ret_tuple;
@@ -641,7 +641,7 @@ BOOST_AUTO_TEST_CASE(plus_strand_softclip)
     auto read_info = readGAM((cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str(), false, false, "/dev/null", "");
     const auto path = read_info->at(4)->path;
     Haplocart hc;
-    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/hcfiles/");
+    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
     auto [nodevector, minid, graph] = pathhandlegraphtuple;
     auto ret_tuple = reconstruct_graph_sequence(graph, path, read_info->at(4)->seq);
     auto [graph_seq, read_seq, mppg_sizes] = ret_tuple;
@@ -655,7 +655,7 @@ BOOST_AUTO_TEST_CASE(minus_strand_perfect_match)
     auto read_info = readGAM((cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str(), false, false, "/dev/null", "");
     const auto path = read_info->at(5)->path;
     Haplocart hc;
-    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/hcfiles/");
+    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
     auto [nodevector, minid, graph] = pathhandlegraphtuple;
     auto ret_tuple = reconstruct_graph_sequence(graph, path, read_info->at(5)->seq);
     auto [graph_seq, read_seq, mppg_sizes] = ret_tuple;
@@ -669,7 +669,7 @@ BOOST_AUTO_TEST_CASE(minus_strand_mismatch)
     auto read_info = readGAM((cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str(), false, false, "/dev/null", "");
     const auto path = read_info->at(6)->path;
     Haplocart hc;
-    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/hcfiles/");
+    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
     auto [nodevector, minid, graph] = pathhandlegraphtuple;
     auto ret_tuple = reconstruct_graph_sequence(graph, path, read_info->at(6)->seq);
     auto [graph_seq, read_seq, mppg_sizes] = ret_tuple;
@@ -683,7 +683,7 @@ BOOST_AUTO_TEST_CASE(minus_strand_insert_in_read)
     auto read_info = readGAM((cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str(), false, false, "/dev/null", "");
     const auto path = read_info->at(7)->path;
     Haplocart hc;
-    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/hcfiles/");
+    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
     auto [nodevector, minid, graph] = pathhandlegraphtuple;
     auto ret_tuple = reconstruct_graph_sequence(graph, path, read_info->at(7)->seq);
     auto [graph_seq, read_seq, mppg_sizes] = ret_tuple;
@@ -697,7 +697,7 @@ BOOST_AUTO_TEST_CASE(minus_strand_deletion_in_read)
     auto read_info = readGAM((cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str(), false, false, "/dev/null", "");
     const auto path = read_info->at(8)->path;
     Haplocart hc;
-    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/hcfiles/");
+    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
     auto [nodevector, minid, graph] = pathhandlegraphtuple;
     auto ret_tuple = reconstruct_graph_sequence(graph, path, read_info->at(8)->seq);
     auto [graph_seq, read_seq, mppg_sizes] = ret_tuple;
@@ -711,7 +711,7 @@ BOOST_AUTO_TEST_CASE(minus_strand_softclip)
     auto read_info = readGAM((cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str(), false, false, "/dev/null", "");
     const auto path = read_info->at(9)->path;
     Haplocart hc;
-    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/hcfiles/");
+    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
     auto [nodevector, minid, graph] = pathhandlegraphtuple;
     auto ret_tuple = reconstruct_graph_sequence(graph, path, read_info->at(9)->seq);
     auto [graph_seq, read_seq, mppg_sizes] = ret_tuple;
@@ -882,9 +882,9 @@ BOOST_ASSERT(taxa_names[0] == "Formicidae");
 
 
 BOOST_AUTO_TEST_CASE(load) {
-    const string path_support_path = "../share/euka_dir/euka_db_graph_path_supports";
-    const string clade_info_path = "../share/euka_dir/euka_db.clade";
-    const string clade_chunk_path = "../share/euka_dir/euka_db.bins";
+    const string path_support_path = "../share/vgan/euka_dir/euka_db_graph_path_supports";
+    const string clade_info_path = "../share/vgan/euka_dir/euka_db.clade";
+    const string clade_chunk_path = "../share/vgan/euka_dir/euka_db.bins";
 
     Euka ek;
     auto clade_info = ek.load_clade_info(clade_info_path, 5);

@@ -88,7 +88,7 @@ const string Euka::usage() const{
           "\n\nNo damage example:\n"+
                   "\n\t./vgan euka -fq1 seqreads.fq.gz\n"+
           "\n\nDamage example:\n"+
-                  "\n\t./vgan euka -fq1 seqreads.fq.gz --deam5p ../share/damageProfiles/dhigh5.prof --deam3p ../share/damageProfiles/dhigh3.prof\n"+
+                  "\n\t./vgan euka -fq1 seqreads.fq.gz --deam5p ../share/vgan/damageProfiles/dhigh5.prof --deam3p ../share/vgan/damageProfiles/dhigh3.prof\n"+
           "\n\nUser specific MCMC example:\n"+
                   "\n\t./vgan euka -fq1 seqreads.fq.gz -iter 100000 -burnin 1000"
 
@@ -148,8 +148,8 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
                                       }
     int lastOpt=1;
 
-    string deam5pfreqE  = getFullPath(cwdProg+"../share/damageProfiles/none.prof");
-    string deam3pfreqE  =  getFullPath(cwdProg+"../share/damageProfiles/none.prof");
+    string deam5pfreqE  = getFullPath(cwdProg+"../share/vgan/damageProfiles/none.prof");
+    string deam3pfreqE  =  getFullPath(cwdProg+"../share/vgan/damageProfiles/none.prof");
 
     bool specifiedDeam=false;
     bool interleaved=false;
@@ -161,7 +161,7 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
     string tmpdir = "/tmp/";
     string outputfilename = "euka_output";
     bool euka_dirspecified = false;
-    string euka_dir = "../share/euka_dir/";
+    string euka_dir = "../share/vgan/euka_dir/";
     string dbprefix = "euka_db";
     int lengthToProf = 5;
     string prof_out_file_path = getFullPath(cwdProg+"../");
