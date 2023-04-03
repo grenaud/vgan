@@ -286,7 +286,7 @@ For additional output options:
 ```
 Please note that the Taxa name provided to the ```--outGroup``` argument must be a taxon defined in euka's database. 
 
-If you specify the ```--outFrag``` option you will be provided with a list of all read names that map to one taxon. To extract these reads for further downstream analysis you can use the following command:
+If you specify the ```--outFrag``` option you will be provided with a list of all read names that belong to the detected taxa (one taxon per row). To extract these reads for further downstream analysis you can use the following command:
 ```
 less -S [output file prefix]_FragNames.tsv | sed '[row number]!d' | sed 's/\t/\n/g' | seqtk subseq [FASTQ input file] - > output.fq
 ```
@@ -353,14 +353,14 @@ The abundance file will list all availabe taxa, while the detected file will onl
 
 There are multiple ways to visualise eukas output. To make sure the provided scripts work, we recommend installing the provided conda environment:
 ```
-conda env create -f ~/vgan/tools/euka.yml
+conda env create -f ~/vgan/bin/euka.yml
 ```
 Or make sure the following packages are installed for python ete3, csv and argparse; for R, you will need the libraries ggplot2 and ggpubr. 
 
 You have the option to visualize these two files with a taxonomic tree using the provided Python script (make sure Python is in your path):
 ``` 
-python ~/vgan/tools/make_tree_from_ouput.py [output file prefix]_abundance.tsv
-python ~/vgan/tools/make_tree_from_ouput.py [output file prefix]_detected.tsv 
+python ~/vgan/bin/make_tree_from_ouput.py [output file prefix]_abundance.tsv
+python ~/vgan/bin/make_tree_from_ouput.py [output file prefix]_detected.tsv 
 ```
 
 The coverage file consists of all detected taxa and their corresponding number of bins. It shows the number of reads sorted into each bin. The coverage TSV file is used by our plotting script to show for a barplot.
@@ -372,7 +372,7 @@ Additionally, we provide an average damage profile for the 5’ end and the 3’
 
 To visualize detected taxa you can use the following provided script:
 ``` 
-~/vgan/tools/visualize_detected_taxa.sh [output file prefix] 
+~/vgan/bin/visualize_detected_taxa.sh [output file prefix] 
 ```
 To visualize only a specific detected taxon please use: 
 ```
