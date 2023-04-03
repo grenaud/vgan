@@ -68,9 +68,16 @@ mkdir -P $HOME/share/vgan/
 mkdir -P $HOME/share/vgan/euka_dir/
 wget -nc -l1 --recursive --no-directories --no-parent -P $HOME/share/vgan/euka_dir/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/
 mkdir -P $HOME/share/vgan/damageProfiles/
-wget -O $/usr/bin/share/vgan/damageProfiles/none.prof https://raw.githubusercontent.com/grenaud/vgan/main/share/vgan/damageProfiles/none.prof
-
+wget -O $HOME/share/vgan/damageProfiles/none.prof https://raw.githubusercontent.com/grenaud/vgan/main/share/vgan/damageProfiles/none.prof
 ```
+Additionally, you can download eukas visualisation scripts:
+```
+wget  -O $HOME/bin/make_tree_from_output.py https://raw.githubusercontent.com/grenaud/vgan/main/bin/make_tree_from_output.py
+wget  -O $HOME/bin/plot_taxon.R https://raw.githubusercontent.com/grenaud/vgan/main/bin/plot_taxon.R
+wget  -O $HOME/bin/visualize_detected_taxa.sh https://raw.githubusercontent.com/grenaud/vgan/main/bin/visualize_detected_taxa.sh
+wget  -O $HOME/bin/euka.yml https://raw.githubusercontent.com/grenaud/vgan/main/bin/euka.yml
+```
+
 Alternatively, you can install the graph files elsewhere and specify them using:
 
 For HaploCart:
