@@ -48,8 +48,10 @@ sudo wget -nc -l1 --recursive --no-parent -P /usr/bin/share/vgan/ ftp://ftp.heal
 
 For euka:
 ```
-sudo mkdir -p /usr/bin/share/vgan/euka_files/
+sudo mkdir -p /usr/bin/share/vgan/euka_dir/
 sudo wget -nc -l1 --recursive --no-parent -P /usr/bin/share/vgan/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/
+sudo mkdir -p /usr/bin/share/vgan/damageProfiles/
+sudo wget -O $/usr/bin/share/vgan/damageProfiles/none.prof https://raw.githubusercontent.com/grenaud/vgan/main/share/vgan/damageProfiles/none.prof
 ```
 
 If you do not have root access, you can download them in the directory of your choice but for ease, you can download them to a share directory in your home folder:
@@ -63,10 +65,12 @@ wget -nc -l1 --recursive --no-directories --no-parent -P $HOME/share/vgan/hcfile
 For euka:
 ```
 mkdir -P $HOME/share/vgan/
-mkdir -P $HOME/share/vgan/euka_files/
-wget -nc -l1 --recursive --no-directories --no-parent -P $HOME/share/vgan/euka_files/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/
-```
+mkdir -P $HOME/share/vgan/euka_dir/
+wget -nc -l1 --recursive --no-directories --no-parent -P $HOME/share/vgan/euka_dir/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/
+mkdir -P $HOME/share/vgan/damageProfiles/
+wget -O $/usr/bin/share/vgan/damageProfiles/none.prof https://raw.githubusercontent.com/grenaud/vgan/main/share/vgan/damageProfiles/none.prof
 
+```
 Alternatively, you can install the graph files elsewhere and specify them using:
 
 For HaploCart:
