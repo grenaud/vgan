@@ -143,6 +143,6 @@ test: ${TEST_PREREQS}
 	${MAKE} autocomp && ${CXX} -o ${BIN_DIR}test $(FLAGS_TEST)
 
 clean:
-	rm -f *.o && rm -f ../bin/* && rm -f -r ../test/output_files/* &&  mkdir -p ../test/output_files/euka
+	rm -f *.o && rm -f ../bin/vgan && rm -f ../bin/test && rm -f -r ../test/output_files/* &&  mkdir -p ../test/output_files/euka
 
 
