@@ -14,6 +14,11 @@ The easiest way to run vgan is to download the static binary.
 
 Step 1: Download the static binary
 
+```
+wget [URL TO RELEASE BINARY]
+```
+
+
 If you have root access, simply install the executable by running
 
 ```
