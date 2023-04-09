@@ -49,7 +49,7 @@ sudo wget -nc -l1 --recursive --no-parent -P /usr/bin/share/vgan/ ftp://ftp.heal
 For euka:
 ```
 sudo mkdir -p /usr/bin/share/vgan/euka_dir/
-sudo wget -nc -l1 --recursive --no-parent -P /usr/bin/share/vgan/euka_dir/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/*
+sudo wget -nc -l1 --recursive --no-parent -P /usr/bin/share/vgan/euka_dir/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/
 sudo mkdir -p /usr/bin/share/vgan/damageProfiles/
 sudo wget -O $/usr/bin/share/vgan/damageProfiles/none.prof https://raw.githubusercontent.com/grenaud/vgan/main/share/vgan/damageProfiles/none.prof
 ```
