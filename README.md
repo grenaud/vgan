@@ -49,11 +49,14 @@ sudo wget -nc -l1 --recursive --no-parent -P /usr/bin/share/vgan/ ftp://ftp.heal
 For euka:
 ```
 sudo mkdir -p /usr/bin/share/vgan/euka_dir/
-sudo wget -nc -l1 --recursive --no-parent -P /usr/bin/share/vgan/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/
+sudo wget -nc -l1 --recursive --no-parent -P /usr/bin/share/vgan/euka_dir/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/*
 sudo mkdir -p /usr/bin/share/vgan/damageProfiles/
 sudo wget -O $/usr/bin/share/vgan/damageProfiles/none.prof https://raw.githubusercontent.com/grenaud/vgan/main/share/vgan/damageProfiles/none.prof
 ```
-
+If euka is to be used by multiple users, please ensure that the file ```/usr/bin/share/vgan/euka_dir/euka_db.dist``` has writing permission with the following command:
+```
+sudo chmod +w /usr/bin/share/vgan/euka_dir/euka_db.dist
+```
 If you do not have root access, you can download them in the directory of your choice but for ease, you can download them to a share directory in your home folder:
 
 For HaploCart:
@@ -70,6 +73,11 @@ wget -nc -l1 --recursive --no-directories --no-parent -P $HOME/share/vgan/euka_d
 mkdir -P $HOME/share/vgan/damageProfiles/
 wget -O $HOME/share/vgan/damageProfiles/none.prof https://raw.githubusercontent.com/grenaud/vgan/main/share/vgan/damageProfiles/none.prof
 ```
+If euka is to be used by multiple users, please ensure that the file ```$HOME/share/vgan/euka_dir/euka_db.dist``` has writing permission with the following command:
+```
+sudo chmod +w  $HOME/share/vgan/euka_dir/euka_db.dist
+```
+
 Additionally, you can download eukas visualisation scripts:
 ```
 wget  -O $HOME/bin/make_tree_from_output.py https://raw.githubusercontent.com/grenaud/vgan/main/bin/make_tree_from_output.py
@@ -113,6 +121,11 @@ wget -nc -l1 --recursive --no-directories --no-parent -P euka_dir/ ftp://ftp.hea
 When calling the euka command, please make sure to add ```--euka_dir``` option with the correct input path to the euka_dir directory with the graph file.
 eukas associated graph files have a size of 11Gb; please make sure that enough space is available when downloading. 
 
+If euka is to be used by multiple users, please ensure that the file ```euka_dir/euka_db.dist``` has writing permission with the following command:
+```
+sudo chmod +w euka_dir/euka_db.dist
+```
+
 ### Building vgan from source
 
 Please ensure that git is installed on your system.
@@ -154,6 +167,10 @@ and for euka:
 
 ```
 make eukafilesmade
+```
+If euka is to be used by multiple users, please ensure that the file ```$HOME/share/vgan/euka_dir/euka_db.dist``` has writing permission with the following command:
+```
+sudo chmod +w  $HOME/share/vgan/euka_dir/euka_db.dist
 ```
 
 from the src directory
