@@ -61,16 +61,15 @@ If you do not have root access, you can download them in the directory of your c
 
 For HaploCart:
 ```
-mkdir -P $HOME/share/vgan/
-mkdir -P $HOME/share/vgan/hcfiles/
+mkdir -p $HOME/share/vgan/
+mkdir -p $HOME/share/vgan/hcfiles/
 wget -nc -l1 --recursive --no-directories --no-parent -P $HOME/share/vgan/hcfiles/ ftp://ftp.healthtech.dtu.dk:/public/haplocart/hcfiles/
 ```
 For euka:
 ```
-mkdir -P $HOME/share/vgan/
-mkdir -P $HOME/share/vgan/euka_dir/
+mkdir -p $HOME/share/vgan/euka_dir/
 wget -nc -l1 --recursive --no-directories --no-parent -P $HOME/share/vgan/euka_dir/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/
-mkdir -P $HOME/share/vgan/damageProfiles/
+mkdir -p $HOME/share/vgan/damageProfiles/
 wget -O $HOME/share/vgan/damageProfiles/none.prof https://raw.githubusercontent.com/grenaud/vgan/main/share/vgan/damageProfiles/none.prof
 ```
 If euka is to be used by multiple users, please ensure that the file ```$HOME/share/vgan/euka_dir/euka_db.dist``` has writing permission with the following command:
