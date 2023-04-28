@@ -175,7 +175,7 @@ long double MCMC::get_proposal_likelihood(const vector <long double> &proposal_v
 
     	for (int k = 1; k<clade_vec->at(total_f_list.at(j)*3+1)->clade_like.size(); k++){
 
-    		total_frac += log((frac * clade_vec->at(total_f_list.at(j)*3+1)->clade_like.at(k) + (1-frac) * av *(1/335)));
+    		total_frac += log(((frac * clade_vec->at(total_f_list.at(j)*3+1)->clade_like.at(k)) + (clade_vec->at(total_f_list.at(j)*3+1)->clade_not_like.at(k)  * (1/335))));
     		
 #ifdef DEBUGGENERATEVEC
     		cerr << "total_frac " << total_frac << endl;
