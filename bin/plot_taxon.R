@@ -10,12 +10,36 @@ args=(commandArgs(TRUE))
 #read in damage profile (will be read in one by one)
 dam <- read.table(paste0(args[1],"_",args[2],".prof"), header = F)
 # read in inSize file (will be read in once)
-insize <- read.csv(paste0(args[1],"_inSize.tsv"), header = F, sep = '\t')
-ne <- t(insize)
+# Read the file line by line
+lines <- readLines(paste0(args[1],"_inSize.tsv"))
+# Split each line by whitespace/tab to separate the elements
+data <- lapply(lines, function(line) unlist(strsplit(line, split = "\t")))
 
-colnames(ne) <- ne[1,]
-ne <- ne[-1,]
-ne <- as.data.frame(ne)
+# Find the maximum number of elements in a row
+max_row_length <- max(lengths(data))
+
+# Pad the shorter rows with NA to make them equal in length
+data_padded <- lapply(data, function(row) {
+  if (length(row) < max_row_length) {
+    c(row, rep(NA, max_row_length - length(row)))
+  } else {
+    row
+  }
+})
+
+
+# Create a dataframe from the data
+df <- as.data.frame(data_padded, stringsAsFactors = FALSE)
+
+# Transpose the dataframe
+df <- t(df)
+
+# Set the first row as column names
+colnames(df) <- df[1, ]
+
+# Remove the first row (names)
+ne <- df[-1, ]
+
 # read in coverage data 
 cov <- read.csv(paste0(args[1],"_coverage.tsv"), header = T, sep = "\t", row.names = 1)
 
