@@ -12,14 +12,13 @@ vgan is supported for use on Linux systems.
 
 The easiest way to run vgan is to download the static binary. 
 
-Step 1: Download the static binary
+Step 1: Download the static binary. The list of releases is here: https://github.com/grenaud/vgan/tags Each release comes with a static binary. Find the URL of the static binary by right-clicking and selecting "copy link"
 
 ```
 wget [URL TO RELEASE BINARY]
 ```
 
-
-If you have root access, simply install the executable by running
+Where you paste the URL of the binary.  If you have root access, simply install the executable by running
 
 ```
 sudo cp vgan /usr/bin
