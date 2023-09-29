@@ -29,8 +29,6 @@ CXX      = g++ -s -std=c++2a -w
 
 
 
-
-
 FLAGS_STATIC =  haplocart_functions.o MCMC.o compute_init_vec.o gam2prof.o baseshift.o     map_giraffe_Euka.o damage.o Euka.o vgan.o Clade.o update_likelihood.o HaploCart.o get_posterior.o \
                process_mapping.o  fa2fq.o get_p_obs_base.o read_fasta.o map_giraffe.o rmdup.o load.o readPathHandleGraph.o NodeInfo.o \
                AlignmentInfo.o ../lib/libgab/libgab.a ../lib/libgab/gzstream/gzstream.o ../dep/vg/obj/subcommand/subcommand.o \
@@ -105,11 +103,11 @@ autocomp:
 #.NOTPARALLEL: hcfiles eukafiles vgmade test
 
 ${VGDIR}:
-	rm -rf ${VGDIR} && git clone --recurse-submodules -j ${NPROCS} https://github.com/vgteam/vg.git ${VGDIR}
+	rm -rf ${VGDIR} && git clone --recurse-submodules https://github.com/JoshuaDanielRubin/SAFARI.git -j ${NPROCS}  ${VGDIR}
 
 ${VGDIR}include/vg/vg.pb.h vgmade: ${VGDIR}
-	(cd ${VGDIR} && git checkout 8e14f9e43219ff7389cb197c340a8a8e4613f87e && git submodule update --init --recursive)
-	(cd ${VGDIR} &&. ./source_me.sh && ${MAKE} -j ${NPROCS} && touch vgmade)
+	#(cd ${VGDIR} && git checkout 8e14f9e43219ff7389cb197c340a8a8e4613f87e && git submodule update --init --recursive)
+	(cd ${VGDIR} &&. ./source_me.sh && ${MAKE} -j ${NPROCS}) && touch vgmade
 
 hcfiles hcfilesmade: vgmade
 	wget -nc -l1 --recursive --no-parent -P ../share/vgan/ ftp://ftp.healthtech.dtu.dk:/public/haplocart/hcfiles/ && \
