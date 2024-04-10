@@ -1,32 +1,53 @@
 #!/bin/bash
 
-# Function to display help message
+# Function to show help
 show_help() {
-    echo "Usage: $0 [options] <input_name>"
+    echo "Usage: $0 <taxon_name> [options]"
+    echo ""
+    echo "First argument must be the taxon name."
+    echo "Then, options can be specified."
     echo ""
     echo "Options:"
-    echo "  -h, --help               Show this help message and exit."
-    echo "  --vg-path <path>         Explicitly specify the path to the VG executable."
-    echo "  taxa                     Overview of all available taxa in the soibean database."
+    echo "  -h, --help           Show this help message"
+    echo "  --vg-path <path>     Specify the VG executable path (optional)"
     echo ""
-    echo "Arguments:"
-    echo "  input_name               Taxon of interest. This taxon will be extracted from the soibean database."
-    echo ""
-    echo "Examples:"
-    echo "  $0 taxa                  Provides a list of all available taxa in the soibean database"
-    echo "  $0 taxon_name --vg-path /path/to/vg  Extracts the taxon of interest from the soibean database and creates all index files needed for soibean."
-    echo ""
+    echo "Example:"
+    echo "$0 Ursidae --vg-path /usr/local/bin/"
 }
 
-# Set the script's working directory to $HOME/vgan/share/vgan/soibean_dir/
-SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+# Function to check for vg binary or download it
+find_or_download_vg_binary() {
+    # If a VG path is specified, check if 'vg' exists there.
+    if [[ -n "$VG_EXECUTABLE_PATH" ]]; then
+        # Append "/vg" if the path does not end with it, assuming it's a directory.
+        if [[ ! "$VG_EXECUTABLE_PATH" =~ vg$ ]]; then
+            VG_EXECUTABLE_PATH="${VG_EXECUTABLE_PATH}/vg"
+        fi
+        # Check if the vg binary exists and is executable.
+        if [[ ! -x "$VG_EXECUTABLE_PATH" ]]; then
+            echo "VG executable not found at $VG_EXECUTABLE_PATH. Downloading..."
+            # Download directly to the specified path (considering VG_EXECUTABLE_PATH includes '/vg').
+            wget -O "$VG_EXECUTABLE_PATH" https://github.com/vgteam/vg/releases/download/v1.44.0/vg
+            chmod +x "$VG_EXECUTABLE_PATH"
+            echo "VG executable downloaded to: $VG_EXECUTABLE_PATH"
+        else
+            echo "Using VG executable found at $VG_EXECUTABLE_PATH"
+        fi
+    else
+        # No VG path specified, check the current working directory.
+        if [[ -x "./vg" ]]; then
+            VG_EXECUTABLE_PATH="./vg"
+            echo "Using VG executable found in the current directory."
+        else
+            echo "VG executable not found in the current directory. Downloading..."
+            VG_EXECUTABLE_PATH="./vg"
+            wget -O "$VG_EXECUTABLE_PATH" https://github.com/vgteam/vg/releases/download/v1.44.0/vg
+            chmod +x "$VG_EXECUTABLE_PATH"
+            echo "VG executable downloaded to the current directory."
+        fi
+    fi
+}
 
-
-# No arguments, show help
-if [ $# -eq 0 ]; then
-    show_help
-    exit 0
-fi
 
 # Check for help option
 if [[ "$1" == "-h" || "$1" == "--help" ]]; then
@@ -34,59 +55,46 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
     exit 0
 fi
 
-# Initialize VG_EXECUTABLE_PATH variable
+input_name="$1" # The first argument is always the input/taxa name.
+shift # Remove the first argument so we can process the rest.
+
+# Initialize VG_EXECUTABLE_PATH variable with an empty value indicating not set.
 VG_EXECUTABLE_PATH=""
 
-# Parse options
-while [[ "$1" =~ ^- && ! "$1" == "--" ]]; do case $1 in
-  --vg-path )
-    shift
-    # Check if the path ends with "vg" or "/", and adjust accordingly
-    if [[ "${1}" == */vg ]]; then
-      VG_EXECUTABLE_PATH="${1}"
-    elif [[ "${1}" == */ ]]; then
-      VG_EXECUTABLE_PATH="${1}vg"
-    else
-      VG_EXECUTABLE_PATH="${1}/vg"
-    fi
-    ;;
-  * )
-    show_help
-    exit 1
-    ;;
-esac; shift; done
-if [[ "$1" == '--' ]]; then shift; fi
+# Now process the rest of the arguments for options.
+while [[ "$1" =~ ^- ]]; do
+    case "$1" in
+        --vg-path)
+            shift # Move past the option to get its value.
+            VG_EXECUTABLE_PATH="$1"
+            # Ensure the path ends with "vg" or is a directory.
+            if [[ ! "$VG_EXECUTABLE_PATH" == */vg && ! -d "$VG_EXECUTABLE_PATH" ]]; then
+                VG_EXECUTABLE_PATH="$VG_EXECUTABLE_PATH/vg"
+            fi
+            ;;
+        *)
+            show_help
+            exit 1
+            ;;
+    esac
+    shift # Move to the next option.
+done
 
-
-input_name=$1
-
-# Function to check for vg binary or download it
-find_or_download_vg_binary() {
-    if [[ -n "$VG_EXECUTABLE_PATH" ]]; then
-        if [[ ! -x "$VG_EXECUTABLE_PATH" ]]; then
-            # VG path specified but executable not found, download it
-            echo "VG executable not found at $VG_EXECUTABLE_PATH. Downloading..."
-            wget -O "$VG_EXECUTABLE_PATH" https://github.com/vgteam/vg/releases/download/v1.44.0/vg
-            chmod +x "$VG_EXECUTABLE_PATH"
-            echo "VG executable downloaded to: $VG_EXECUTABLE_PATH"
-        else
-            echo "Using specified VG executable path: $VG_EXECUTABLE_PATH"
-        fi
-        return 0
-    fi
-
-    # VG path not specified, search for it
-    # (You can add default search locations and logic here)
-}
-
-# Call find_or_download_vg_binary to handle VG executable path logic
+# Call the function to check for the VG executable or download it.
 find_or_download_vg_binary
+
+echo "Processing input name: $input_name"
+
+SCRIPT_DIR=$(readlink -f "$(dirname "$0")")
+
 
 CLADE_FILE="${SCRIPT_DIR}/soibean_db.clade"
 # Check for the soibean_db.clade file, download if not exists
 if [ ! -f "$CLADE_FILE" ]; then
     echo "soibean_db.clade file not found. Downloading..."
     wget -nc --recursive --no-parent -P "${SCRIPT_DIR}" ftp://ftp.healthtech.dtu.dk:/public/soibean_files/soibean_db.clade
+    mv ftp.healthtech.dtu.dk/public/soibean_files/soibean_db.clade ${SCRIPT_DIR} 
+    rm -r ftp.healthtech.dtu.dk/public/soibean_files/
 else
     echo ""
 fi

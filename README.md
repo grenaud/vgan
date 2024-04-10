@@ -476,6 +476,8 @@ soibean is a tool crafted for identifying and placing ancient environmental DNA 
 For fastq mapped to the taxon of bears (Ursidae):
 ```
 wget https://github.com/grenaud/vgan/raw/main/test/input_files/soibean/k1.fq.gz
+cd $HOME/vgan/share/vgan/soibean_dir/tree_dir
+unzip trees.zip
 ./make_graph_files.sh taxa
 ./make_graph_files.sh Ursidae
 vgan soibean -fq1 k1.fq.gz --dbprefix Ursidae -t 20
