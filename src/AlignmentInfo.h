@@ -17,6 +17,14 @@ class AlignmentInfo{
 private:
 
 public:
+
+    struct BaseInfo {
+      char readBase;
+      char referenceBase;
+      bool pathSupport;
+      double logLikelihood;
+    };
+
     string seq;
     string name;
     vg::Path path;
@@ -24,6 +32,11 @@ public:
     string quality_scores;
     bool is_paired;
     double identity;
+    int n_reads;
+    vector<string> mostProbPath;
+    unordered_map <string,double> pathMap;
+    unordered_map <string, bool> supportMap;
+    unordered_map <string, vector<vector<BaseInfo>>> detailMap;
 
     AlignmentInfo();
     AlignmentInfo(const AlignmentInfo & other);

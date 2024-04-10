@@ -1,13 +1,22 @@
-
 #include "Euka.h"
 #include <random>
 
+
+//#define DEBUGGIRAFFE
 using namespace vg;
 
-#define PRINTVEC(v) for (const auto &el : v){cerr << el << '\t';}cerr << endl<< endl;   
+const char get_dummy_qual_score(double &background_error_prob)             {
+    // Given a background error probability, return a dummy quality score for the artificial FASTQ reads
+    string illumina_encodings = "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHI";
+    const int Q = -10 * log10(background_error_prob);
+    return illumina_encodings[Q];
+                                                                           }
+
+
 void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n_threads, bool interleaved,
-                                                    const char * fifo_A, const vg::subcommand::Subcommand* sc,
-                                                    const string &tmpdir, const string &cwdProg, const string &prefix){
+		       const char * fifo_A, const vg::subcommand::Subcommand* sc,
+		       const string &tmpdir, const string &cwdProg, const string &prefix){
+    cerr << "Mapping reads..." << endl;
 
     int retcode;
     vector<string> arguments;
@@ -17,91 +26,76 @@ void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n
     auto normal_cout = cout.rdbuf();
     ofstream cout(fifo_A);
     std::cout.rdbuf(cout.rdbuf());
+
     // Map with VG Giraffe to generate a GAM file
     string minimizer_to_use= prefix + ".min";
 
-if (fastq1filename != "" && fastq2filename != "")
-    {
+    if (fastq1filename != "" && fastq2filename != "")
+	{
 
-        arguments.emplace_back("-f");
-        arguments.emplace_back(fastq1filename);
-        arguments.emplace_back("-f");
-        arguments.emplace_back(fastq2filename);
-        arguments.emplace_back("-Z");
-        arguments.emplace_back(prefix + ".giraffe.gbz");
-        arguments.emplace_back("-d");
-        arguments.emplace_back(prefix + ".dist");
-        arguments.emplace_back("-m");
-        arguments.emplace_back(minimizer_to_use);
-        arguments.emplace_back("-s");
-        arguments.emplace_back("100");
-        arguments.emplace_back("-D");
-        arguments.emplace_back("400");
-        arguments.emplace_back("-w");
-        arguments.emplace_back("40");
-        arguments.emplace_back("-v");
-        arguments.emplace_back("2");
-        arguments.emplace_back("-r");
-        arguments.emplace_back("30");
-        arguments.emplace_back("-t");
-        arguments.emplace_back(to_string(n_threads));
-        char** argvtopass = new char*[arguments.size()];
-        for (int i=0;i<arguments.size();i++) {
-            argvtopass[i] = const_cast<char*>(arguments[i].c_str());
-                                             }
+	    arguments.emplace_back("-f");
+	    arguments.emplace_back(fastq1filename);
+	    arguments.emplace_back("-f");
+	    arguments.emplace_back(fastq2filename);
+	    arguments.emplace_back("-g");
+	    arguments.emplace_back(prefix + ".gg");
+	    arguments.emplace_back("-d");
+	    arguments.emplace_back(prefix + ".dist");
+	    arguments.emplace_back("-m");
+	    arguments.emplace_back(minimizer_to_use);
+	    arguments.emplace_back("-H");
+	    arguments.emplace_back(prefix + ".gbwt");
+	    arguments.emplace_back("-x");
+	    arguments.emplace_back(prefix + ".og");
+	    char** argvtopass = new char*[arguments.size()];
+	    for (int i=0;i<arguments.size();i++) {
+		argvtopass[i] = const_cast<char*>(arguments[i].c_str());
+	    }
 
-        auto* sc = vg::subcommand::Subcommand::get(arguments.size(), argvtopass);
-        auto normal_cerr = cerr.rdbuf();
-        //std::cerr.rdbuf(NULL);
-        (*sc)(arguments.size(), argvtopass);
-        //std::cerr.rdbuf(normal_cerr);
+	    auto* sc = vg::subcommand::Subcommand::get(arguments.size(), argvtopass);	    
+	    auto normal_cerr = cerr.rdbuf();
+	    //std::cerr.rdbuf(NULL);
+	    (*sc)(arguments.size(), argvtopass);
+	    //std::cerr.rdbuf(normal_cerr);
 
-    }
+	}
 
-else if (fastq1filename != "" && fastq2filename == "")
-    {
-               arguments.emplace_back("-f");
-               arguments.emplace_back(fastq1filename);
-               arguments.emplace_back("-Z");
-               arguments.emplace_back(prefix + ".giraffe.gbz");
-               arguments.emplace_back("-d");
-               arguments.emplace_back(prefix + ".dist");
-               arguments.emplace_back("-m");
-               arguments.emplace_back(minimizer_to_use);
-               arguments.emplace_back("-s");
-               arguments.emplace_back("100");
-               arguments.emplace_back("-D");
-               arguments.emplace_back("400");
-               arguments.emplace_back("-w");
-               arguments.emplace_back("40");
-               arguments.emplace_back("-v");
-               arguments.emplace_back("2");
-               arguments.emplace_back("-r");
-               arguments.emplace_back("30");
-               arguments.emplace_back("-t");
-               arguments.emplace_back(to_string(n_threads));
+    else if (fastq1filename != "" && fastq2filename == "")
+	{
+	    arguments.emplace_back("-f");
+	    arguments.emplace_back(fastq1filename);
+	    arguments.emplace_back("-g");
+	    arguments.emplace_back(prefix + ".gg");
+	    arguments.emplace_back("-d");
+	    arguments.emplace_back(prefix + ".dist");
+	    arguments.emplace_back("-m");
+	    arguments.emplace_back(minimizer_to_use);
+	    arguments.emplace_back("-H");
+	    arguments.emplace_back(prefix + ".gbwt");
+	    arguments.emplace_back("-x");
+	    arguments.emplace_back(prefix + ".og");
 
+	    if (interleaved) {
+		arguments.emplace_back("-i");
+	    }
 
-           if (interleaved) {
-               arguments.emplace_back("-i");
-                            }
+	    char** argvtopass = new char*[arguments.size()];
+	    for (int i=0;i<arguments.size();i++) {
+		argvtopass[i] = const_cast<char*>(arguments[i].c_str());
+#ifdef DEBUGGIRAFFE		
+		cerr<<"argvtopass["<<i<<"] = "<<argvtopass[i] <<endl;
+#endif
+	    }
 
-               //PRINTVEC(arguments)
+	    auto* sc = vg::subcommand::Subcommand::get(arguments.size(), argvtopass);
+	    auto normal_cerr = cerr.rdbuf();
+	    //std::cerr.rdbuf(NULL);
+	    (*sc)(arguments.size(), argvtopass);
+	    //std::cerr.rdbuf(normal_cerr);
+	    delete[] argvtopass;
 
-               char** argvtopass = new char*[arguments.size()];
-               for (int i=0;i<arguments.size();i++) {
-                   argvtopass[i] = const_cast<char*>(arguments[i].c_str());
-                                                    }
-
-               auto* sc = vg::subcommand::Subcommand::get(arguments.size(), argvtopass);
-               auto normal_cerr = cerr.rdbuf();
-               //std::cerr.rdbuf(NULL);
-               (*sc)(arguments.size(), argvtopass);
-               //std::cerr.rdbuf(normal_cerr);
-               delete[] argvtopass;
-
-    }
+	}
 
     std::cout.rdbuf(normal_cout);
-
+    std::cerr << "Reads mapped" << endl;
 }

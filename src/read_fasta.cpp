@@ -43,7 +43,7 @@ const pair<vector<string>, vector<string>> Haplocart::read_fasta(const string & 
                 if (!(contains_only_valid_bases(line))) {
                     string invalid_base;
                     invalid_base += get_invalid_base(line);
-                    //throw std::runtime_error("[HaploCart] Error, invalid base " + invalid_base);
+                    throw std::runtime_error("[HaploCart] Error, invalid base " + invalid_base);
                                                         }
                 content += line;
             }
@@ -58,7 +58,7 @@ const pair<vector<string>, vector<string>> Haplocart::read_fasta(const string & 
 
     if (vec.empty()){throw std::runtime_error("[HaploCart] Error, no sequences found in FASTA input file");}
     vector<string> sorted_ids = ids; sort(sorted_ids.begin(), sorted_ids.end());
-    for (int i=1; i<sorted_ids.size(); ++i) {
+    for (size_t i=1; i<sorted_ids.size(); ++i) {
         if (sorted_ids[i] == sorted_ids[i-1]) {cerr << "[HaploCart] Warning: Duplicate id in multifasta file: " + sorted_ids[i] << '\n';}
                                                                          }
     return make_pair(vec, ids);

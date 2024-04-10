@@ -13,7 +13,7 @@ const vector<long double> Euka::compute_init_vec(vector<Clade *> * clade_vec, ve
 
     for (int i=0; i<clade_list_id.size(); i++){
 
-    	total_frag_count += clade_vec->at(clade_list_id.at(i)*3+1)->count;
+    	total_frag_count += clade_vec->at(clade_list_id.at(i)*6+1)->count;
 
     }
 
@@ -24,7 +24,7 @@ const vector<long double> Euka::compute_init_vec(vector<Clade *> * clade_vec, ve
     vector<long double> total_f_list;
     for (int n=0; n<clade_list_id.size(); n++){
 
-        const long double frag_count = clade_vec->at(clade_list_id.at(n)*3+1)->count;
+        const long double frag_count = clade_vec->at(clade_list_id.at(n)*6+1)->count;
 
         const long double dis = frag_count/total_frag_count;
 

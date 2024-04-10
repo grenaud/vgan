@@ -149,7 +149,7 @@ static pair <vector<AlignmentInfo *>*, vector<int>> readGAM3(const bdsg::ODGI &g
 
             // with the clade id access the pairwise average distance computed for each clade
 
-            double pair_dist = clade_vec->at(c_n*3 +1)->dist;  // *3+1 is to index the vector of pointers (every clade has 3 entries (*3) but the counting starts at 0)
+            double pair_dist = clade_vec->at(c_n*6 +1)->dist;  // *3+1 is to index the vector of pointers (every clade has 3 entries (*3) but the counting starts at 0)
 
 
             // reconstructing the graph and the read sequence
@@ -160,7 +160,7 @@ static pair <vector<AlignmentInfo *>*, vector<int>> readGAM3(const bdsg::ODGI &g
 
             // Init baseshift data array in clade_vec
 
-            int** baseshift_data_array_location = clade_vec->at(c_n*3+1)->baseshift_clade_array;
+            unsigned int** baseshift_data_array_location = clade_vec->at(c_n*6+1)->baseshift_clade_array;
 
             // init baseshift data array in baseshift class
             Baseshift baseshift_data_array(lengthToProf, baseshift_data_array_location);
@@ -224,7 +224,7 @@ static pair <vector<AlignmentInfo *>*, vector<int>> readGAM3(const bdsg::ODGI &g
 #endif
 
 
-    	   //for each base
+           //for each base
             for ( unsigned int m=0; m<graph_seq.size();m++)
             {
 
@@ -335,7 +335,7 @@ static pair <vector<AlignmentInfo *>*, vector<int>> readGAM3(const bdsg::ODGI &g
                     // If no damage profile is provided the pre-damage substitution matrix is multiplied by 0 and stays the same.
 
                     for(int bpd=0;bpd<4;bpd++){
-                	    //post damage = prob pre damage * damage rate from bpo to bpd
+                        //post damage = prob pre damage * damage rate from bpo to bpd
                         for(int bpo=0;bpo<4;bpo++){
                             probBasePostDamage[bpd]+=probBasePreDamage[bpo]*subDeamDiNuc[Lseq][n].p[bpo][bpd];
 #ifdef DEBUGDAMAGE2
@@ -377,18 +377,18 @@ static pair <vector<AlignmentInfo *>*, vector<int>> readGAM3(const bdsg::ODGI &g
 
 
 
-                	double log_lik_marg   = 0.0; //sum of the likelihoods but in log space, this will be added to log_lik
+                    double log_lik_marg   = 0.0; //sum of the likelihoods but in log space, this will be added to log_lik
                     // LEVEL 3 //
                     //as we do not know the base post damage, we marginalize over it
                     // we already know the probability of each base after damage. we marginalise over these probabilities and add the probability to see a seq error
                     // if the base in the read is still equal to the bpd (which are the base probility after damage from the graph) there also can't be a seq error (1 - e)
-                	for(int bpd=0;bpd<4;bpd++){
-                	    if( "ACGT"[bpd]== read_seq[m]){// no sequencing error
-                		//                                                    Prob of bpd                no seq error
+                    for(int bpd=0;bpd<4;bpd++){
+                        if( "ACGT"[bpd]== read_seq[m]){// no sequencing error
+                        //                                                    Prob of bpd                no seq error
                             log_lik_marg = oplusInitnatl( log_lik_marg , log(    probBasePostDamage[bpd]*(  1 - qscore_vec[base_quality]) ) );
 
-                	    }else{ // we are already marginalising over all possible bases, if the base is not matching it must be a seq error.
-                		//                                                    Prob of bpd                seq error
+                        }else{ // we are already marginalising over all possible bases, if the base is not matching it must be a seq error.
+                        //                                                    Prob of bpd                seq error
                             log_lik_marg = oplusInitnatl( log_lik_marg , log(    probBasePostDamage[bpd]* (qscore_vec[base_quality]/3) ) ) ;
                         }
                     }
@@ -451,7 +451,7 @@ static pair <vector<AlignmentInfo *>*, vector<int>> readGAM3(const bdsg::ODGI &g
                 in_clade_lik     += log_lik;
                 not_in_clade_lik += log_lik_2;
 #ifdef DEBUGDAMAGE2
-                cerr<<a.name()<<","<<(in_clade_lik - not_in_clade_lik)<< "," << clade_vec->at(c_n*3 +1)->name <<endl; 
+                cerr<<a.name()<<","<<(in_clade_lik - not_in_clade_lik)<< "," << clade_vec->at(c_n*6 +1)->name <<endl; 
 #endif
 
                 if(read_seq[m] != '-' && isrev == false){
@@ -464,44 +464,57 @@ static pair <vector<AlignmentInfo *>*, vector<int>> readGAM3(const bdsg::ODGI &g
             } // END loop through each base
 
 
-
+    //////////////////////////////// CLADE LIKELIHOOD ////////////////////////////////////////
+    /// We are computing the clade likelihood with the following function: 
+    /// 
+    /// Likelihood function = (vi * (logit(M1/M2) * MQ) + (1 - (logit(M1/M2) * (MQ)) / len(v)))
+    //
+    // function to update the likelihood function.
+    // The clade_like and clade_not_like vector are stored within the CLADE class and are estimated for each read that maps to a specific clade.
+    // clade like = logit(M1/M2) * (MQ)
+    // clade_not_like = 1 - (logit(M1/M2) * (MQ))
+    // As soon as  a clade has passed all filters and therefore has been "detected", it is considered for the distribution vector (init_distr)
+    // The init distr is calculated based on the number of total reads mapped to detected clades and than divided by the number of reads mapped to one clade
+    // The number of fragments of the distribution = len(v)
+    // The fragment of the distribution = vi
+    /// the product of the mapping quality and the logit of like_ratio is stored in the clade object as a vector "clade_like". It is computed while going through the gam file. 
+    /// The rest of the function will be computed after the lambda function went through the gam file. 
+    /////////////////////////////////////////////////////////////////////////////////////////
 
 
             double ratio = (in_clade_lik - not_in_clade_lik); 
             
-            //double p_ratio =  ; //the logit function is defind in miscfunc.h
 
             double map_q = (1- get_p_incorrectly_mapped(a.mapping_quality())); //get_p_incorrectly_mapped is taken from Haplocart but also stored in miscfunc.h
             
             // saving the probability of each read coming from the clade and not coming from that clade.
-            //clade_vec->at(c_n*3+1)->clade_like.emplace_back(map_q * p_ratio);
-            //clade_vec->at(c_n*3+1)->clade_not_like.emplace_back(1 - (map_q * p_ratio));
-            clade_vec->at(c_n*3+1)->clade_like.emplace_back(map_q * exp((in_clade_lik) - oplusInitnatl(in_clade_lik, not_in_clade_lik)));
-            clade_vec->at(c_n*3+1)->clade_not_like.emplace_back(1 - (map_q * (exp((in_clade_lik) - oplusInitnatl(in_clade_lik, not_in_clade_lik)))));
-
+            clade_vec->at(c_n*6+1)->clade_like.emplace_back(map_q * exp((in_clade_lik) - oplusInitnatl(in_clade_lik, not_in_clade_lik)));
+            clade_vec->at(c_n*6+1)->clade_not_like.emplace_back(1 - (map_q *(exp((in_clade_lik) - oplusInitnatl(in_clade_lik, not_in_clade_lik)))));
     
 
 
 
 #ifdef DEBUGREADGAM
 
-            cerr << a.name() << "," << in_clade_lik << "," << not_in_clade_lik << "," << (in_clade_lik - not_in_clade_lik) << "," << clade_vec->at(c_n*3 +1)->name << "," << a.mapping_quality() << endl;
+            cerr << a.name() << "," << in_clade_lik << "," << not_in_clade_lik << "," << (in_clade_lik - not_in_clade_lik) << "," << clade_vec->at(c_n*6 +1)->name << "," << a.mapping_quality() << endl;
 #endif
 
+            //cout << a.name() << "," << in_clade_lik << "," << not_in_clade_lik << "," << (in_clade_lik - not_in_clade_lik) << "," << clade_vec->at(c_n*3 +1)->name << "," << a.mapping_quality() << endl;
             // the mapping (read and all nodes it mapped to) has a likelihood higher than 1 it will be counted and included in the coverage estimation
             if (
                 ((in_clade_lik) - (not_in_clade_lik) > 1) && //if the likelihood of the in-clade model is greater than the random alignment one
                 
-                
+                //cout << clade_vec->at(c_n*6 + 1)->name << '\t' << a.mapping_quality() << endl; 
                 (a.mapping_quality() > MINIMUMMQ) //&&                   //AND the mapping quality is greater than 29
                 //(entropy_score > ENTROPY_SCORE_THRESHOLD) 
                 
 
                 ){ // we only take detected reads and pass them on 
-
-                    clade_vec->at(c_n*3 +1)->count++;
-                    clade_vec->at(c_n*3+1)->inSize.emplace_back(a.sequence().size());
-                    clade_vec->at(c_n*3+1)->nameStorage.emplace_back(a.name());
+		    //cout << clade_vec->at(c_n*6 + 1)->name << '\t' << a.mapping_quality() << endl;
+                    //cerr << a.name() << ",PASS"<< "\t" <<((in_clade_lik) - (not_in_clade_lik))<<endl;
+                    clade_vec->at(c_n*6 +1)->count++;
+                    clade_vec->at(c_n*6+1)->inSize.emplace_back(a.sequence().size());
+                    clade_vec->at(c_n*6+1)->nameStorage.emplace_back(a.name());
 
 
 #ifdef DEBUGREADGAM
@@ -568,8 +581,9 @@ static pair <vector<AlignmentInfo *>*, vector<int>> readGAM3(const bdsg::ODGI &g
     vg::get_input_file(gamfilename, [&](istream& in) { vg::io::for_each(in, lambda);    });
 
     int sum_of_clades = 0;
-    for (int i = 1;i<clade_vec->size();i+=3) {
+    for (int i = 1;i<clade_vec->size();i+=6) {
         sum_of_clades += clade_vec->at(i)->count;
+        //cout << "sum_of_clades" << sum_of_clades << endl;
 
        
     }
@@ -592,22 +606,22 @@ static pair <vector<AlignmentInfo *>*, vector<int>> readGAM3(const bdsg::ODGI &g
 
 
 
-        if (std::count(check_for_zero.begin(), check_for_zero.end(), 0.0) || check_for_zero.size() < MINNUMOFBINS || clade_vec->at(i*3+1)->count < MINNUMOFREADS){
+        if (std::count(check_for_zero.begin(), check_for_zero.end(), 0.0) || check_for_zero.size() < MINNUMOFBINS || clade_vec->at(i*6+1)->count < MINNUMOFREADS){
 
 
 #ifdef VERBOSE_S
-            cerr << "The clade " << clade_vec->at(i*3+1)->name << " could not be detected." << endl;
+            cerr << "The clade " << clade_vec->at(i*6+1)->name << " could not be detected." << endl;
             
 #endif     
         }
         else {
             // creating a list of ids 
-            clade_list_id.emplace_back(clade_vec->at(i*3+1)->id);
+            clade_list_id.emplace_back(clade_vec->at(i*6+1)->id);
 
 
 
 #ifdef VERBOSE_S
-            cerr << "Clade " << clade_vec->at(i*3+1)->name << " is present in the sample." << endl;
+            cerr << "Clade " << clade_vec->at(i*6+1)->name << " is present in the sample." << endl;
 #endif
 
 
@@ -630,6 +644,5 @@ cerr << "Number of fragments after filtering: " << sum_of_clades << endl;
 
     return make_pair(read_vec, clade_list_id);
 }
-
 
 

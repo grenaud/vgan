@@ -33,13 +33,16 @@ public:
     int64   id;
     string name;
     double dist;
+    int noPaths;
     int count;
+    int snode;
+    int enode;
     vector<double> clade_like;
     vector<double> clade_not_like; 
     vector<int> inSize; 
-    int** baseshift_clade_array; //Mikkel code
+    unsigned int** baseshift_clade_array; //Mikkel code
     vector<string>nameStorage; 
-    Clade(const int64 id,const string name,const double dist, const int count, const vector<double> clade_like, const vector<double> clade_not_like, const vector<int> inSize, int** baseshift_clade_array, const vector<string> nameStorage); //Mikkel code last argument
+    Clade(const int64 id,const string name,const double dist, const int noPaths, const int snode, const int enode, const int count, const vector<double> clade_like, const vector<double> clade_not_like, const vector<int> inSize, unsigned int** baseshift_clade_array, const vector<string> nameStorage); //Mikkel code last argument
     Clade(const Clade & other);
     ~Clade();
     Clade & operator= (const Clade & other);

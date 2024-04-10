@@ -10,10 +10,13 @@
 //using namespace google::protobuf;
 
 
-Clade::Clade(int64 id, string name, double dist, int count, std::vector<double> clade_like, vector<double> clade_not_like,const vector<int> inSize, int** baseshift_clade_array, const vector<string> nameStorage){ // Mikkel code last argument
+Clade::Clade(int64 id, string name, double dist, int noPaths, int snode, int enode, int count, std::vector<double> clade_like, vector<double> clade_not_like,const vector<int> inSize, unsigned int** baseshift_clade_array, const vector<string> nameStorage){ // Mikkel code last argument
     this->id = id;
     this->name = name;
     this->dist = dist;
+    this->noPaths = noPaths;
+    this->snode = snode;
+    this->enode = enode;
     this->count = count;
     this->clade_like = clade_like;
     this->clade_not_like = clade_not_like;

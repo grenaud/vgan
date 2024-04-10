@@ -1,14 +1,21 @@
-#include "Euka.h"
+#include "damage.h"
 using namespace std;
 
 
+Damage::Damage(){
+
+}
+
+Damage::~Damage(){
+
+}
 
 //! A method to combined 5' deam rates and 3' deam rates
 /*!
   This method is called by the initDeamProbabilities.
   It uses the "worse" deamination
 */
-void Euka::combineDeamRates(long double f1[4],long double f2[4],long double f[4],int b){
+void Damage::combineDeamRates(long double f1[4],long double f2[4],long double f[4],int b){
     long double minFreq = MIN2(f1[b] , f2[b]);
     //cout<<b<<"\t"<<f1[b]<<"\t"<<f2[b]<<"\t"<<f[b]<<"\t"<<minFreq<<endl;
 
@@ -31,7 +38,7 @@ void Euka::combineDeamRates(long double f1[4],long double f2[4],long double f[4]
 /*!
   This method is called by the run/main function
 */
-void Euka::initDeamProbabilities(const string & deam5pfreqE,const string & deam3pfreqE){
+void Damage::initDeamProbabilities(const string & deam5pfreqE,const string & deam3pfreqE){
 
     vector<substitutionRates> sub5pT;
     vector<substitutionRates> sub3pT;

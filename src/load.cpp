@@ -110,17 +110,20 @@ vector<Clade *> * Euka::load_clade_info(const string clade_info_path, int length
     igzstream myfile;
     myfile.open(clade_info_path.c_str(), ios::in);
     string line;
-    int** init_array; // Mikkel code
+    unsigned int** init_array; // Mikkel code
     while ( getline (myfile,line) )
         {
             vector<string> tokens= allTokensWhiteSpaces(line);
-            assert(tokens.size() == 3);
+            assert(tokens.size() == 6);
             for(unsigned int i=0;i<tokens.size();i++){
-                Clade * clade_info = new Clade(0, "", 0.0, 0, {0.0}, {0.0}, {0}, init_array, {""}); //Mikkel code last argument
+                Clade * clade_info = new Clade(0, "", 0.0, 0, 0, 0, 0, {0.0}, {0.0}, {0}, init_array, {""}); //Mikkel code last argument
                 //cout<<"tokens["<<i<<"]= "<<tokens[i]<<endl;
                 clade_info->id = stoi(tokens[0]);
                 clade_info->name = tokens[1];
                 clade_info->dist = stod(tokens[2]);
+                clade_info->noPaths = stoi(tokens[3]);
+                clade_info->snode = stoi(tokens[4]);
+                clade_info->enode = stoi(tokens[5]);
                 clade_info->count = 0;
                 clade_info->clade_like = {0.0};
                 clade_info->inSize = {0};
@@ -130,11 +133,11 @@ vector<Clade *> * Euka::load_clade_info(const string clade_info_path, int length
                 // Mikkel code begins
 
                 // Construct baseshift clade_Array
-                int **baseshift_clade_array;
-                baseshift_clade_array = new int*[lengthToProf*2];
+                unsigned int **baseshift_clade_array;
+                baseshift_clade_array = new unsigned int*[lengthToProf*2];
 
                 for (int p = 0; p < lengthToProf*2; p++){
-                    baseshift_clade_array[p] = new int[16];
+                    baseshift_clade_array[p] = new unsigned int[16];
 
                     for (int i = 0; i < 16; i++){
                         baseshift_clade_array[p][i] = 0;
@@ -152,57 +155,83 @@ vector<Clade *> * Euka::load_clade_info(const string clade_info_path, int length
 
     return clade_vec;
 }
+
+// Overload for boost test
+
+//vector<Clade *> * Euka::load_clade_info(const string &clade_info_path, const int lengthToProf, const bool){
+//    return Euka::load_clade_info(clade_info_path,lengthToProf);
+//                                                                                                          }
 
 // // // Mikkel code begin - This should be done better
+// vector<Clade *> * Gam2prof::load_clade_info(const string &clade_info_path, const int lengthToProf){ // Mikkel last argument
+//     vector<Clade *> * clade_vec = new vector<Clade *>();
+//     igzstream myfile;
+//     myfile.open(clade_info_path.c_str(), ios::in);
+//     string line;
+//     unsigned int** init_array; // Mikkel code
+//     while ( getline (myfile,line) )
+//         {
+//             vector<string> tokens= allTokensWhiteSpaces(line);
+//             for(unsigned int i=0;i<tokens.size();i++){
+//                 Clade * clade_info = new Clade(0, "", 0.0, 0, {0.0}, {0.0}, {0}, init_array); //Mikkel code last argument
+//                 //cout<<"tokens["<<i<<"]= "<<tokens[i]<<endl;
+//                 clade_info->id = stoi(tokens[0]);
+//                 clade_info->name = tokens[1];
+//                 clade_info->dist = stod(tokens[2]);
+//                 clade_info->count = 0;
+//                 clade_info->clade_like = {0.0};
+//                 clade_info->inSize = {0};
 
-vector<Clade *> * Gam2prof::load_clade_info(const string clade_info_path, int lengthToProf){ // Mikkel last argument
-    vector<Clade *> * clade_vec = new vector<Clade *>();
-    igzstream myfile;
-    myfile.open(clade_info_path.c_str(), ios::in);
-    string line;
-    int** init_array; // Mikkel code
-    while ( getline (myfile,line) )
-        {
-            vector<string> tokens= allTokensWhiteSpaces(line);
-            for(unsigned int i=0;i<tokens.size();i++){
-                Clade * clade_info = new Clade(0, "", 0.0, 0, {0.0}, {0.0}, {0}, init_array, {""}); //Mikkel code last argument
-                //cout<<"tokens["<<i<<"]= "<<tokens[i]<<endl;
-                clade_info->id = stoi(tokens[0]);
-                clade_info->name = tokens[1];
-                clade_info->dist = stod(tokens[2]);
-                clade_info->count = 0;
-                clade_info->clade_like = {0.0};
-                clade_info->inSize = {0};
-                clade_info->nameStorage = {""};
+//                 // Mikkel code begins
+
+//                 // Construct baseshift clade_Array
+//                 unsigned int **baseshift_clade_array;
+//                 baseshift_clade_array = new unsigned int*[lengthToProf*2];
+
+//                 for (int p = 0; p < lengthToProf*2; p++){
+//                     baseshift_clade_array[p] = new unsigned int[16];
+
+//                     for (int i = 0; i < 16; i++){
+//                         baseshift_clade_array[p][i] = 0;
+//                     }
+//                 };
+//                 clade_info->baseshift_clade_array = baseshift_clade_array;
+
+//                 // Mikkel code ends
+
+//                 clade_vec->emplace_back(clade_info);
+//             }
+
+//         }
+
+//     return clade_vec;
+// }
 
 
-                // Mikkel code begins
 
-                // Construct baseshift clade_Array
-                int **baseshift_clade_array;
-                baseshift_clade_array = new int*[lengthToProf*2];
 
-                for (int p = 0; p < lengthToProf*2; p++){
-                    baseshift_clade_array[p] = new int[16];
+// const vector<vector<bool>> Euka::load_path_supports_Euka(const string & pathsupportfile) {
+//     vector<vector<bool>> path_supports(6271738);
+//     const string path_support_path = pathsupportfile;
+//     igzstream myfile;
+//     myfile.open(path_support_path.c_str(), ios::in);
+//     string line;
+//     int index = 0;
+//     while (getline(myfile, line))
+//     {
+//         for (int j=0; j<line.size(); ++j) {
+//         char supported = line[j];
+//         if (supported == '1') {path_supports[index].emplace_back(true);}
+//         else {path_supports[index].emplace_back(false);}
+//         }
+//         index += 1;
+//     }
+//     return path_supports;
+// }
 
-                    for (int i = 0; i < 16; i++){
-                        baseshift_clade_array[p][i] = 0;
-                    }
-                }; 
-                
-                clade_info->baseshift_clade_array = baseshift_clade_array;
 
-                // Mikkel code ends
 
-                clade_vec->emplace_back(clade_info);
-            }
-
-        }
-
-    return clade_vec;
-}
-
-vector<vector<tuple<int, int, double, double > > > Gam2prof::load_clade_chunks(string clade_chunk_path){
+vector<vector<tuple<int, int, double, double > > > Gam2prof::load_clade_chunks(const string &clade_chunk_path){
     vector<vector<tuple<int, int, double, double > > > chunks;
     vector<tuple<int, int, double, double > > bin_range;
     igzstream myfile;
@@ -227,7 +256,6 @@ vector<vector<tuple<int, int, double, double > > > Gam2prof::load_clade_chunks(s
     }
     return chunks;
 }
-
 // // Mikkel code end
 
 

@@ -1,26 +1,68 @@
 #pragma once
+#include "libgab.h"
+#include <random>
+#include <limits>
+#include <unordered_set>
+
 #define MIN2(a,b) (((a)<(b))?(a):(b))
 #define MAX2(a,b) (((a)>(b))?(a):(b))
 #define probably_true(x) __builtin_expect(!!(x), 1)
 
-//Taken from: https://stackoverflow.com/questions/11964552/finding-quartiles
-template <typename T1, typename T2> typename T1::value_type quant(const T1 &x, T2 q)
-{
-    assert(q >= 0.0 && q <= 1.0);
-    
-    const auto n  = x.size();
-    const auto id = (n - 1) * q;
-    const auto lo = floor(id);
-    const auto hi = ceil(id);
-    const auto qs = x[lo];
-    const auto h  = (id - lo);
-    
-    return (1.0 - h) * qs + h * x[hi];
+// Compute the mean of a sequence
+inline long double mean(const std::vector<long double>& v) {
+    return std::accumulate(v.begin(), v.end(), 0.0) / v.size();
 }
 
-constexpr double logit(const double like_rato){
-    double p = 1 / (1 + (exp(-(like_rato -1))/1));
-    return p;
+// Compute the variance of a sequence
+inline long double variance(const std::vector<long double>& v, long double mean) {
+    long double sum = 0.0;
+    for (const auto& i : v) {
+        long double diff = i - mean;
+         sum += diff * diff;
+    }
+    return sum / (v.size() - 1);
+}
+
+// Compute the autocorrelation of a sequence at lag k
+inline long double autocorrelation(const std::vector<long double>& v, int k) {
+    long double m = mean(v);
+    long double denom = variance(v, m);
+
+    double numer = 0.0;
+    for (size_t i = 0; i < v.size() - k; ++i) {
+        numer += ((v[i] - m) * (v[i + k] - m));
+    }
+
+    return numer / ((v.size() - k) * denom);
+}
+
+// Compute the effective sample size (ESS) of a sequence
+inline double effectiveSampleSize(const std::vector<long double>& v) {
+    double m = mean(v);
+    double vari = variance(v, m);
+
+    int max_lag = v.size() / 2;
+    double rho_hat_even = 1.0;
+    double rho_hat_odd = autocorrelation(v, 1);
+    double rho_hat_tot = rho_hat_even + rho_hat_odd;
+
+    // First part of autocorrelation, where lag <= max_lag
+    int t = 1;
+    while ((t < max_lag - 2) && (rho_hat_even + rho_hat_odd > 0)) {
+        rho_hat_even = autocorrelation(v, t + 1);
+        rho_hat_odd = autocorrelation(v, t + 2);
+        rho_hat_tot += 2.0 * (rho_hat_even + rho_hat_odd);
+        t += 2;
+    }
+
+    // Might be negative at end, so set to zero
+    if (rho_hat_even + rho_hat_odd < 0) {
+        rho_hat_tot -= (rho_hat_even + rho_hat_odd);
+    }
+
+    double n_eff = v.size() / (1 + rho_hat_tot);
+
+    return n_eff;
 }
 
 typedef struct {
@@ -56,7 +98,6 @@ typedef struct {
 } diNucleotideProb;
 
 
-
 static void readNucSubstitionRatesFreq(const string filename,vector<substitutionRates> & subVec){
     igzstream subFP;
 
@@ -72,9 +113,10 @@ static void readNucSubstitionRatesFreq(const string filename,vector<substitution
 	    throw std::runtime_error("Unable to open file "+filename);
 	}
 	fields = allTokens(line,'\t');
+        if (fields.size() == 13){fields.pop_back();}
 
 	if(fields.size() != 12){
-	    throw std::runtime_error("line from error profile does not have 12 fields "+line);
+	    throw std::runtime_error("line from error profile has " + to_string(fields.size()) + " fields rather than 12");
 	}
 
 
@@ -82,9 +124,10 @@ static void readNucSubstitionRatesFreq(const string filename,vector<substitution
 	while ( getline (subFP,line)){
 
 	    fields = allTokens(line,'\t');
+            if (fields.size() == 13){fields.pop_back();}
 
 	    if(fields.size() != 12){
-		throw std::runtime_error("line from error profile does not have 12 fields "+line);
+		throw std::runtime_error("line from error profile has " + to_string(fields.size()) + " fields rather than 12");
 	    }
 
 	    substitutionRates tempFreq;
@@ -192,4 +235,40 @@ inline constexpr double get_p_incorrectly_mapped(const int Q)
 int main_filter(int argc, char** argv);
 int main_gamsort(int argc, char** argv);
 int main_giraffe(int argc, char** argv);
+
+// void update_clade_dis(vector <double> clade_like, vector<double> clade_not_like, double frac, int vec_len){
+
+//     std::transform(clade_like.begin(), clade_like.end(), clade_like.begin(), [&frac](auto & c){return c*frac;});
+
+//     std::transform(clade_not_like.begin(), clade_not_like.end(), clade_not_like.begin(),[&vec_len](auto & c){return c/vec_len;});
+
+// }
+
+constexpr double logit(const double like_rato){
+
+    const double p = 1 / (1 + (exp(-(like_rato -1))/1));
+
+    return p;
+
+}
+
+//Taken from: https://stackoverflow.com/questions/11964552/finding-quartiles
+template <typename T1, typename T2> typename T1::value_type quant(const T1 &x, T2 q)
+{
+    assert(q >= 0.0 && q <= 1.0);
+
+    const auto n  = x.size();
+    const auto id = (n - 1) * q;
+    const auto lo = floor(id);
+    const auto hi = ceil(id);
+    const auto qs = x[lo];
+    const auto h  = (id - lo);
+
+    return (1.0 - h) * qs + h * x[hi];
+}
+
+
+
+
+
 

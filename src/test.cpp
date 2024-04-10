@@ -4,6 +4,8 @@
 #include "HaploCart.h"
 #include "readGAM.h"
 #include "Euka.h"
+#include "soibean.h"
+#include "MCMC.h"
 #include <boost/test/unit_test.hpp>
 #include <boost/test/tools/output_test_stream.hpp>
 #include "crash.hpp"
@@ -14,6 +16,7 @@
 #include "bdsg/odgi.hpp"
 #define PRINTVEC(v) for (int i=0; i<20; ++i){cerr << v[i] << '\t';}cerr << endl << endl;
 using namespace vg;
+
 
 bool is_convertible_to_double(const std::string& str) {
     try {
@@ -62,6 +65,277 @@ struct Fixture {
     boost::unit_test::unit_test_log.set_threshold_level(boost::unit_test::log_messages);
   }
 };
+
+
+
+
+/////////////////////////////////////////// BEGIN TEST SOIBEAN ///////////////////////////////////////////////////
+struct BranchPlacementRecord {
+    std::string source;
+    int chain;
+    double meanBranchPosition;
+    double meanBranchPositionCI;
+    double medianBranchPosition;
+    double medianBranchPositionCI;
+    double effectiveSampleSize;
+    double autocorrelationVariance;
+};
+
+struct ProportionEstimateRecord {
+    std::string source;
+    int chain;
+    double meanProportionEstimate;
+    double meanProportionEstimateCI5;
+    double medianProportionEstimate;
+    double medianProportionEstimateCI95;
+    double effectiveSampleSize;
+    double autocorrelationVariance;
+};
+
+// Struct for Chain Diagnostics data
+struct ChainDiagnosticsRecord {
+    std::string source;
+    double highestLogLikelihood;
+    int rhatProportionEstimate;
+    double rhatBranchPositionEstimate;
+};
+
+
+// Function to split a string by whitespace
+std::vector<std::string> split(const std::string &s) {
+    std::vector<std::string> result;
+    std::istringstream iss(s);
+    for (std::string token; iss >> token; )
+        result.push_back(token);
+    return result;
+}
+
+auto load_result_file(const string &file_path){
+
+                                                                                      }
+
+auto load_trace_file(const string &file_path){
+
+                                                                                      }
+
+std::vector<ChainDiagnosticsRecord> loadChainDiagnosticsData(const std::string& filename) {
+    std::vector<ChainDiagnosticsRecord> records;
+    std::ifstream file(filename);
+    std::string line;
+
+    // Read and discard the header line
+    getline(file, line);
+
+    while (getline(file, line)) {
+        auto tokens = split(line);
+        if (tokens.size() >= 5) {
+            ChainDiagnosticsRecord record;
+            record.source = tokens[0];
+            record.highestLogLikelihood = std::stod(tokens[1]);
+            record.rhatProportionEstimate = std::stod(tokens[2]);
+            record.rhatBranchPositionEstimate = std::stod(tokens[3]);
+            records.push_back(record);
+        }
+    }
+    return records;
+}
+
+std::vector<ProportionEstimateRecord> load_prop_diagnostics_file(const string &file_path) {
+    std::vector<ProportionEstimateRecord> records;
+    std::ifstream file(file_path);
+    std::string line;
+
+    // Read and discard the header line
+    getline(file, line);
+
+    while (getline(file, line)) {
+        auto tokens = split(line);
+
+        if (tokens.size() >= 9) {
+            ProportionEstimateRecord record;
+            record.source = tokens[0];
+            record.chain = std::stoi(tokens[1]);
+            record.meanProportionEstimate = std::stod(tokens[2]);
+            record.meanProportionEstimateCI5 = std::stod(tokens[3]);
+            record.medianProportionEstimate = std::stod(tokens[4]);
+            record.medianProportionEstimateCI95 = std::stod(tokens[5]);
+
+            try {
+                record.effectiveSampleSize = std::stod(tokens[6]);
+                record.autocorrelationVariance = std::stod(tokens[7]);
+            } catch (const std::invalid_argument&) {
+                record.effectiveSampleSize = -1;
+                record.autocorrelationVariance = -1;
+            }
+            records.push_back(record);
+        }
+    }
+    return records;
+}
+                                                                                                      
+                                                                                   
+
+std::vector<BranchPlacementRecord> load_branch_placement_diagnostics_file(const string &file_path) {
+    std::vector<BranchPlacementRecord> records;
+    std::ifstream file(file_path);
+    std::string line;
+
+    // Read and discard the header line
+    getline(file, line);
+
+    while (getline(file, line)) {
+        auto tokens = split(line);
+
+        if (tokens.size() >= 8) {
+            BranchPlacementRecord record;
+            record.source = tokens[0];
+
+            // Debugging output and robust conversion for 'chain'
+            try {
+                record.chain = std::stoi(tokens[1]);
+            } catch (const std::invalid_argument& e) {
+                std::cerr << "Invalid argument for stoi on line: " << line << "\nError: " << e.what() << std::endl;
+                continue; // Skip this record
+            }
+
+            record.meanBranchPosition = std::stod(tokens[2]);
+            record.meanBranchPositionCI = std::stod(tokens[3]);
+            record.medianBranchPosition = std::stod(tokens[4]);
+            record.medianBranchPositionCI = std::stod(tokens[5]);
+
+            try {
+                record.effectiveSampleSize = std::stod(tokens[6]);
+                record.autocorrelationVariance = std::stod(tokens[7]);
+            } catch (const std::invalid_argument&) {
+                record.effectiveSampleSize = -1;
+                record.autocorrelationVariance = -1;
+            }
+            records.push_back(record);
+        }
+    }
+    return records;
+}
+
+
+
+                                                                                                        
+
+
+///////////////////////////////////////////// TEST SOIBEAN //////////////////////////////////////////////////////////
+
+BOOST_AUTO_TEST_SUITE(Soibean)
+
+
+void run_k1(soibean * sb){
+
+
+vector<string> soibean_argvec;
+soibean_argvec.emplace_back("vgan");
+soibean_argvec.emplace_back("soibean");
+soibean_argvec.emplace_back("-fq1");
+soibean_argvec.emplace_back(getCWD(".")+"bin/" + "../test/input_files/soibean/k1.fq.gz");
+soibean_argvec.emplace_back("-t");
+soibean_argvec.emplace_back("20");
+soibean_argvec.emplace_back("-o");
+soibean_argvec.emplace_back(getCWD(".")+"bin/" + "../test/output_files/soibean/k1");
+soibean_argvec.emplace_back("--dbprefix");
+soibean_argvec.emplace_back("Ursidae");
+soibean_argvec.emplace_back("--iter");
+soibean_argvec.emplace_back("1000");
+soibean_argvec.emplace_back("--burnin");
+soibean_argvec.emplace_back("150");
+soibean_argvec.emplace_back("--chains");
+soibean_argvec.emplace_back("1");
+
+
+char** argvtopass = new char*[soibean_argvec.size()];
+for (int i=0;i<soibean_argvec.size();i++) {
+                   argvtopass[i] = const_cast<char*>(soibean_argvec[i].c_str());
+                                       }
+
+sb->run(soibean_argvec.size(), argvtopass, getCWD(".")+"bin/");
+
+
+                                                  }
+
+void run_k2(soibean * sb){
+
+
+vector<string> soibean_argvec;
+soibean_argvec.emplace_back("vgan");
+soibean_argvec.emplace_back("soibean");
+soibean_argvec.emplace_back("-fq1");
+soibean_argvec.emplace_back(getCWD(".")+"bin/" + "../test/input_files/soibean/k2.fq.gz");
+soibean_argvec.emplace_back("-t");
+soibean_argvec.emplace_back("20");
+soibean_argvec.emplace_back("-o");
+soibean_argvec.emplace_back(getCWD(".")+"bin/" + "../test/output_files/soibean/k2");
+soibean_argvec.emplace_back("--dbprefix");
+soibean_argvec.emplace_back("Ursidae");
+soibean_argvec.emplace_back("--iter");
+soibean_argvec.emplace_back("1000");
+soibean_argvec.emplace_back("--burnin");
+soibean_argvec.emplace_back("150");
+soibean_argvec.emplace_back("--chains");
+soibean_argvec.emplace_back("1");
+
+
+char** argvtopass = new char*[soibean_argvec.size()];
+for (int i=0;i<soibean_argvec.size();i++) {
+                   argvtopass[i] = const_cast<char*>(soibean_argvec[i].c_str());
+                                       }
+
+sb->run(soibean_argvec.size(), argvtopass, getCWD(".")+"bin/");
+
+
+                                                  }
+BOOST_AUTO_TEST_CASE(k2)
+{
+    soibean sb;
+
+    run_k2(&sb);
+    auto branchRecords = load_branch_placement_diagnostics_file(getCWD(".")+"bin/" + "../test/output_files/soibean/k2BranchEstimate2.txt");
+
+
+    auto propRecords = load_prop_diagnostics_file(getCWD(".")+"bin/" + "../test/output_files/soibean/k2ProportionEstimates2.txt");
+    double expectedValue = 0.5; // set the expected value
+    double tolerancePercent = 1.0; // set the tolerance as a percentage (e.g., 0.01 for 1%)
+    BOOST_CHECK_CLOSE(propRecords[0].meanProportionEstimate, expectedValue, tolerancePercent);
+    BOOST_CHECK_CLOSE(propRecords[1].meanProportionEstimate, expectedValue, tolerancePercent);
+
+    BOOST_ASSERT(branchRecords[0].meanBranchPosition > 0.9);
+    BOOST_ASSERT(branchRecords[1].meanBranchPosition > 0.9);
+    //BOOST_ASSERT(chainRecords[0].rhatBranchPositionEstimate < 10);
+    BOOST_ASSERT(branchRecords[0].source == "NC_003426.1_Ursus_americanus_mitochondrion__complete_genome" || branchRecords[0].source == "NC_009971.1_Ursus_thibetanus_mitochondrion__complete_genome");
+    BOOST_ASSERT(branchRecords[1].source == "NC_009971.1_Ursus_thibetanus_mitochondrion__complete_genome" || branchRecords[1].source == "NC_003426.1_Ursus_americanus_mitochondrion__complete_genome");
+
+}
+
+BOOST_AUTO_TEST_CASE(k1)
+{
+    soibean sb;
+    run_k1(&sb);
+    auto branchRecords = load_branch_placement_diagnostics_file(getCWD(".")+"bin/" + "../test/output_files/soibean/k1BranchEstimate1.txt");
+
+
+    auto propRecords = load_prop_diagnostics_file(getCWD(".")+"bin/" + "../test/output_files/soibean/k1ProportionEstimates1.txt");
+
+    BOOST_ASSERT(propRecords[0].meanProportionEstimate == 1.0);
+
+    BOOST_ASSERT(branchRecords[0].meanBranchPosition > 0.9);
+    //BOOST_ASSERT(chainRecords[0].rhatBranchPositionEstimate < 10);
+    BOOST_ASSERT(branchRecords[0].source == "NC_003426.1_Ursus_americanus_mitochondrion__complete_genome");
+
+}
+
+
+
+BOOST_AUTO_TEST_SUITE_END()
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// Output for k 1: right branch ? prop = 1 and pos > 0.9
+/// Output for k 2: right branches ? prop between 0.4 and 0.6 and sum to 1 and pos > 0.9 
 
 
 // Euka
@@ -897,4 +1171,5 @@ BOOST_AUTO_TEST_CASE(load) {
 
 BOOST_AUTO_TEST_SUITE_END()
 //////////////////////////////////////////// END TEST EUKA ///////////////////////////////////////////////////////
+
 

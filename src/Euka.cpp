@@ -8,9 +8,8 @@
 #include "miscfunc.h"
 #include "readOG_Euka.h"
 #include "MCMC.h"
+#include "damage.h"
 #include "baseshift.cpp" // Mikkel code
-#include <unistd.h>
-
 
 using namespace google::protobuf;
 using namespace vg;
@@ -86,11 +85,11 @@ const string Euka::usage() const{
 
           "vgan euka [options] \n"+
           "\n\nNo damage example:\n"+
-                  "\n\t./vgan euka -fq1 seqreads.fq.gz\n"+
+                  "\n\tvgan euka -fq1 seqreads.fq.gz\n"+
           "\n\nDamage example:\n"+
-                  "\n\t./vgan euka -fq1 seqreads.fq.gz --deam5p ../share/vgan/damageProfiles/dhigh5.prof --deam3p ../share/vgan/damageProfiles/dhigh3.prof\n"+
+                  "\n\tvgan euka -fq1 seqreads.fq.gz --deam5p ../share/damageProfiles/dhigh5.prof --deam3p ../share/damageProfiles/dhigh3.prof\n"+
           "\n\nUser specific MCMC example:\n"+
-                  "\n\t./vgan euka -fq1 seqreads.fq.gz -iter 100000 -burnin 1000"
+                  "\n\tvgan euka -fq1 seqreads.fq.gz -iter 100000 -burnin 1000"
 
           
 
@@ -103,13 +102,13 @@ const string Euka::usage() const{
                   "\t\t"+""  +"" +"-i"   +"\t\t\t" + "Paired-end reads are interleaved (default: false)"+"\n"+
                   //"\t\t"+""  +"" +"-g"   +"\t\t" + "GAM input file"+"\n"+ 
                   "\t\t"+""  +"" +"-o [STR]"   +"\t\t" + "Output file prefix (default: euka_output) "+"\n"+
-                  "\t\t"+""  +"" +"-t"   +"\t\t\t" + "Number of threads (-1 for all available), only for merged and single-end reads"+"\n"+
+                  "\t\t"+""  +"" +"-t"   +"\t\t\t" + "Number of threads (-1 for all available)"+"\n"+
                   "\t\t"+""  +"" +"-Z"   +"\t\t\t" + "Temporary directory (default: /tmp)"+"\n"+
                   "\n"+
                   "Filter options:\n"+
                   "\t\t"+""  +"" +"--minMQ [INT]"    +"\t\t"      +"Set the mapping quality minimum for a fragment (default: 29)"+"\n"+
                   "\t\t"+""  +"" +"--minFrag [INT]"    +"\t\t"      +"Minimum amount of fragments that need to map to a group (default: 10)"+"\n"+
-                  "\t\t"+""  +"" +"--entropy [double]"    +"\t"      +"Minimum entropy score for a bin to be considered (default: 1.17)"+"\n"+
+                  "\t\t"+""  +"" +"--entropy [double]"    +"\t\t"      +"Minimum entropy score for a bin to be considered (default: 1.17)"+"\n"+
                   "\t\t"+""  +"" +"--minBins [INT]"    +"\t\t"      +"Minimum number of bins that need to be available for a group (default: 6)"+"\n"+
                   "\n"+
                   "Damage options:"+"\n"+
@@ -125,7 +124,7 @@ const string Euka::usage() const{
                   "\n"+
                   "Additional output option:\n"+
                   "\t\t"+""  +"" +"--outFrag"     +"\t\t"   +"Outputs a file with all read names per taxonomic group (default: false)"+"\n"
-                  "\t\t"+""  +"" +"--outGroup [STR]"     +"\t"   +"Outputs all information about a taxonmic group of interest (default: empty)"+"\n"
+                  "\t\t"+""  +"" +"--outGroup [string]"     +"\t\t"   +"Outputs all information about a taxonmic group of interest (default: empty)"+"\n"
 
                   //"\t"+"-b" + "\t\t\t"+"Produce binary compressed output       (default: "+booleanAsString(uncompressed)+")\n"+
 		  ""
@@ -162,7 +161,7 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
     string outputfilename = "euka_output";
     bool euka_dirspecified = false;
     string euka_dir = "../share/vgan/euka_dir/";
-    string dbprefix = "euka_db";
+    string dbprefixS = "euka_db";
     int lengthToProf = 5;
     string prof_out_file_path = getFullPath(cwdProg+"../");
     unsigned int MINNUMOFBINS = 6; 
@@ -183,7 +182,7 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
         }
 
         if(string(argv[i]) == "--dbprefix"){
-            dbprefix = argv[i+1];
+            dbprefixS = argv[i+1];
             continue;
         }
 
@@ -193,20 +192,20 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
             samplename=fastq1filename.substr(idx + 1);
             samplename=fastq1filename;
             if (fastq1filename.ends_with(".fa") || fastq1filename.ends_with(".fasta") || fastq1filename.ends_with(".fa.gz") || fastq1filename.ends_with(".fasta.gz"))
-                {throw runtime_error("[Euka] Input file must be FASTQ, not FASTA");}
+                {throw runtime_error("[euka] Input file must be FASTQ, not FASTA");}
             continue;
                                 }
 
         if(string(argv[i]) == "-fq2"){
             fastq2filename = argv[i+1];
             if (fastq2filename.ends_with(".fa") || fastq2filename.ends_with(".fasta") || fastq2filename.ends_with(".fa.gz") || fastq2filename.ends_with(".fasta.gz"))
-                {throw runtime_error("[Euka] Input file must be FASTQ, not FASTA");}
+                {throw runtime_error("[euka] Input file must be FASTQ, not FASTA");}
             continue;
         }
 
         if(string(argv[i]) == "-i"){
             interleaved = true;
-            if (fastq2filename != ""){throw runtime_error("[Euka] If interleaved option chosen, Euka expects only one FASTQ file");}
+            if (fastq2filename != ""){throw runtime_error("[euka] If interleaved option chosen, Euka expects only one FASTQ file");}
             continue;
                                }
 
@@ -243,13 +242,13 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
         if(string(argv[i]) == "--entropy"){
             ENTROPY_SCORE_THRESHOLD=stod(argv[i+1]);
             assert(ENTROPY_SCORE_THRESHOLD >= 0);
-            if (ENTROPY_SCORE_THRESHOLD > 5.0){throw runtime_error("[Euka] Error, entropy thresold is too stringent");}
+            if (ENTROPY_SCORE_THRESHOLD > 5.0){throw runtime_error("[euka] Error, entropy thresold is too stringent");}
             continue;
         }
         if(string(argv[i]) == "--minBins"){
             MINNUMOFBINS=stoi(argv[i+1]);
             assert(MINNUMOFBINS >= 0);
-            if (MINNUMOFBINS > 20){throw runtime_error("[Euka] Error, minimum number of bins exceeds the total number of bins");}
+            if (MINNUMOFBINS > 20){throw runtime_error("[euka] Error, minimum number of bins exceeds the total number of bins");}
             continue;
         }
         if(string(argv[i]) == "--minMQ"){
@@ -273,13 +272,13 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
 
 
         if(string(argv[i]) == "-t"){
-        if (stoi(argv[i+1]) < -1 || stoi(argv[i+1]) == 0) {throw std::runtime_error("[Euka] Error, invalid number of threads");}
+        if (stoi(argv[i+1]) < -1 || stoi(argv[i+1]) == 0) {throw std::runtime_error("[euka] Error, invalid number of threads");}
         if (stoi(argv[i+1]) == -1) {n_threads = std::thread::hardware_concurrency();}
         else if (stoi(argv[i+1]) <= std::thread::hardware_concurrency()) {
                 n_threads = stoi(argv[i+1]);
                                                                          }
         else {
-               cerr << "[Euka] Warning, specified number of threads is greater than the number available. Using " << n_threads << " threads\n";
+               cerr << "[euka] Warning, specified number of threads is greater than the number available. Using " << n_threads << " threads\n";
                n_threads = std::thread::hardware_concurrency();
              }
             continue;
@@ -329,14 +328,15 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
     }
 
 
-    dbprefix              = euka_dir + dbprefix;
+    string dbprefix              = euka_dir + dbprefixS;
 
 
     string ogfilename     = dbprefix+".og";
     string vgfilename     = dbprefix+".vg";
     string cladefilename  = dbprefix+".clade";
     string binsfilename   = dbprefix+".bins";
-    string pathsupportfile = dbprefix+"_graph_path_supports";
+    //string pathsupportfile = dbprefix+"_graph_path_supports";
+    string gbtwfilename = dbprefix+".gbwt";
 
     // Checking if all mandatory graph input files exist
     if (isFile(ogfilename) == false){
@@ -346,8 +346,8 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
         throw(std::runtime_error(cladefilename + " does not exist."));
     } else if (isFile(binsfilename) == false){
         throw(std::runtime_error(binsfilename + " does not exist."));
-    } else if (isFile(pathsupportfile) == false){
-    	throw(std::runtime_error(pathsupportfile + " does not exist."));
+    } else if (isFile(gbtwfilename) == false){
+    	throw(std::runtime_error(gbtwfilename + " does not exist."));
      } 
 
 
@@ -359,7 +359,9 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
     if (fastq2filename != "") {if(!(filesystem::exists(fastq2filename)))
                       {throw std::runtime_error("[euka] Error, FASTQ2 input file " + fastq2filename + " does not exist");}}
 
-    initDeamProbabilities(deam5pfreqE,deam3pfreqE);
+
+    Damage dmg;
+    dmg.initDeamProbabilities(deam5pfreqE,deam3pfreqE);
 
 
     /////// WRITE PATH SUPPORTS FROM VG INPUT (ONLY NEED TO DO THIS ONCE) /////////
@@ -368,18 +370,23 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
     //write_path_supports("euka_db_graph_path_supports", nodevector);
     /////////// DONE WRITING PATH SUPPORTS ///////////////////////////////////////
 
-
-    cerr << "Reading in variation graph ..." << endl;
-
-    auto [nodevector, minid, graph] = Euka().readPathHandleGraph(ogfilename, 1, pathsupportfile);
-
-
     //read information about different clades
     cerr << "Reading in taxa information ..." << endl;
     cerr << "\t-------------------------------" << endl;
     vector<Clade *> * clade_vec = load_clade_info(cladefilename, lengthToProf);
     cerr << "... done!" << endl;
+    if (clade_vec->empty()) {
+    throw std::runtime_error("Error: The clade vector is empty. Unable to proceed. Check if the soibean.clade file is not empty.");
+    }
         cerr << "-------------------------------" << endl;
+
+
+    cerr << "Reading in variation graph ..." << endl;
+
+    auto [nodevector, minid, graph, node_path_matrix, path_names] = Euka().readPathHandleGraph(ogfilename, 1, gbtwfilename, dbprefixS, clade_vec);
+
+
+    
 
     // Check outgroup makes sense
     if (outGroup != ""){
@@ -397,6 +404,7 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
     vector<vector<tuple<int, int, double, double >>>  chunks = load_clade_chunks(binsfilename);
     cerr << "... done!" << endl;
     cerr << "\t-------------------------------" << endl;
+    if(chunks.empty()){throw runtime_error("Bins file is empty unable to proceed");}
 
 
 
@@ -490,7 +498,7 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
     cerr << "\t-------------------------------" << endl;
     auto [readgam, clade_id_list] = readGAM3(graph,fifo_A,populateAlignmentVector,clade_vec,\
                                              nodevector,qscore_vec, base_freq, t_T_ratio, rare_bases,\
-                                             chunks, subDeamDiNuc, lengthToProf, prof_out_file_path, MINIMUMMQ,\
+                                             chunks, dmg.subDeamDiNuc, lengthToProf, prof_out_file_path, MINIMUMMQ,\
                                              MINNUMOFREADS, MINNUMOFBINS, ENTROPY_SCORE_THRESHOLD);
     remove(fifo_A);
     cerr << " .. done!" << endl;
@@ -503,10 +511,10 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
 
         ofstream outnameStorage((outputfilename + "_FragNames.tsv").c_str(), ios::trunc);
         for (int i = 0; i < clade_id_list.size(); ++i){
-            outnameStorage << clade_vec->at(clade_id_list.at(i)*3+1)->name << '\t';
-            for (int s = 1; s<clade_vec->at(clade_id_list.at(i)*3+1)->nameStorage.size(); ++s){
-                    outnameStorage << clade_vec->at(clade_id_list.at(i)*3+1)->nameStorage.at(s);
-                    if (s != clade_vec->at(clade_id_list.at(i)*3+1)->nameStorage.size() -1){
+            outnameStorage << clade_vec->at(clade_id_list.at(i)*6+1)->name << '\t';
+            for (int s = 1; s<clade_vec->at(clade_id_list.at(i)*6+1)->nameStorage.size(); ++s){
+                    outnameStorage << clade_vec->at(clade_id_list.at(i)*6+1)->nameStorage.at(s);
+                    if (s != clade_vec->at(clade_id_list.at(i)*6+1)->nameStorage.size() -1){
                         outnameStorage << '\t';
                     }
                 }
@@ -518,18 +526,18 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
 
         int extra_id = -1;
         for (int j; j<chunks.size(); j++){
-            if (clade_vec->at(j*3+1)->name == outGroup){
-                extra_id =clade_vec->at(j*3+1)->id;
+            if (clade_vec->at(j*6+1)->name == outGroup){
+                extra_id =clade_vec->at(j*6+1)->id;
             }
         }
 
         clade_id_list.emplace_back(extra_id);
         ofstream outnameStorage((outputfilename + "_FragNames.tsv").c_str(), ios::trunc);
         for (int i = 0; i < clade_id_list.size(); ++i){
-            outnameStorage << clade_vec->at(clade_id_list.at(i)*3+1)->name << '\t';
-            for (int s = 1; s<clade_vec->at(clade_id_list.at(i)*3+1)->nameStorage.size(); ++s){
-                    outnameStorage << clade_vec->at(clade_id_list.at(i)*3+1)->nameStorage.at(s);
-                    if (s != clade_vec->at(clade_id_list.at(i)*3+1)->nameStorage.size() -1){
+            outnameStorage << clade_vec->at(clade_id_list.at(i)*6+1)->name << '\t';
+            for (int s = 1; s<clade_vec->at(clade_id_list.at(i)*6+1)->nameStorage.size(); ++s){
+                    outnameStorage << clade_vec->at(clade_id_list.at(i)*6+1)->nameStorage.at(s);
+                    if (s != clade_vec->at(clade_id_list.at(i)*6+1)->nameStorage.size() -1){
                         outnameStorage << '\t';
                     }
                 }
@@ -574,8 +582,8 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
         {
 
             //save id for specified outGroup if specified:
-            if (outGroup == clade_vec->at(i*3+1)->name){
-                extra_id =clade_vec->at(i*3+1)->id;
+            if (outGroup == clade_vec->at(i*6+1)->name){
+                extra_id =clade_vec->at(i*6+1)->id;
             }
 
 
@@ -587,16 +595,16 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
                 }
             }
             // a group is disregarded if they have an empty bin, their minimum number of bins above the entropy threshold is too low or their total amount of reads is to low.
-            if (std::count(check_for_zero.begin(), check_for_zero.end(), 0.0) || check_for_zero.size() < MINNUMOFBINS  || clade_vec->at(i*3+1)->count < MINNUMOFREADS)
+            if (std::count(check_for_zero.begin(), check_for_zero.end(), 0.0) || check_for_zero.size() < MINNUMOFBINS  || clade_vec->at(i*6+1)->count < MINNUMOFREADS)
             {
 
                 // in case a group is defined to be analysed no matter what this chunk of code will produce the coverage file
-                out << clade_vec->at(i*3+1)->name << '\t' << "no" << '\t' << clade_vec->at(i*3+1)->count << '\t' << 0 << endl;
-                if (outGroup == clade_vec->at(i*3+1)->name)
+                out << clade_vec->at(i*6+1)->name << '\t' << "no" << '\t' << clade_vec->at(i*6+1)->count << '\t' << 0 << endl;
+                if (outGroup == clade_vec->at(i*6+1)->name)
                 {
                                 
 
-                    outbin << clade_vec->at(i*3+1)->name << '\t';
+                    outbin << clade_vec->at(i*6+1)->name << '\t';
 
                     for (size_t j = 0; j<chunks[i].size()-1; j++){
                         outbin << std::fixed << std::setprecision(5);
@@ -609,10 +617,10 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
 
                     outbin << endl;
 
-                    outinSize << clade_vec->at(i*3+1)->name << '\t';
-                    for (int s = 1; s<clade_vec->at(i*3+1)->inSize.size(); s++){
-                        outinSize << clade_vec->at(i*3+1)->inSize.at(s);
-                        if (s != clade_vec->at(i*3+1)->inSize.size() -1){
+                    outinSize << clade_vec->at(i*6+1)->name << '\t';
+                    for (int s = 1; s<clade_vec->at(i*6+1)->inSize.size(); s++){
+                        outinSize << clade_vec->at(i*6+1)->inSize.at(s);
+                        if (s != clade_vec->at(i*6+1)->inSize.size() -1){
                             outinSize << '\t';
                         }
                     }
@@ -625,12 +633,12 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
             {
 
                 // creating a list of ids 
-                clade_list_id.emplace_back(clade_vec->at(i*3+1)->id);
+                clade_list_id.emplace_back(clade_vec->at(i*6+1)->id);
                 // creating a list of all fragments counts per group. We only added a count to the clade if it passed the likelihood test and the mapping quality filter
                 // this is defined in readGAM_Euka.h line 515. We are not accessing any fragments that do not pass the first set of filters. 
-                clade_list_count.emplace_back(clade_vec->at(i*3+1)->count);
+                clade_list_count.emplace_back(clade_vec->at(i*6+1)->count);
                 
-                outbin << clade_vec->at(i*3+1)->name << '\t';
+                outbin << clade_vec->at(i*6+1)->name << '\t';
 
                 for (int j = 0; j<chunks[i].size()-1; j++){
                     outbin << std::fixed << std::setprecision(5);
@@ -642,14 +650,14 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
                 }
                 outbin << '\n';
 
-                out << clade_vec->at(i*3+1)->name << '\t' << "yes" << '\t' << clade_vec->at(i*3+1)->count << '\t';
-                outsurv << clade_vec->at(i*3+1)->name << '\t' << "yes" << '\t' << clade_vec->at(i*3+1)->count << '\t';
-                outinSize << clade_vec->at(i*3+1)->name << '\t';
+                out << clade_vec->at(i*6+1)->name << '\t' << "yes" << '\t' << clade_vec->at(i*6+1)->count << '\t';
+                outsurv << clade_vec->at(i*6+1)->name << '\t' << "yes" << '\t' << clade_vec->at(i*6+1)->count << '\t';
+                outinSize << clade_vec->at(i*6+1)->name << '\t';
 
 
-                for (int s = 1; s<clade_vec->at(i*3+1)->inSize.size(); s++){
-                    outinSize << clade_vec->at(i*3+1)->inSize.at(s);
-                    if (s != clade_vec->at(i*3+1)->inSize.size() -1){
+                for (int s = 1; s<clade_vec->at(i*6+1)->inSize.size(); s++){
+                    outinSize << clade_vec->at(i*6+1)->inSize.at(s);
+                    if (s != clade_vec->at(i*6+1)->inSize.size() -1){
                         outinSize << '\t';
                     }
                 }
@@ -701,17 +709,17 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
 
             // Find loaction of baseshift data array in clade_vec
 	    
-            int** baseshift_data_array_location = clade_vec->at(clade_list_id[i]*3+1)->baseshift_clade_array; 
+            unsigned int** baseshift_data_array_location = clade_vec->at(clade_list_id[i]*6+1)->baseshift_clade_array; 
             
             // init baseshift data array in baseshift class
             Baseshift baseshift_data_array(lengthToProf, baseshift_data_array_location);
             
             // make filename for clades
-            prof_out_file = outputfilename + "_" + clade_vec->at(clade_list_id[i]*3+1)->name + ".prof";
+            prof_out_file = outputfilename + "_" + clade_vec->at(clade_list_id[i]*6+1)->name + ".prof";
             
             vector <vector <double >> dam;
             // Display substitution matrix for cladeqq
-            dam = baseshift_data_array.print_prof(prof_out_file);
+            dam = baseshift_data_array.display_prof(prof_out_file);
 
             
 
@@ -747,17 +755,17 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
 
         if (extra_id != -1){
             //cout << extra_id << endl; 
-            int** baseshift_data_array_location = clade_vec->at(extra_id*3+1)->baseshift_clade_array; 
+            unsigned int** baseshift_data_array_location = clade_vec->at(extra_id*6+1)->baseshift_clade_array; 
             
             // init baseshift data array in baseshift class
             Baseshift baseshift_data_array(lengthToProf, baseshift_data_array_location);
             
             // make filename for clades
-            prof_out_file = outputfilename + "_" + clade_vec->at(extra_id*3+1)->name + ".prof";
+            prof_out_file = outputfilename + "_" + clade_vec->at(extra_id*6+1)->name + ".prof";
             
             vector <vector <double >> rest;
             // Display substitution matrix for cladeqq
-            rest = baseshift_data_array.print_prof(prof_out_file);
+            rest = baseshift_data_array.display_prof(prof_out_file);
 
 
         }
@@ -822,18 +830,18 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
         cerr << "Abundance estimation completed! " << endl; 
         cerr << '\n';
         cerr << "No MCMC was computed. It was either specified by the user or less than 2 groups were present in the sample." << endl; 
-        cerr << "You can find all four output files (./"+outputfilename + "_abundance.tsv, ./"+outputfilename +"_detected.tsv, and ./"+outputfilename+"_coverage.tsv, and the damage profiles) in your current working directory!" << endl;
+        cerr << "You can find all four output files ("+outputfilename + "_abundance.tsv, "+outputfilename +"_detected.tsv, and "+outputfilename+"_coverage.tsv, and the damage profiles) in your current working directory!" << endl;
         cerr << '\n';
         cerr << '\n';
-        cerr << "You have two options to visualize euka’s output. All scripts necessary for the visualization can be found in vgan/tools/." << endl; 
+        cerr << "You have two options to visualize euka’s output. All scripts necessary for the visualization can be found in vgan/share/vgan/plottingScripts/." << endl; 
         cerr << '\n';
-        cerr << '\t' << '\t' << "1) "+cwdProg+"visualize_detected_taxa.sh ./"+ outputfilename << endl;
+        cerr << '\t' << '\t' << "1) ./visualize_detected_taxa.sh "+ outputfilename << endl;
         cerr << '\n';
         cerr << "This will provide you with a summary plot of each detected taxa, including their damage profiles, estimated coverage across the pangenome graph and fragment length distribution." << endl;
         cerr << '\n';
-        cerr << '\t' << '\t' << "2) python "+cwdProg+"make_tree_from_output.py ./" +outputfilename+"_abundance.tsv or python "+cwdProg+"make_tree_from_output.py ./"+outputfilename+"_detected.tsv" << endl; 
+        cerr << '\t' << '\t' << "2) python vgan/share/vgan/plottingScripts/make_tree_from_output.py " +outputfilename+"_abundance.tsv or python vgan/share/vgan/plottingScripts/make_tree_from_output.py " +outputfilename+"_detected.tsv" << endl; 
         cerr << '\n';
-        cerr << "These two commands will plot a taxonomic tree with all (./"+outputfilename+"_abundance.tsv) taxa or only the detected (./" +outputfilename+"_detected.tsv) taxa." << endl; 
+        cerr << "These two commands will plot a taxonomic tree with all ("+outputfilename+"_abundance.tsv) taxa or only the detected (" +outputfilename+"_detected.tsv) taxa." << endl; 
 
     }
     // there are more than 1 group detected or the mcmc was not turned off. 
@@ -870,8 +878,8 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
         for (int i = 0; i<chunks.size(); i++) {
 
             //save id for specified outGroup if specified:
-            if (outGroup == clade_vec->at(i*3+1)->name){
-                extra_id =clade_vec->at(i*3+1)->id;
+            if (outGroup == clade_vec->at(i*6+1)->name){
+                extra_id =clade_vec->at(i*6+1)->id;
             }
 
 
@@ -884,16 +892,16 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
                 }
             }
             // disregarded groups except its defined as outgroup
-            if (std::count(check_for_zero.begin(), check_for_zero.end(), 0.0) || check_for_zero.size() < MINNUMOFBINS || clade_vec->at(i*3+1)->count < MINNUMOFREADS)
+            if (std::count(check_for_zero.begin(), check_for_zero.end(), 0.0) || check_for_zero.size() < MINNUMOFBINS || clade_vec->at(i*6+1)->count < MINNUMOFREADS)
             {
 
                 
-                out << clade_vec->at(i*3+1)->name << '\t' << "no" << '\t' << clade_vec->at(i*3+1)->count << '\t' << 0 << '\t' << 0 << '\t'<< 0 << '\t'<< 0 << '\t'<< 0 << endl;
-                if (outGroup == clade_vec->at(i*3+1)->name){
+                out << clade_vec->at(i*6+1)->name << '\t' << "no" << '\t' << clade_vec->at(i*6+1)->count << '\t' << 0 << '\t' << 0 << '\t'<< 0 << '\t'<< 0 << '\t'<< 0 << endl;
+                if (outGroup == clade_vec->at(i*6+1)->name){
 
                     //cout << outGroup << endl; 
 
-                    outbin << clade_vec->at(i*3+1)->name << '\t';
+                    outbin << clade_vec->at(i*6+1)->name << '\t';
 
                     for (size_t j = 0; j<chunks[i].size()-1; j++){
                         outbin << std::fixed << std::setprecision(5);
@@ -906,10 +914,10 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
 
                     outbin << endl;
 
-                    outinSize << clade_vec->at(i*3+1)->name << '\t';
-                    for (int s = 1; s<clade_vec->at(i*3+1)->inSize.size(); s++){
-                        outinSize << clade_vec->at(i*3+1)->inSize.at(s);
-                        if (s != clade_vec->at(i*3+1)->inSize.size() -1){
+                    outinSize << clade_vec->at(i*6+1)->name << '\t';
+                    for (int s = 1; s<clade_vec->at(i*6+1)->inSize.size(); s++){
+                        outinSize << clade_vec->at(i*6+1)->inSize.at(s);
+                        if (s != clade_vec->at(i*6+1)->inSize.size() -1){
                             outinSize << '\t';
                         }
                     }
@@ -921,11 +929,11 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
             } else {
 
                 // creating a list of ids 
-                clade_list_id.emplace_back(clade_vec->at(i*3+1)->id);
+                clade_list_id.emplace_back(clade_vec->at(i*6+1)->id);
                 // creating a list of all fragments counts per clade
-                clade_list_count.emplace_back(clade_vec->at(i*3+1)->count);
+                clade_list_count.emplace_back(clade_vec->at(i*6+1)->count);
                 
-                outbin << clade_vec->at(i*3+1)->name << '\t';
+                outbin << clade_vec->at(i*6+1)->name << '\t';
 
                 for (size_t j = 0; j<chunks[i].size()-1; j++){
                     outbin << std::fixed << std::setprecision(5);
@@ -938,12 +946,12 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
 
                 outbin << endl;
 
-                out << clade_vec->at(i*3+1)->name << '\t' << "yes" << '\t' << clade_vec->at(i*3+1)->count << '\t';
-                outsurv << clade_vec->at(i*3+1)->name << '\t' << "yes" << '\t' << clade_vec->at(i*3+1)->count << '\t';
-                outinSize << clade_vec->at(i*3+1)->name << '\t';
-                for (int s = 1; s<clade_vec->at(i*3+1)->inSize.size(); s++){
-                    outinSize << clade_vec->at(i*3+1)->inSize.at(s);
-                    if (s != clade_vec->at(i*3+1)->inSize.size() -1){
+                out << clade_vec->at(i*6+1)->name << '\t' << "yes" << '\t' << clade_vec->at(i*6+1)->count << '\t';
+                outsurv << clade_vec->at(i*6+1)->name << '\t' << "yes" << '\t' << clade_vec->at(i*6+1)->count << '\t';
+                outinSize << clade_vec->at(i*6+1)->name << '\t';
+                for (int s = 1; s<clade_vec->at(i*6+1)->inSize.size(); s++){
+                    outinSize << clade_vec->at(i*6+1)->inSize.at(s);
+                    if (s != clade_vec->at(i*6+1)->inSize.size() -1){
                         outinSize << '\t';
                     }
                 }
@@ -994,18 +1002,18 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
         for (size_t i = 0; i < clade_list_id.size(); i++){
 
             // Find loaction of baseshift data array in clade_vec
-            int** baseshift_data_array_location = clade_vec->at(clade_list_id[i]*3+1)->baseshift_clade_array; 
+            unsigned int** baseshift_data_array_location = clade_vec->at(clade_list_id[i]*6+1)->baseshift_clade_array; 
             
             // init baseshift data array in baseshift class
             Baseshift baseshift_data_array(lengthToProf, baseshift_data_array_location);
             
             // make filename for clades
-            prof_out_file = outputfilename + "_" + clade_vec->at(clade_list_id[i]*3+1)->name + ".prof";
-            //count_out_file = outputfilename + clade_vec->at(clade_list_id[i]*3+1)->name + ".count";
+            prof_out_file = outputfilename + "_" + clade_vec->at(clade_list_id[i]*6+1)->name + ".prof";
+            //count_out_file = outputfilename + clade_vec->at(clade_list_id[i]*6+1)->name + ".count";
             
             vector <vector <double >> dam;
             // Display substitution matrix for cladeqq
-            dam = baseshift_data_array.print_prof(prof_out_file);
+            dam = baseshift_data_array.display_prof(prof_out_file);
             //baseshift_data_array.print_counts(count_out_file);
 
             
@@ -1041,17 +1049,17 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
 
         }
         if (extra_id != -1){
-            int** baseshift_data_array_location = clade_vec->at(extra_id*3+1)->baseshift_clade_array; 
+            unsigned int** baseshift_data_array_location = clade_vec->at(extra_id*6+1)->baseshift_clade_array; 
             
             // init baseshift data array in baseshift class
             Baseshift baseshift_data_array(lengthToProf, baseshift_data_array_location);
             
             // make filename for clades
-            prof_out_file = outputfilename + "_" + clade_vec->at(extra_id*3+1)->name + ".prof";
+            prof_out_file = outputfilename + "_" + clade_vec->at(extra_id*6+1)->name + ".prof";
             
             vector <vector <double >> rest;
             // Display substitution matrix for cladeqq
-            rest = baseshift_data_array.print_prof(prof_out_file);
+            rest = baseshift_data_array.display_prof(prof_out_file);
 
 
         }
@@ -1117,18 +1125,18 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
         std::size_t pos = outputfilename.find_last_of("/");
         string file_in_dir = outputfilename.substr(pos+1);
 
-        cerr << "You can find all four output files (./"+file_in_dir + "_abundance.tsv, ./"+file_in_dir +"_detected.tsv, ./"+file_in_dir+"_coverage.tsv, and the damage profils) in your current working directory!" << endl;
+        cerr << "You can find all four output files ("+file_in_dir + "_abundance.tsv, "+file_in_dir +"_detected.tsv, "+file_in_dir+"_coverage.tsv, and the damage profils) in your current working directory!" << endl;
         cerr << '\n';
         cerr << '\n';
-        cerr << "You have two options to visualize euka’s output. All scripts necessary for the visualization can be found in vgan/tools/." << endl; 
+        cerr << "You have two options to visualize euka’s output. All scripts necessary for the visualization can be found in vgan/share/vgan/plottingScripts/." << endl; 
         cerr << '\n';
-        cerr << '\t' << '\t' << "1) "+cwdProg+"visualize_detected_taxa.sh "+ file_in_dir << endl;
+        cerr << '\t' << '\t' << "1) ./visualize_detected_taxa.sh "+ file_in_dir << endl;
         cerr << '\n';
         cerr << "This will provide you with a summary plot of each detected taxa, including their damage profiles, estimated coverage across the pangenome graph and fragment length distribution." << endl;
         cerr << '\n';
-        cerr << '\t' << '\t' << "2) python "+cwdProg+"make_tree_from_output.py " +file_in_dir+"_abundance.tsv or python "+cwdProg+"make_tree_from_output.py " +file_in_dir+"_detected.tsv" << endl; 
+        cerr << '\t' << '\t' << "2) python vgan/share/vgan/plottingScripts/make_tree_from_output.py " +file_in_dir+"_abundance.tsv or python vgan/share/vgan/plottingScripts/make_tree_from_output.py " +file_in_dir+"_detected.tsv" << endl; 
         cerr << '\n';
-        cerr << "These two commands will plot a taxonomic tree with all ("+file_in_dir+"_abundance.tsv) taxa or only the detected ("+file_in_dir+"_detected.tsv) taxa." << endl; 
+        cerr << "These two commands will plot a taxonomic tree with all ("+file_in_dir+"_abundance.tsv) taxa or only the detected (" +file_in_dir+"_detected.tsv) taxa." << endl; 
 
 
   

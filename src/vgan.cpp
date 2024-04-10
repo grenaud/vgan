@@ -7,6 +7,7 @@
 #include "NodeInfo.h"
 #include "AlignmentInfo.h"
 #include "Euka.h"
+#include "soibean.h"
 #include "HaploCart.h"
 #include "Dup_Remover.h"
 #include "crash.hpp"
@@ -28,30 +29,20 @@ using namespace vg;
 
 int main(int argc, char *argv[]) {
 
-    /// JUST FOR TESTING WILL BE PLACED ELSEWHERE //////
-    /////// Testing MCMC ////////
-
-    // const double alpha = 0.1;
-    // vector<long double> current_vec = {0.05, 0.6, 0.1, 0.25};
-
-    // const vector <long double> test = MCMC().generate_proposal(current_vec, alpha);
-
-    // for (auto elemet:test){
-    //     cout << elemet << endl;
-    // }
-
 
     string_view usage=string("\n")+
         "   vgan is a suite of tools for mitochondrial pangenomics. \n"+
-        "   We currently support two subcommands: euka (for the classification of eukaryotic taxa) \n"+
-	"   and HaploCart (for modern human mtDNA haplogroup classification). \n"+
+        "   We currently support three subcommands: euka (for the classification of eukaryotic taxa), \n"+
+	"   HaploCart (for modern human mtDNA haplogroup classification) and \n"+
+        "   soibean (for the identification of eukaryotic species). \n" +
         "   The underlying data structure is the VG graph. \n\n" +
         string(argv[0]) +" <command> options\n"+
         "\n"+
         "   Commands:\n"+
-        "      euka         Identify eukaryotic species "+"\n"+
+        "      euka         Identify eukaryotic taxa "+"\n"+
         "      duprm         Remove PCR duplicates from a GAM file "+"\n"+
         "      haplocart    Predict human mitochondrial haplogroup  "+"\n"+
+        "      soibean      Identify eukaryotic species " +"\n"+
         //"      gam2prof     Reads a GAM file and produces a deamination profile for the\n"+
         //"                   5' and 3' ends " +"\n" +
         "      version      Print version                         " +
@@ -119,6 +110,27 @@ int main(int argc, char *argv[]) {
         dup_remover.remove_duplicates(gamfile);
         return 1;
                                         }
+
+    else if(string(argv[1]) == "soibean"){
+        
+
+        soibean soibean_;
+        
+        if( argc==2 ||
+            (argc == 3 && (string(argv[2]) == "-h" || string(argv[2]) == "--help") )
+            ){
+            const string cwdProg=getCWD(argv[0]);
+            cerr<<soibean_.usage(cwdProg)<<"\n";
+            return 1;
+        }
+        
+        const string cwdProg=getCWD(argv[0]);
+            argv++;
+            argc--;
+            return soibean_.run(argc, argv, cwdProg);
+        
+        }
+
 
 else{      if(string(argv[1]) == "haplocart"){
 
