@@ -87,16 +87,16 @@ autocomp:
 #	(cd ${VGDIR} && git checkout de51eb534394bb93a406baa809ac079ed2223eeb && . ./source_me.sh && ${MAKE} -j ${NPROCS}) && touch vgmade
 
 hcfiles hcfilesmade: vgmade
-	wget -nc -l1 --recursive --no-parent -P ../share/ ftp://ftp.healthtech.dtu.dk:/public/haplocart/hcfiles/ && \
-        mv -fv ../share/ftp.healthtech.dtu.dk/public/haplocart/hcfiles/* ../share/ && rm -rf ../share/ftp.healthtech.dtu.dk && touch hcfilesmade
+	wget -nc -l1 --recursive --no-parent -P ../share/vgan/ ftp://ftp.healthtech.dtu.dk:/public/haplocart/hcfiles/ && \
+        mv -fv ../share/vgan/ftp.healthtech.dtu.dk/public/haplocart/hcfiles/* ../share/vgan/hcfiles && rm -rf ../share/vgan/ftp.healthtech.dtu.dk && touch hcfilesmade
 
 eukafiles eukafilesmade: vgmade
 	wget -nc -l0 --recursive --no-parent -P ../share/vgan/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/ && \
-	mv -fv ../share/ftp.healthtech.dtu.dk/public/euka_files/* ../share/ && rm -rf ../share/ftp.healthtech.dtu.dk && touch eukafilesmade
+	mv -fv ../share/vgan/ftp.healthtech.dtu.dk/public/euka_files/* ../share/vgan/euka_dir && rm -rf ../share/ftp.healthtech.dtu.dk && touch eukafilesmade
 
 soibeanfiles soibeanfilesmade: vgmade
 	wget -nc -l0 --recursive --no-parent -P ../share/vgan/ ftp://ftp.healthtech.dtu.dk:/public/soibean_files/ && \
-	mv -fv ../share/ftp.healthtech.dtu.dk/public/soibean_files/* ../share/ && rm -rf ../share/ftp.healthtech.dtu.dk && touch soibeanfilesmade
+	mv -fv ../share/vgan/ftp.healthtech.dtu.dk/public/soibean_files/* ../share/vgan/soibean_dir && rm -rf ../share/vgan/ftp.healthtech.dtu.dk && touch soibeanfilesmade
 
 ../lib/libgab/libgab.a: libgabmade
 	echo ""
