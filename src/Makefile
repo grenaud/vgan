@@ -92,7 +92,7 @@ hcfiles hcfilesmade: vgmade
 
 eukafiles eukafilesmade: vgmade
 	wget -nc -l0 --recursive --no-parent -P ../share/vgan/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/ && \
-	mv -fv ../share/vgan/ftp.healthtech.dtu.dk/public/euka_files/* ../share/vgan/euka_dir && rm -rf ../share/ftp.healthtech.dtu.dk && touch eukafilesmade
+	mv -fv ../share/vgan/ftp.healthtech.dtu.dk/public/euka_files/* ../share/vgan/euka_dir && rm -rf ../share/vgan/ftp.healthtech.dtu.dk && touch eukafilesmade
 
 soibeanfiles soibeanfilesmade: vgmade
 	rm -rf ../share/vgan/soibean_dir/tree_dir
