@@ -123,11 +123,23 @@ dam <- ggarrange(first, second, ncol=2, common.legend = TRUE, legend="top")
 col_names <- colnames(ne)
 n <- which(args[2] == col_names)
 
-inSize_plot <- ggplot(ne)+
-  geom_histogram(aes(as.numeric(ne[,n])), binwidth = 3, fill = "darkblue") + 
-  theme_bw() + 
-  xlab("Fragment Lengths")+
-  ggtitle("Fragment length distribution")
+if(length(n) == 1) {
+  # Convert the specified column to numeric, omitting NA values
+  ne_data <- data.frame(value = as.numeric(na.omit(ne[, n])))
+  
+  # Create the histogram plot
+  inSize_plot <- ggplot(ne_data, aes(x = value)) +
+    geom_histogram(binwidth = 3, fill = "darkblue") +
+    theme_bw() +
+    xlab("Fragment Lengths") +
+    ggtitle("Fragment Length Distribution")
+  
+  # Print the plot
+  print(inSize_plot)
+} else {
+  # Error handling if the column is not found
+  stop("Specified column not found in the data frame.")
+}
 
 ############################
 
