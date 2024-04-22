@@ -135,17 +135,17 @@ if [[ -z "$fifth_element" || -z "$sixth_element" ]]; then
     exit 1
 fi
 
-$VG_EXECUTABLE_PATH chunk -r ${fifth_element}:${sixth_element} -x soibean_db.og > ${input_name}_pre.vg
+$VG_EXECUTABLE_PATH chunk -r ${fifth_element}:${sixth_element} -x ${SCRIPT_DIR}/soibean_db.og > ${SCRIPT_DIR}/${input_name}_pre.vg
 echo "Subgraph created!"
 echo "Building indexing files for subgraph ... "
-$VG_EXECUTABLE_PATH mod -X 5 ${input_name}_pre.vg > ${input_name}.vg
-$VG_EXECUTABLE_PATH snarls ${input_name}.vg > ${input_name}.snarls
-$VG_EXECUTABLE_PATH view ${input_name}.vg > ${input_name}.gfa
-$VG_EXECUTABLE_PATH gbwt -o ${input_name}.gbwt -g ${input_name}.gg -G ${input_name}.gfa
-$VG_EXECUTABLE_PATH index -j ${input_name}.dist ${input_name}.vg
-$VG_EXECUTABLE_PATH minimizer -g ${input_name}.gbwt -i ${input_name}.min -k 20 -w 10 ${input_name}.vg
-$VG_EXECUTABLE_PATH convert -g ${input_name}.gfa -o > ${input_name}.og
+$VG_EXECUTABLE_PATH mod -X 5 ${SCRIPT_DIR}/${input_name}_pre.vg > ${SCRIPT_DIR}/${input_name}.vg
+$VG_EXECUTABLE_PATH snarls ${SCRIPT_DIR}/${input_name}.vg > ${SCRIPT_DIR}/${input_name}.snarls
+$VG_EXECUTABLE_PATH view ${SCRIPT_DIR}/${input_name}.vg > ${SCRIPT_DIR}/${input_name}.gfa
+$VG_EXECUTABLE_PATH gbwt -o ${SCRIPT_DIR}/${input_name}.gbwt -g ${SCRIPT_DIR}/${input_name}.gg -G ${SCRIPT_DIR}/${input_name}.gfa
+$VG_EXECUTABLE_PATH index -j ${SCRIPT_DIR}/${input_name}.dist ${SCRIPT_DIR}/${input_name}.vg
+$VG_EXECUTABLE_PATH minimizer -g ${SCRIPT_DIR}/${input_name}.gbwt -i ${SCRIPT_DIR}/${input_name}.min -k 20 -w 10 ${SCRIPT_DIR}/${input_name}.vg
+$VG_EXECUTABLE_PATH convert -g ${SCRIPT_DIR}/${input_name}.gfa -o > ${SCRIPT_DIR}/${input_name}.og
 
-chmod +w ${input_name}.dist
+chmod +w ${SCRIPT_DIR}/${input_name}.dist
 
-echo "... done!"
+echo "... done! You can find your graph files in ${SCRIPT_DIR}!"
