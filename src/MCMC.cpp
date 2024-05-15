@@ -114,13 +114,13 @@ pair<unordered_map<string, vector<vector<double>>>, double> MCMC::processMCMCite
         //now we need to sort for quantiles
         sort(positionVec.begin(), positionVec.end());
         sort(proportionVec.begin(), proportionVec.end());
-        long double Theta_fq = getQuantile2(proportionVec, 0.10);
-        long double Theta_tq = getQuantile2(proportionVec, 0.90);
+        long double Theta_fq = getQuantile2(proportionVec, 0.05);
+        long double Theta_tq = getQuantile2(proportionVec, 0.95);
         
         long double Theta_median = getQuantile2(proportionVec, 0.5);
-        long double Pos_fq = getQuantile2(positionVec, 0.1);
+        long double Pos_fq = getQuantile2(positionVec, 0.05);
         long double Pos_median = getQuantile2(positionVec, 0.5);
-        long double Pos_tq = getQuantile2(positionVec, 0.90);
+        long double Pos_tq = getQuantile2(positionVec, 0.95);
 
         //estimation of autocorrelation and effective sample size. 
         //rule of thump: higher ESS and lower correlation is good, indicating better mixing between sample. 
