@@ -287,6 +287,18 @@ Haplocart does not yet accept HTS-lib-compatible input directly. Please first un
 samtools bam2fq [FASTQ file] | vgan haplocart -fq1 /dev/stdin
 ```
 
+VCF input:
+
+We generally advise against using VCF as input as this will rely on a model that was used for calling the variants. Furthermore, a lot of the information is lost and we therefore recommend to use it on the full dataset to gain maximum advantage from the pangenome graph. However, if you wish to use it anyway, we provide a helper script to convert to fasta. If the rCRS (with header J01415.2 in the fasta) was used to call the variants, then use:
+
+```
+share/vgan/hc_scripts/vcf2fasta.py input.vcf.gz rCRS J01415.2 |gzip > input.fa.gz
+vgan haplocart -f input.fa.gz
+
+```
+
+
+
 ## Haplocart Output File
 
 The output file for Haplocart is a TSV file with the following columns:
