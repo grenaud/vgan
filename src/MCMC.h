@@ -114,7 +114,7 @@ public:
 
 
  inline const double computeBaseLogLike(const AlignmentInfo* read, RunTreeProportionParams &params, const int basevec, \
-                                   const int base, const string &pathName, const double t)
+                                   const int base, const string &pathName, const double t, double branch_len)
     {
 
         const auto &detail = read->detailMap.at(pathName).at(basevec).at(base);
@@ -314,7 +314,6 @@ public:
 
         return log_lik_marg;
     }
-
 
     double calculateLogWeightedAverage(double logValueChild, double weightChild, double logValueParent, double weightParent) {
 

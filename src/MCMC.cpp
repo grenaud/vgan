@@ -642,7 +642,7 @@ if (read->detailMap.find(pathNames[0]) == read->detailMap.end()) {
         for (int base = 0; base < read->detailMap[pathNames[0]][basevec].size(); ++base) {
             loopentered = true;
             if (read->detailMap[pathNames[0]][basevec][base].pathSupport) {
-                 readLogLike += computeBaseLogLike(read, params, basevec, base, pathNames[0], t2);
+                 readLogLike += computeBaseLogLike(read, params, basevec, base, pathNames[0], t2, t);
             } else {
                  readLogLike += read->detailMap[pathNames[0]][basevec][base].logLikelihood;
             }
@@ -657,7 +657,7 @@ if (read->detailMap.find(parentpathNames[0]) == read->detailMap.end()) {
     for (unsigned int basevec = 0; basevec < read->detailMap[parentpathNames[0]].size(); ++basevec) {
         for (int base = 0; base < read->detailMap[parentpathNames[0]][basevec].size(); ++base) {
             if (read->detailMap[parentpathNames[0]][basevec][base].pathSupport) {
-                readLogLikeP += computeBaseLogLike(read, params, basevec, base, parentpathNames[0], t1);
+                readLogLikeP += computeBaseLogLike(read, params, basevec, base, parentpathNames[0], t1, t);
             } else {
                  readLogLikeP += read->detailMap[parentpathNames[0]][basevec][base].logLikelihood;
             }
@@ -724,7 +724,7 @@ if (dta->cont_mode && pathNames.size() == 2) {
                                             read->detailMap[pathNames[y]][basevec][base].logLikelihoodNoDamage;
 
                 if (read->detailMap[pathNames[y]][basevec][base].pathSupport) {
-                    readLogLike += computeBaseLogLike(read, params, basevec, base, pathNames[y], t2);
+                    readLogLike += computeBaseLogLike(read, params, basevec, base, pathNames[y], t2, t);
                 } else {
                     readLogLike += logLikelihoodValue;
                 }
@@ -735,7 +735,7 @@ if (dta->cont_mode && pathNames.size() == 2) {
                                           read->detailMap[parentpathNames[y]][basevec][base].logLikelihoodNoDamage;
 
         if (read->detailMap[parentpathNames[y]][basevec][base].pathSupport) {
-            readLogLikeP += computeBaseLogLike(read, params, basevec, base, parentpathNames[y], t1);
+            readLogLikeP += computeBaseLogLike(read, params, basevec, base, parentpathNames[y], t1, t);
                                                                             }
          else {
             readLogLikeP += parentLogLikelihoodValue;
@@ -793,7 +793,7 @@ for (unsigned int basevec = 0; basevec < read->detailMap[pathNames[y]].size(); +
 
     for (unsigned int base = 0; base < itPath->second[basevec].size(); ++base) {
         if (itPath->second[basevec][base].pathSupport) {
-            readLogLike += computeBaseLogLike(read, params, basevec, base, pathNames[y], t2);
+            readLogLike += computeBaseLogLike(read, params, basevec, base, pathNames[y], t2, t);
         } else {
             readLogLike += itPath->second[basevec][base].logLikelihood;
         }
@@ -809,7 +809,7 @@ if (itParentPath == read->detailMap.end()) {
     for (unsigned int basevec = 0; basevec < itParentPath->second.size(); ++basevec) {
         for (unsigned int base = 0; base < itParentPath->second[basevec].size(); ++base) {
             if (itParentPath->second[basevec][base].pathSupport) {
-                readLogLike += computeBaseLogLike(read, params, basevec, base, parentpathNames[y], t1);
+                readLogLike += computeBaseLogLike(read, params, basevec, base, parentpathNames[y], t1, t);
             } else {
                 readLogLikeP += itParentPath->second[basevec][base].logLikelihood;
             }
@@ -1205,7 +1205,7 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams par
                         if (read->detailMap[pathNames[0]][basevec][base].pathSupport)
                         {
                             counter++;
-                            readLogLike += computeBaseLogLike(read, params, basevec, base, pathNames[0], t2);
+                            readLogLike += computeBaseLogLike(read, params, basevec, base, pathNames[0], t2, t);
 
                             
                             
@@ -1236,7 +1236,7 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams par
                         if(read->detailMap[parentpathNames[0]][basevec][base].pathSupport)
                         {
                             counter++;
-                            readLogLikeP += computeBaseLogLike(read, params,basevec, base, parentpathNames[0], t1);
+                            readLogLikeP += computeBaseLogLike(read, params,basevec, base, parentpathNames[0], t1, t);
 
 
 #ifdef DEBUGPAIN
@@ -1276,8 +1276,8 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams par
                             cerr << std::setprecision(14)<< "t " << t << " t1 " << t1 << " t2 " << t2 << endl;
                             cerr << std::setprecision(14)<< "pre calc log like " << read->detailMap[pathNames[0]][basevec][base].logLikelihood << endl;
                             cerr << std::setprecision(14)<< "parent pre calc log like " << read->detailMap[parentpathNames[0]][basevec][base].logLikelihood << endl;
-                            double test = computeBaseLogLike(read, params,basevec, base, pathNames[0], t2);
-                            double what = computeBaseLogLike(read, params,basevec, base, parentpathNames[0], t1);
+                            double test = computeBaseLogLike(read, params,basevec, base, pathNames[0], t2, t);
+                            double what = computeBaseLogLike(read, params,basevec, base, parentpathNames[0], t1, t);
                             cerr << std::setprecision(14)<< "path calc " << test << endl;
                             cerr << std::setprecision(14)<< "parent path calc " << what << endl;
                             throw std::runtime_error("Error: Log-likelihood is nan.");
@@ -1344,7 +1344,7 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams par
                             if (read->detailMap[pathNames[y]][basevec][base].pathSupport)
                             {
                                 counter++;
-                                readLogLike += computeBaseLogLike(read, params,basevec, base, pathNames[y], t2);//;
+                                readLogLike += computeBaseLogLike(read, params,basevec, base, pathNames[y], t2, t);
                                 
                                 
                             }
@@ -1356,7 +1356,7 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams par
                             if(read->detailMap[parentpathNames[y]][basevec][base].pathSupport)
                             {
                                 counter++;
-                                readLogLikeP += computeBaseLogLike(read, params,basevec, base, parentpathNames[y], t1); //
+                                readLogLikeP += computeBaseLogLike(read, params,basevec, base, parentpathNames[y], t1, t);
                                 
                                 
                             }
@@ -1377,8 +1377,8 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams par
                                 cerr << std::setprecision(14)<< "t " << t << " t1 " << t1 << " t2 " << t2 << endl;
                                 cerr << std::setprecision(14)<< "pre calc log like " << read->detailMap[pathNames[y]][basevec][base].logLikelihood << endl;
                                 cerr << std::setprecision(14)<< "parent pre calc log like " << read->detailMap[parentpathNames[y]][basevec][base].logLikelihood << endl;
-                                double test = computeBaseLogLike(read, params,basevec, base, pathNames[y], t2);
-                                double what = computeBaseLogLike(read, params,basevec, base, parentpathNames[y], t1);
+                                double test = computeBaseLogLike(read, params,basevec, base, pathNames[y], t2, t);
+                                double what = computeBaseLogLike(read, params,basevec, base, parentpathNames[y], t1, t);
                                 cerr << std::setprecision(14)<< "path calc " << test << endl;
                                 cerr << std::setprecision(14)<< "parent path calc " << what << endl;
 

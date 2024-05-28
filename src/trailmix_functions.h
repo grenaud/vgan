@@ -152,6 +152,7 @@ const string fa2fq(const string & fastaseq, const char & dummyqualscore, const s
      return tempfqfilename;
                                                                                      }
 
+
 void Trailmix::map_giraffe(const string &fastaseq, shared_ptr<Trailmix_struct> &dta){
 
     if (!dta->quiet) {cerr << "Mapping reads..." << endl;}
@@ -188,7 +189,7 @@ if (dta->fastq1filename != "" && dta->fastq1filename != "")
         arguments.emplace_back("--deam-5p");
         arguments.emplace_back(dta->deam5pfreqE);
         arguments.emplace_back("-j");
-        arguments.emplace_back("1.01");
+        arguments.emplace_back("0.9");
         char** argvtopass = new char*[arguments.size()];
         for (int i=0;i<arguments.size();i++) {
             argvtopass[i] = const_cast<char*>(arguments[i].c_str());
@@ -219,7 +220,7 @@ else if (dta->fastq1filename != "" && dta->fastq1filename == "")
                arguments.emplace_back("--deam-5p");
                arguments.emplace_back(dta->deam5pfreqE);
                arguments.emplace_back("-j");
-               arguments.emplace_back("1.01");
+               arguments.emplace_back("0.9");
 
            if (dta->interleaved) {
                arguments.emplace_back("-i");
@@ -262,7 +263,7 @@ else if (fastaseq != ""){
     arguments.emplace_back("--deam-5p");
     arguments.emplace_back(dta->deam5pfreqE);
     arguments.emplace_back("-j");
-    arguments.emplace_back("1.01");
+    arguments.emplace_back("0.9");
 
     char** argvtopass = new char*[arguments.size()];
     for (int i=0;i<arguments.size();i++) {
@@ -293,6 +294,7 @@ char** convert_to_char_array(const vector<string>& arguments) {
     }
     return argvtopass;
 }
+
 
 void Trailmix::run_gam2prof(shared_ptr<Trailmix_struct>& dta) {
     //vector<string> g2parguments = {"vgan", "gam2prof", "--running-trailmix"};
