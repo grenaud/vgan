@@ -29,6 +29,6 @@ public:
     Gam2prof & operator= (const Gam2prof & other);
 
     const string usage() const;
-    const int run(int argc, char *argv[] , const string &cwdProg);
+    const int run(int argc, char *argv[] , string &cwdProg, shared_ptr<Trailmix_struct> &dta);
 
 };

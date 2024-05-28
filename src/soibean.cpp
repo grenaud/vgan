@@ -1,4 +1,3 @@
-
 #include "soibean.h"
 #include <omp.h>
 #include <sys/wait.h>
@@ -506,7 +505,7 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
         }
     }
 
-    auto gam = analyse_GAM(graph,fifo_A,clade_vec,nodevector, nodepaths, path_names, qscore_vec, false, minid, false, dmg.subDeamDiNuc);
+    auto gam = precompute_GAM(graph,fifo_A,clade_vec,nodevector, nodepaths, path_names, qscore_vec, false, minid, false, dmg.subDeamDiNuc);
     
     //turn all alignment likelihoods for each path into a vector<vector<int>> for the MCMC input
     vector<vector<double>> probMatrix = convertMapsToVector(gam);
@@ -761,7 +760,9 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
                 
 
                 // Process the MCMC iterations to get the statistics map for this chain
-                pair<unordered_map<string, vector<vector<double>>>, double> intermStatsMapPair = mcmc.processMCMCiterations(chainiter, subVector.size(), num, chainIndex, taxatreePtr, leafcounter);
+                shared_ptr<Trailmix_struct> dta;
+                pair<unordered_map<string, vector<vector<double>>>, double> intermStatsMapPair = mcmc.processMCMCiterations(dta, chainiter, subVector.size(), num, \
+                                                                                                                            chainIndex, taxatreePtr, leafcounter, false);
 
                 unordered_map<string, vector<vector<double>>> intermStatsMap = intermStatsMapPair.first;
                 chainLogLikes.emplace_back(intermStatsMapPair.second);

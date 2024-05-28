@@ -13,9 +13,10 @@
 #include "NodeInfo.h"
 #include "AlignmentInfo.h"
 #include "Clade.h"
-#include "getLCAfromGAM.h"
+#include "precompute.h"
 #include "subcommand/subcommand.hpp"
 #include "bdsg/odgi.hpp"
+#include "miscfunc.h"
 #include "../dep/spimap/src/Tree.h"
 #include "../dep/spimap/src/newick.h"
 

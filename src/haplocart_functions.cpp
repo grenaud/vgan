@@ -6,6 +6,19 @@ using namespace vg;
 int main_filter(int argc, char** argv);
 int main_gamsort(int argc, char** argv);
 
+inline constexpr bool Haplocart::transversion(const char &base1, const char &base2) {
+    if ((toupper(base1)=='A' || toupper(base1)=='G') && (toupper(base2)=='C' || toupper(base2)=='T')) {return true;}
+    else if ((toupper(base1)=='C' || toupper(base1)=='T') && (toupper(base2)=='A' || toupper(base2)=='G')) {return true;}
+    else {return false;}
+}
+
+bool Haplocart::contains_no_inf(const std::vector<double>& v) {
+    return std::all_of(v.begin(), v.end(), [](double x) {
+        return x != std::numeric_limits<double>::infinity() &&
+               x != -std::numeric_limits<double>::infinity();
+    });
+}
+
 void Haplocart::filter(const int n_threads, const bool interleaved, char const * fifo_A, char const * fifo_B){
 
     auto normal_cout = cout.rdbuf();
@@ -62,7 +75,7 @@ void Haplocart::gamsort(const int n_threads, const bool interleaved, char const 
     arguments.push_back("-");
 
     char** argvtopass = new char*[arguments.size()];
-    for (int i=0;i<arguments.size();i++) {
+    for (size_t i=0;i<arguments.size();i++) {
         argvtopass[i] = const_cast<char*>(arguments[i].c_str());
                                          }
     main_gamsort(arguments.size(), argvtopass);
@@ -78,7 +91,9 @@ void Haplocart::gamsort(const int n_threads, const bool interleaved, char const 
 }
 
 
-const double Haplocart::get_background_freq(const char base)
+
+
+const double Haplocart::get_background_freq(const char &base)
      {
 
     //Background proportions of nucleotides in the hominin mitogenome (taken from frequencies within the graph)
@@ -98,12 +113,15 @@ const double Haplocart::get_background_freq(const char base)
      }
 
 
-const vector<double> Haplocart::precompute_incorrect_mapping_probs(){
-vector<double> incorrect_mapping_vec;
+constexpr double Haplocart::get_p_incorrectly_mapped(const int &Q)
+{return pow(10, ((-1 * Q)*0.1));}
+
+
+void Haplocart::precompute_incorrect_mapping_probs(shared_ptr<Trailmix_struct> &dta){
 for (int Q=0; Q!=100; ++Q) {
-    incorrect_mapping_vec.emplace_back(pow(10, ((-1 * Q)*0.1)));
+    dta->incorrect_mapping_vec.emplace_back(Haplocart::get_p_incorrectly_mapped(Q));
                            }
-return incorrect_mapping_vec;
+return;
 }
 
 

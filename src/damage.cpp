@@ -15,8 +15,8 @@ Damage::~Damage(){
   This method is called by the initDeamProbabilities.
   It uses the "worse" deamination
 */
-void Damage::combineDeamRates(long double f1[4],long double f2[4],long double f[4],int b){
-    long double minFreq = MIN2(f1[b] , f2[b]);
+void Damage::combineDeamRates(double f1[4],double f2[4],double f[4],int b){
+    double minFreq = MIN2(f1[b] , f2[b]);
     //cout<<b<<"\t"<<f1[b]<<"\t"<<f2[b]<<"\t"<<f[b]<<"\t"<<minFreq<<endl;
 
     if(f1[b] == minFreq){//use f1

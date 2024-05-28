@@ -1,7 +1,6 @@
 #include "HaploCart.h"
-#include "miscfunc.h"
+//#include "miscfunc.h"
 #include<random>
-
 
 void Haplocart::write_fq_read(auto & dummyFASTQFile, int offset, const int window_size, const string &fastaseq, char dummyqualscore) {
         string seq_to_write, qual_to_write;
@@ -22,7 +21,7 @@ void Haplocart::write_fq_read(auto & dummyFASTQFile, int offset, const int windo
         dummyFASTQFile << qual_to_write;
         dummyFASTQFile << '\n';
         offset += window_size;
-                     }
+                                                                                                                                   }
 
 
 const string Haplocart::fa2fq(const string & fastaseq, const char & dummyqualscore, const string & tmpdir) {
@@ -35,8 +34,8 @@ const string Haplocart::fa2fq(const string & fastaseq, const char & dummyqualsco
     const string tempfqfilename= prefix+random_string(7);
     ofstream dummyFASTQFile;
     dummyFASTQFile.open(tempfqfilename);
-    int window_size = ceil(fastaseq.size()/100);
-    int offset = 0;
+    unsigned int window_size = ceil(fastaseq.size()/100);
+    unsigned int offset = 0;
     string seq_to_write, qual_to_write;
 
      for (int i = 0; i < 101; ++i) {

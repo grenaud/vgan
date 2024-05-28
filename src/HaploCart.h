@@ -3,7 +3,6 @@
 #include <string>
 #include <vector>
 #include <gzstream.h>
-#include <variant>
 #include "libgab.h"
 #include "NodeInfo.h"
 #include "AlignmentInfo.h"
@@ -11,6 +10,7 @@
 #include "readGAM.h"
 #include "subcommand/subcommand.hpp"
 #include "bdsg/odgi.hpp"
+//#include "Trailmix_struct.h"
 
 using namespace std;
 
@@ -18,36 +18,30 @@ class Haplocart{
 private:
 
 public:
+
+const double getBaseFrequency(const char base);
+
 /** @brief Read in the graph.
  *
  *  Deserialize the graph, which is in ODGI format.
  */
 
-const tuple<vector<NodeInfo *>, const int, const bdsg::ODGI> readPathHandleGraph (const string &ogfilename, const int n_threads, const string &hcfiledir);
+void readPathHandleGraph (shared_ptr<Trailmix_struct> &dta);
 
 /** @brief Update likelihood_vec for a given read.
  *
  *  Given a read, update our vector of log-likelihoods appropriately.
  */
 
-inline const vector<long double> update_likelihood(const map<const string, int> &pangenome_map, const AlignmentInfo* read_info,
-                                 const vector<NodeInfo *> &nodevector,
-                                 vector<long double> log_likelihood_vec, const vector<double> &qscore_vec,
-                                 const vector<double> &mappabilities, const int nbpaths, const bool quiet, bool use_background_error_prob,
-                                 const double &background_error_prob, const vector<double> &incorrect_mapping_vec,
-                                 const int minid,
-                                 const bool is_consensus_fasta, const int n_threads, const bdsg::ODGI &graph) noexcept;
+inline const vector<double> update_likelihood(shared_ptr<Trailmix_struct> &dta, const AlignmentInfo* read_info,
+                                 vector<double> log_likelihood_vec) noexcept;
 
 /** @brief Update log likelihood vector for each thread.
  *
  *  Same as above (used for multithreading).
  */
 
-const vector<long double> update(const int i, const map<const string, int> &pangenome_map, const vector<NodeInfo *> &nodevector,
-                           const AlignmentInfo* read_info, vector<long double> log_likelihood_vec, const vector<double> &qscore_vec,
-                           const vector<double> &mappabilities, const int nbpaths, const bool quiet, bool use_background_error_prob,
-                           double background_error_prob, const vector<double> &incorrect_mapping_vec, int n_reads,
-                           const int minid, const bool is_consensus_fasta, const int n_threads, const bdsg::ODGI &graph) noexcept;
+const vector<double> update(shared_ptr<Trailmix_struct> &dta, const int i, vector<double> log_likelihood_vec) noexcept;
 
 // Process mapping
 
@@ -68,11 +62,9 @@ inline const double get_log_lik_if_unsupported(const vg::Mapping &mppg, const ve
  */
 
 
-inline const vector<long double> process_mapping(const map<const string, int> &pangenome_map, const AlignmentInfo* read_info, vector<long double> log_likelihood_vec,
-const vg::Mapping &mppg, string &mapping_seq, const vector<NodeInfo *> &nodevector,
-const vector<int> &quality_scores, string &graph_seq, const vector<double> &qscore_vec, const vector<double> &mappabilities, const int &nbpaths,
-bool &use_background_error_prob, const double &background_error_prob, const vector<double> &incorrect_mapping_vec,
-const int &minid, const bool &is_consensus_fasta, const int & n_threads) noexcept;
+inline const vector<double> process_mapping(shared_ptr<Trailmix_struct> &dta, const AlignmentInfo* read_info, vector<double> log_likelihood_vec,
+const vg::Mapping &mppg, string &mapping_seq,
+const vector<int> &quality_scores, const string &graph_seq, unsigned int path_idx) noexcept;
 
 // Load
 
@@ -83,7 +75,7 @@ const int &minid, const bool &is_consensus_fasta, const int & n_threads) noexcep
  *
  */
 
-const map<const string, int> load_pangenome_map(const string &hcfiledir);
+void load_pangenome_map(shared_ptr<Trailmix_struct> &dta);
 
 /**
  * @brief Load mappabilities
@@ -92,15 +84,14 @@ const map<const string, int> load_pangenome_map(const string &hcfiledir);
  *
  */
 
-const vector<double> load_mappabilities(const string &hcfiledir);
+void load_mappabilities(shared_ptr<Trailmix_struct> &dta);
 
 /**
  * @brief Load a vector of path names, in order
  *
  */
 
-
-const vector<int> load_unstable(const string &hcfiledir);
+void load_path_names(shared_ptr<Trailmix_struct> &dta);
 
 /**
  * @brief Load path supports into memory.
@@ -111,7 +102,8 @@ const vector<int> load_unstable(const string &hcfiledir);
  *
  */
 
-const vector<vector<bool>> load_path_supports(const string &hcfiledir);
+ const vector<vector<bool>> load_path_supports(shared_ptr<Trailmix_struct> &dta);
+//void load_path_supports(shared_ptr<Trailmix_struct> &dta);
 
 /**
  * @brief Compute per-base probability of no sequencing error.
@@ -120,15 +112,14 @@ const vector<vector<bool>> load_path_supports(const string &hcfiledir);
  * This is inferred from the PHRED-encoded quality scores.
  */
 
-const vector<long double> get_p_no_seq_error_mapping(const string &mapping_seq, const vector<int> &quality_scores,
-             const string &graph_seq, const vector<double> &qscore_mats, const bool use_background_error_prob, const double &background_error_prob,
-                                        const int n_threads);
+const vector<double> get_p_no_seq_error_mapping(shared_ptr<Trailmix_struct> &dta, string &mapping_seq, const vector<int> &quality_scores,
+            const string &graph_seq);
 
 /**
  * @brief Check if mutation is a transversion
  */
 
-inline constexpr bool transversion(const char base1, const char base2);
+inline constexpr bool transversion(const char &base1, const char &base2);
 
 /**
  * @brief Check if value is in a given range
@@ -144,8 +135,8 @@ const bool inRange(const unsigned &low, const unsigned &high, const unsigned &x)
  *
  */
 
-const long double get_p_obs_base(const int pangenome_base, const char mapping_base, const char graph_base, const double epsilon, \
-                                 const int generations);
+const double get_p_obs_base(const size_t pangenome_base, const char mapping_base, const char graph_base, \
+                                 const double epsilon, const size_t generations, const size_t base_index_on_read, const size_t Lseq, shared_ptr<Trailmix_struct> &dta);
 
 const pair<vector<string>, vector<string>> read_fasta(const string &fastafilename);
 
@@ -170,7 +161,7 @@ void map_giraffe(string &fastaseq, string &fastq1filename, string &fastq2filenam
  *
  */
 
-const char get_dummy_qual_score(const double background_error_prob);
+const char get_dummy_qual_score(const double &background_error_prob);
 
 
 /**
@@ -180,7 +171,7 @@ const char get_dummy_qual_score(const double background_error_prob);
  *
  */
 
-vector<AlignmentInfo*>* remove_duplicates(vector<AlignmentInfo*> * sorted_algnvector, const int n_threads, const bool quiet);
+shared_ptr<vector<AlignmentInfo*>> remove_duplicates(shared_ptr<vector<AlignmentInfo*>> sorted_algnvector, const int n_threads, const bool &quiet);
 
 /**
  * @brief Helper function to update vector of booleans when encountering a paired forward-end read.
@@ -189,8 +180,8 @@ vector<AlignmentInfo*>* remove_duplicates(vector<AlignmentInfo*> * sorted_algnve
  *
  */
 
-vector<bool>* update_for_paired_forward(vector<bool>* is_dup, const bool is_reverse, vector<AlignmentInfo*> * sorted_algnvector,
-const long unsigned int i, const int n_threads);
+const vector<bool> update_for_paired_forward(vector<bool> &is_dup, shared_ptr<vector<shared_ptr<AlignmentInfo>>> sorted_algnvector,
+const long unsigned int i, const int &n_threads);
 
 /**
  * @brief  Helper function to update vector of booleans when encountering a single-end read.
@@ -199,7 +190,7 @@ const long unsigned int i, const int n_threads);
  *
  */
 
-vector<bool>* update_for_single(vector<bool>* is_dup, const bool is_reverse, vector<AlignmentInfo*> * sorted_algnvector, long unsigned int i, const int n_threads);
+vector<bool> update_for_single(vector<bool> &is_dup, shared_ptr<vector<shared_ptr<AlignmentInfo>>> sorted_algnvector, long unsigned int i, const int n_threads);
 
 /**
  * @brief Sort GAM file
@@ -228,8 +219,15 @@ void filter(const int n_threads, const bool interleaved, char const * fifo_A, ch
  *
  */
 
-const double get_background_freq(const char base);
+const double get_background_freq(const char &base);
 
+/**
+ * @brief Autodetect input file format
+ *
+ *
+ */
+
+const string autodetect(const string & input_file);
 
 /**
  * @brief Get the probability that an alignment was incorrectly mapped.
@@ -238,7 +236,7 @@ const double get_background_freq(const char base);
  *
  */
 
-constexpr double get_p_incorrectly_mapped(const int Q);
+constexpr double get_p_incorrectly_mapped(const int &Q);
 
 /**
  * @brief Precompute incorrect mapping probabilities
@@ -247,7 +245,7 @@ constexpr double get_p_incorrectly_mapped(const int Q);
  *
  */
 
-const vector<double> precompute_incorrect_mapping_probs();
+void precompute_incorrect_mapping_probs(shared_ptr<Trailmix_struct> &dta);
 
 /**
  * @brief Compute confidence in our predicted haplogroup assignment
@@ -257,18 +255,17 @@ const vector<double> precompute_incorrect_mapping_probs();
  *
  */
 
-void get_posterior(const vector<long double> &final_vec, const vector<string> &path_names,
+void get_posterior(const vector<double> &final_vec, const vector<string> path_names,
                                map<string, vector<string>> parents, map<string, vector<string>> children,
-                               const string &samplename, const string &predicted_haplotype, const string &posteriorfilename, const bool webapp,
-                               const int sample);
+                               const string &samplename, const string &predicted_haplotype, const string &posteriorfilename, const bool webapp);
 
 /**
  * @brief Write posterior output file
  *
  */
 
-void write_posterior_log(const string &samplename, const string &posteriorfilename, vector<string> &clade_vec, vector<double> &confidence_vec,
-                         const bool webapp, const int sample);
+void write_posterior_log(const string &samplename, const string &posteriorfilename, vector<string> clade_vec, vector<double> confidence_vec,
+                         const bool &webapp);
 
 
 /**
@@ -278,7 +275,7 @@ void write_posterior_log(const string &samplename, const string &posteriorfilena
  *
  */
 
-const map<string, vector<string>> load_parents(const string &hcfiledir);
+void load_parents(shared_ptr<Trailmix_struct> &dta);
 
 /**
  * @brief Load file of children
@@ -287,14 +284,8 @@ const map<string, vector<string>> load_parents(const string &hcfiledir);
  *
  */
 
-const map<string, vector<string>> load_children(const string &hcfiledir);
+void load_children(shared_ptr<Trailmix_struct> &dta);
 
-/**
- * @brief Load list of paths from a file, in alphabetical order
- *
- */
-
-const vector<string> load_paths(const string &hcfiledir);
 
 /**
  * @brief Find total posterior probability that the true haplotype lies within a given clade.
@@ -302,8 +293,8 @@ const vector<string> load_paths(const string &hcfiledir);
  * Find total posterior probability that the true haplotype lies within a given clade.
  */
 
-const vector<long double> get_posterior_of_clade(vector<long double> &all_tops, vector<long double> final_vec, set<string> haplotypes,
-                                                 map<string, vector<string>> &children, const long double total_ll,
+const vector<double> get_posterior_of_clade(vector<double> all_tops, vector<double> final_vec, set<string> haplotypes,
+                                                 map<string, vector<string>> children, const double total_ll,
                                                  const vector<string> path_names, bool initial);
 
 const set<string> get_children(set<string> haplotypes, map<string, vector<string>> children);
@@ -314,7 +305,7 @@ const set<string> get_children(set<string> haplotypes, map<string, vector<string
  * Compute log(exp(x) + exp(y) + ...) while avoiding underflows or loss of precision.
  */
 
-const long double sum_log_likelihoods(const vector<long double> &all_top);
+const double sum_log_likelihoods(vector<double> all_top);
 
 /**
  * @brief Convert FASTA to FASTQ
@@ -329,15 +320,18 @@ const string fa2fq(const string & fastaseq, const char & dummyqualscore, const s
  */
 
 
-void write_fq_read(auto & dummyFASTQFile, int offset, const int window_size, const string &fastaseq, const char dummyqualscore);
+void write_fq_read(auto & dummyFASTQFile, int offset, const int window_size, const string &fastaseq, char dummyqualscore);
+
+
+bool contains_no_inf(const std::vector<double>& v);
 
 Haplocart();
-Haplocart(const Haplocart & other);
+Haplocart(const Haplocart & other) = delete;
 ~Haplocart();
-Haplocart & operator= (const Haplocart & other);
+Haplocart & operator= (const Haplocart & other) = delete;
 
-const string usage() const;
-const int run(int argc, char *argv[], const string &cwdProg);
+const string usage();
+void run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta);
 
 };
 

@@ -9,24 +9,24 @@
 #define probably_true(x) __builtin_expect(!!(x), 1)
 
 // Compute the mean of a sequence
-inline long double mean(const std::vector<long double>& v) {
+inline double mean(const std::vector<double>& v) {
     return std::accumulate(v.begin(), v.end(), 0.0) / v.size();
 }
 
 // Compute the variance of a sequence
-inline long double variance(const std::vector<long double>& v, long double mean) {
-    long double sum = 0.0;
+inline double variance(const std::vector<double>& v, double mean) {
+    double sum = 0.0;
     for (const auto& i : v) {
-        long double diff = i - mean;
+        double diff = i - mean;
          sum += diff * diff;
     }
     return sum / (v.size() - 1);
 }
 
 // Compute the autocorrelation of a sequence at lag k
-inline long double autocorrelation(const std::vector<long double>& v, int k) {
-    long double m = mean(v);
-    long double denom = variance(v, m);
+inline double autocorrelation(const std::vector<double>& v, int k) {
+    double m = mean(v);
+    double denom = variance(v, m);
 
     double numer = 0.0;
     for (size_t i = 0; i < v.size() - k; ++i) {
@@ -37,7 +37,7 @@ inline long double autocorrelation(const std::vector<long double>& v, int k) {
 }
 
 // Compute the effective sample size (ESS) of a sequence
-inline double effectiveSampleSize(const std::vector<long double>& v) {
+inline double effectiveSampleSize(const std::vector<double>& v) {
     double m = mean(v);
     double vari = variance(v, m);
 
@@ -66,7 +66,7 @@ inline double effectiveSampleSize(const std::vector<long double>& v) {
 }
 
 typedef struct {
-    long double s[12];
+    double s[12];
  } substitutionRates;
 
 
@@ -89,12 +89,12 @@ typedef struct {
 //  15 T->T
 
 typedef struct {
-    long double s[16];
+    double s[16];
 } probSubstition;
 
 
 typedef struct {
-    long double p[4][4];
+    double p[4][4];
 } diNucleotideProb;
 
 
@@ -135,7 +135,7 @@ static void readNucSubstitionRatesFreq(const string filename,vector<substitution
 
 	    for(unsigned int k=0;k<12;k++){
 		//for(unsigned int t=0;t<=2;t++){
-		tempFreq.s[k]=destringify<long double>(fields[k]);
+		tempFreq.s[k]=destringify<double>(fields[k]);
 		//}
 	    }
 

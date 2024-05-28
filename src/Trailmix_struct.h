@@ -5,25 +5,25 @@
 #include "handlegraph/path_handle_graph.hpp"
 #include "bdsg/odgi.hpp"
 #include "NodeInfo.h"
-#include <Eigen/Dense>
 #include "../dep/spimap/src/Tree.h"
 #include "damage.h"
-#include "utils.hpp"
 #include <gbwtgraph/gbwtgraph.h>
 #include <gbwtgraph/path_cover.h>
 #include <cfloat>
-//#include "MCMC.h"
 
-using namespace Eigen;
+// Define a 4x4 matrix
+using Matrix = std::array<std::array<double, 4>, 4>;
 
 struct Trailmix_struct {
-    // Damage info object
+
     Damage dmg;
 
     // Boolean variables
+    bool include_read_props=true;
     bool reads_already_processed = false;
     bool output_profs=false;
     bool webapp = false;
+    bool cont_mode=false;
     bool verbose = false;
     bool quiet = false;
     bool debug=false;
@@ -37,23 +37,27 @@ struct Trailmix_struct {
     bool dump_json=false;
     bool auto_mode=false;
     bool graph_dir_specified = false;
+    bool tmfiledirspecified = false;
+    bool hcfiledirspecified = false;
 
     // Integer variables
     unsigned int n_threads = 1;
-    unsigned int k = 1;
+    unsigned int k = 2;
     unsigned int n_samples = 1;
-    int auto_max = 5;
-    int iter=1;
-    int burnin = 0;
+    int iter=100000;
+    int burnin = 1000;
     int chains = 4;
+    int depth=3;
 
-    // Double variables
+    // double variables
     double background_error_prob = 0.0001;
 
     // String variables
+    string hcfiledir = "../share/hcfiles/";
+    string tmfiledir = "../share/tmfiles/";
     string graph_prefix = "graph";
-    string graph_dir = "../share/toy_hcfiles/";
-    string graphfilename = graph_prefix + "graph.og";
+    string graph_dir = hcfiledir;
+    string graphfilename = graph_prefix + ".og";
     string treePath;
 
     // Giraffe parameters
@@ -67,19 +71,12 @@ struct Trailmix_struct {
     string posteriorfilename;
     string jsonfilename;
     string outputfilename = "/dev/stdout";
+    string TM_outputfilename;
     string tmpdir = "/tmp/";
-
-    // RPVG parameters
-    string rng_seed = "NONE";
-    string rpvg_gamfilename;
-    string mu = "125";
-    string sigma = "0.000001";
-    bool strand_specific = false;
-    string strand_specific_library_type = "rf";
 
     // Named pipe variables
     int status, status1, status2, status3, rpvg_status, rpvg_ht_status, pack_status;
-    pid_t wpid, wpid2, wpid3, rpvg_wpid, rpvg_ht_wpid, pid1, pid2, pid3, rpvg_pid, rpvg_ht_pid, pack_pid;
+    pid_t wpid, wpid2, wpid3, pid1, pid2, pid3, rpvg_pid, rpvg_ht_pid, pack_pid;
     string first_fifo, second_fifo, third_fifo;
     const char* fifo_A;
     const char* fifo_B;
@@ -89,8 +86,25 @@ struct Trailmix_struct {
     shared_ptr<vector<AlignmentInfo*>> algnvector = make_shared<vector<AlignmentInfo*>>();
     shared_ptr<vector<AlignmentInfo*>> current_algnvector = make_shared<vector<AlignmentInfo*>>();
 
+        // RPVG parameters
+    string rng_seed = "NONE";
+    string rpvg_gamfilename;
+    vector<string> mus = {"100"};
+    bool strand_specific = false;
+    string strand_specific_library_type = "rf";
+
     // Loaded data
-    vector<string> MCMC_path_names;
+    string deam3pfreqE;
+    string deam5pfreqE;
+    std::vector<Matrix> substitution_matrices;
+    std::unordered_map<std::string, std::string> originalPathNames;
+    set<string> in_pruned_set;
+    int n_leaves=0;
+    vector<vector<string>> hap_combos;
+    vector<pair<string, double>> tpms;
+    pair<vector<double>, vector<vector<unsigned int>>> read_probs;
+    vector<string> RPVG_hap_names;
+    vector<vector<spidir::Node*>> node_combos;
     map<const string, int> pangenome_map;
     vector<NodeInfo*> nodevector;
     vector<double> mappabilities;
@@ -98,11 +112,7 @@ struct Trailmix_struct {
     vector<string> path_names;
     vector<double> qscore_vec;
     vector<unsigned int> quality_scores;
-    vector<vector<string>> hap_combos;
-    vector<pair<string, double>> tpms;
     vector<unsigned int> dup_alignment_counts;
-    pair<vector<double>, vector<vector<unsigned int>>> read_probs;
-    vector<string> RPVG_hap_names;
     std::shared_ptr<gbwt::GBWT> gbwt;
     shared_ptr<gbwtgraph::GBWTGraph> gbwtgraph;
     vector<string> gbwt_paths;
@@ -111,64 +121,27 @@ struct Trailmix_struct {
 
     // Inference
 
-    vector<AlignmentInfo*>* gam = NULL;
-    long double read_coverage;
-    vector<long double> log_likelihood_vec;
+    double read_coverage;
+    vector<double> log_likelihood_vec;
     unsigned int max_branch_combo_index;
-    vector<vector<long double>> bc_dists;
-    vector<long double> branch_combo_lls;
     unsigned int nbpaths;
     unsigned int** baseshift_data_array;
-    unordered_map<int, int> path_node_map;
-    unordered_map<int, int> node_path_map;
-    vector<double> hap_combo_posteriors;
-    vector<vector<spidir::Node*>> node_combos;
-    vector<vector<unsigned int>> branch_combos;
-    vector<unsigned int> best_branch_combo;
-    shared_ptr<spidir::Tree> tree;
+    spidir::Tree* tree;
     vg::Mapping mppg;
     string graph_seq;
     string mapping_seq;
-    vector<vector<bool>> path_supports;
-    vector<unsigned int> node_counts;
-    unsigned int minid = -1;
+    vector<vector<string>> nodepaths;
+    unordered_map<string, int> path_node_map;
+    unordered_map<int, string> node_path_map;
+    unsigned int minid = 1;
     unsigned int maxid = -1;
-    long double max_ll_all = 42;
-    std::vector<Matrix4d> sub_vec;
-    vg::subcommand::Subcommand* sc = NULL;
+    const vg::subcommand::Subcommand* sc = NULL;
     map<string, vector<string>> parents;
     map<string, vector<string>> children;
     bdsg::ODGI graph;
-    map<unsigned int, vector<unsigned int>> mapping_supports;
-    vector<tuple<char, char, unsigned int, unsigned int, long double>> to_increment;
-    vector<long double> seed;
-    vector<long double> optimized_branch_placements;
-    vector<long double> optimized_branch_lengths;
+    vector<double> seed;
     std::unordered_map<unsigned int, int> gbwt_increments;
-
-    // Auto mode
-    bool current_source=true;
-    vector<bool> sources;
-    vector<vector<vector<bool>>> all_sources;
-    unsigned int source_pos;
-    long double best_model_likelihood = -DBL_MAX;
-    long double cur_model_likelihood = -DBL_MAX;
-    vector<long double> best_branch_combo_of_best_model;
-    vector<unsigned int> max_branch_combo_indices;
-    vector<vector<vector<unsigned int>>> best_branch_combos;
-    vector<vector<long double>> best_branch_placements;
-    vector<vector<long double>> model_lls;
-    unsigned int cur_within_k;
-    bool first_of_new_k = true;
-    vector<tuple<char, char, unsigned int, unsigned int, long double>> to_increment_ancient;
-    size_t ancient_counts=0;
-    size_t modern_counts=0;
-
-    // Inferred values
-    vector<vector<long double>> all_branch_placements;
-    vector<vector<long double>> all_branch_lengths;
-    vector<vector<double>> optimized_thetas;
-
+    vector<bool> source_assignments = vector<bool>{true, false}; // True is ancient, false is modern
 
     // Surjection
     vector<string> paths_to_surject;

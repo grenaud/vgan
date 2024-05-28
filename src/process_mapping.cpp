@@ -1,5 +1,18 @@
+#pragma once
 #include "HaploCart.h"
 #include "miscfunc.h"
+
+inline const double Haplocart::getBaseFrequency(const char base) {
+    switch(base) {
+        case 'A': return 0.27532;
+        case 'C': return 0.30044;
+        case 'G': return 0.25780;
+        case 'T': return 0.16644;
+        default:
+            // Handle error - unknown base
+            throw std::invalid_argument("Invalid base");
+    }
+}
 
 inline const double Haplocart::get_log_lik_if_unsupported(const vg::Mapping &mppg, const vector<int> &quality_scores)
 {
@@ -23,69 +36,81 @@ inline const double Haplocart::get_log_lik_if_unsupported(const vg::Mapping &mpp
     return ret;
 }
 
-inline const vector<long double> Haplocart::process_mapping(const map<const string, int> &pangenome_map, const AlignmentInfo * read_info,
-vector<long double> log_likelihood_vec, const vg::Mapping &mppg, string &mapping_seq, const vector<NodeInfo *> &nodevector,
-const vector<int> &quality_scores, string &graph_seq, const vector<double> &qscore_vec, const vector<double> &mappabilities,
-const int &nbpaths, bool &use_background_error_prob, const double &background_error_prob, const vector<double> &incorrect_mapping_vec,
-const int &minid, const bool &is_consensus_fasta, const int & n_threads) noexcept
+inline const vector<double> Haplocart::process_mapping(shared_ptr<Trailmix_struct> &dta, const AlignmentInfo* read_info,
+vector<double> log_likelihood_vec, const vg::Mapping &mppg, string &mapping_seq,
+const vector<int> &quality_scores, const string &graph_seq, unsigned int path_idx) noexcept
 {
 
-const int pangenome_base = pangenome_map.at(to_string(mppg.position().node_id()));
+int base_index_on_read;
+const bool isrev = read_info->path.mapping()[0].position().is_reverse();
+if (isrev){base_index_on_read=0;}
+else{base_index_on_read=read_info->seq.size()-1;}
 
-const double mappability = mappabilities[pangenome_base];
+const int pangenome_base = dta->pangenome_map.at(to_string(mppg.position().node_id()));
+
+const double mappability = dta->mappabilities[pangenome_base];
 vector<double> background_freqs;
 
-long double p_correctly_mapped;
+double p_correctly_mapped;
 
-if (is_consensus_fasta == false) {
-   p_correctly_mapped = (1-incorrect_mapping_vec[read_info->mapping_quality]) * mappability;
-                                 }
+if (dta->is_consensus_fasta == false) {
+   p_correctly_mapped = (1-dta->incorrect_mapping_vec[read_info->mapping_quality]) * mappability;
+                                      }
 
-unsigned int i;
-//#pragma omp parallel for private(i) num_threads(n_threads)
-for (i=0; i != mapping_seq.size(); ++i) {
+for (unsigned int i=0; i != mapping_seq.size(); ++i) {
    background_freqs.emplace_back(Haplocart::get_background_freq(mapping_seq[i]));
 }
 
-const vector<long double> p_no_seq_error = Haplocart::get_p_no_seq_error_mapping(mapping_seq, quality_scores, graph_seq,
-                                                                                 qscore_vec, use_background_error_prob,
-                                                                                 background_error_prob, n_threads);
 
-	for(int i=0;i!=nbpaths;++i){
-          const bool is_supported = nodevector.at(mppg.position().node_id()-minid)->pathsgo[i];
+const vector<double> p_no_seq_error = Haplocart::get_p_no_seq_error_mapping(dta, mapping_seq, quality_scores, graph_seq);
+
+          const bool is_supported = dta->nodevector.at(mppg.position().node_id()-dta->minid)->pathsgo[path_idx];
+          //const bool is_supported = dta->path_supports[mppg.position().node_id()-dta->minid][i];
 
 	  if (is_supported) {
-                  long double log_lik_if_mapped = 0;
+
+
+                  double log_lik_if_supported = 0;
 		  for (long unsigned int j = 0; j != graph_seq.size(); ++j)
 		      {
                                 // Discard ambiguous bases
                                 if (graph_seq[j] == 'N' || mapping_seq[j] == 'N') {continue;}
                                 if ( !isValidDNA(graph_seq[j]) || !isValidDNA(mapping_seq[j])) {continue;}
 
-                                // Get the probability of observing the base given that it was generated from the putative haplotype
-                                const long double p_obs_base = get_p_obs_base(pangenome_base, mapping_seq[j], graph_seq[j],
-                                                                                          p_no_seq_error[j], 8);
-                                long double log_prod;
-                                if (is_consensus_fasta == false) {
-                                       log_prod = log(((1-p_correctly_mapped) * background_freqs[j]) + (p_correctly_mapped * p_obs_base));
-                                                                 }
+                                if (!isrev){
+                                    base_index_on_read++;
+                                           }
+                                else{
+                                    base_index_on_read--;
+                                    }
+
+                                const double p_obs_base = get_p_obs_base(pangenome_base, mapping_seq[j], graph_seq[j], \
+                                               p_no_seq_error[j], 8, base_index_on_read, read_info->seq.size(), dta);
+
+                                double log_prod;
+                                if (dta->is_consensus_fasta == false) {
+                                           double base_frequency = Haplocart::getBaseFrequency(mapping_seq[j]);
+                                           log_prod = log(((1-p_correctly_mapped) * base_frequency) + (p_correctly_mapped * p_obs_base));
+                                                                      }
                                 else {
-                                       log_prod = log((1-background_error_prob) * p_obs_base);
+                                       log_prod = log((1-dta->background_error_prob) * p_obs_base);
                                      }
 
-				log_lik_if_mapped += log_prod;
+				log_lik_if_supported += log_prod;
 		      }
-
-		  log_likelihood_vec[i] += log_lik_if_mapped;
-
+                          log_likelihood_vec[path_idx] += 0; //log_lik_if_supported;
 		  }
 
 	  else if (!is_supported)           {
-                  const double log_lik_if_unsupported = get_log_lik_if_unsupported(mppg, quality_scores);
-                  //#pragma omp critical
-                  log_likelihood_vec[i] += log_lik_if_unsupported;
+
+                  for (unsigned int b = 0; b!= graph_seq.size(); ++b){
+                      if (graph_seq[b] == 'N' || mapping_seq[b] == 'N') {continue;}
+                      if ( !isValidDNA(graph_seq[b]) || !isValidDNA(mapping_seq[b])) {continue;}
+                         const double llu = get_log_lik_if_unsupported(mppg, quality_scores);
+                                                                     }
+
+                  log_likelihood_vec[path_idx] += -100.0; //get_log_lik_if_unsupported(mppg, quality_scores);
 		                            }
-	}
 
 return log_likelihood_vec;
 }

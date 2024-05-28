@@ -23,7 +23,7 @@ public:
 
     //deamination functions
     void initDeamProbabilities(const string & deam5pfreqE,const string & deam3pfreqE);
-    void combineDeamRates(long double f1[4],long double f2[4],long double f[4],int b);
+    void combineDeamRates(double f1[4],double f2[4],double f[4],int b);
 
     //Substitution rates due to deamination
     vector<probSubstition> sub5p;

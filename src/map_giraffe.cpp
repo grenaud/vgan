@@ -13,7 +13,7 @@ struct null_streambuf: public std::streambuf
   }
 };
 
-const char Haplocart::get_dummy_qual_score(const double background_error_prob) {
+const char Haplocart::get_dummy_qual_score(const double &background_error_prob) {
     // Given a background error probability, return a dummy quality score for the artificial FASTQ reads
     string illumina_encodings = "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHI";
     const int Q = -10 * log10(background_error_prob);
@@ -38,42 +38,25 @@ void Haplocart::map_giraffe(string &fastaseq, string &fastq1filename, string &fa
     ofstream cout(fifo_A);
     std::cout.rdbuf(cout.rdbuf());
     // Map with VG Giraffe to generate a GAM file
-    string minimizer_to_use=  graph_dir_path + "k31_w11.min";
-
-
-    int nonbase_count = 0;
-    for (auto base : fastaseq) {
-        if (base != 'A' && base != 'C' && base != 'T' && base != 'G' && base != 'a' && base != 'c' && base != 't' && base != 'g') {
-            ++nonbase_count;
-                                                                      }
-                               }
-
-
-    if (nonbase_count > 7999) {
-        if (!quiet) {cerr << "Detecting many ambiguous bases, using alternative minimizer index..." << endl;}
-        minimizer_to_use=  graph_dir_path + "k17_w18.min";
-                              }
+    string minimizer_to_use=  graph_dir_path + "graph.min";
 
 
 if (fastq1filename != "" && fastq2filename != "")
-    {
-
-	//@josh what is this? I commented
-        // if(fastq1filename.front() != '/'){fastq1filename = getFullPath(cwdProg + fastq1filename);}
-        // if(fastq2filename.front() != '/'){fastq1filename = getFullPath(cwdProg + fastq2filename);}
-
+   {
         arguments.emplace_back("-f");
         arguments.emplace_back(fastq1filename);
         arguments.emplace_back("-f");
         arguments.emplace_back(fastq2filename);
         arguments.emplace_back("-Z");
-        arguments.emplace_back(getFullPath(graph_dir_path + "graph.giraffe.gbz"));
+        arguments.emplace_back(getFullPath(graph_dir_path + "graph" + ".giraffe.gbz"));
         arguments.emplace_back("-d");
-        arguments.emplace_back(getFullPath(graph_dir_path + "graph.dist"));
+        arguments.emplace_back(getFullPath(graph_dir_path + "graph" + ".dist"));
         arguments.emplace_back("-m");
         arguments.emplace_back(minimizer_to_use);
         arguments.emplace_back("-b");
-        arguments.emplace_back("fast");
+        //arguments.emplace_back("fast");
+        //arguments.emplace_back("-M");
+        //arguments.emplace_back("2");
         char** argvtopass = new char*[arguments.size()];
         for (int i=0;i<arguments.size();i++) {
             argvtopass[i] = const_cast<char*>(arguments[i].c_str());
@@ -81,7 +64,7 @@ if (fastq1filename != "" && fastq2filename != "")
 
         auto* sc = vg::subcommand::Subcommand::get(arguments.size(), argvtopass);
         auto normal_cerr = cerr.rdbuf();
-        std::cerr.rdbuf(NULL);
+        //std::cerr.rdbuf(NULL);
         (*sc)(arguments.size(), argvtopass);
         std::cerr.rdbuf(normal_cerr);
 
@@ -89,21 +72,16 @@ if (fastq1filename != "" && fastq2filename != "")
 
 else if (fastq1filename != "" && fastq2filename == "")
     {
-		//@josh what is this? I commented
-
-	//if(fastq1filename.front() != '/'){fastq1filename = getFullPath(cwdProg + fastq1filename);}
-
                arguments.emplace_back("-f");
                arguments.emplace_back(fastq1filename);
                arguments.emplace_back("-Z");
-               arguments.emplace_back(getFullPath(graph_dir_path + "graph.giraffe.gbz"));
+               arguments.emplace_back(getFullPath(graph_dir_path + "graph" + ".giraffe.gbz"));
                arguments.emplace_back("-d");
-               arguments.emplace_back(getFullPath(graph_dir_path + "graph.dist"));
+               arguments.emplace_back(getFullPath(graph_dir_path + "graph" + ".dist"));
                arguments.emplace_back("-m");
                arguments.emplace_back(minimizer_to_use);
-               arguments.emplace_back("-b");
-               arguments.emplace_back("fast");
-
+               //arguments.emplace_back("-M");
+               //arguments.emplace_back("2");
            if (interleaved) {
                arguments.emplace_back("-i");
                             }
@@ -115,7 +93,7 @@ else if (fastq1filename != "" && fastq2filename == "")
 
                auto* sc = vg::subcommand::Subcommand::get(arguments.size(), argvtopass);
                auto normal_cerr = cerr.rdbuf();
-               std::cerr.rdbuf(NULL);
+               //std::cerr.rdbuf(NULL);
                (*sc)(arguments.size(), argvtopass);
                std::cerr.rdbuf(normal_cerr);
                delete[] argvtopass;
@@ -133,14 +111,15 @@ else if (fastaseq != ""){
     arguments.emplace_back("-f");
     arguments.emplace_back(dummy_fastq_file);
     arguments.emplace_back("-Z");
-    arguments.emplace_back(getFullPath(graph_dir_path + "graph.giraffe.gbz"));
+    arguments.emplace_back(getFullPath(graph_dir_path + "graph" + ".giraffe.gbz"));
     arguments.emplace_back("-d");
-    arguments.emplace_back(getFullPath(graph_dir_path + "graph.dist"));
+    arguments.emplace_back(getFullPath(graph_dir_path + "graph" + ".dist"));
     arguments.emplace_back("-m");
     arguments.emplace_back(minimizer_to_use);
     arguments.emplace_back("-b");
-    arguments.emplace_back("fast");
-
+    //arguments.emplace_back("fast");
+    //arguments.emplace_back("-M");
+    //arguments.emplace_back("2");
     char** argvtopass = new char*[arguments.size()];
     for (int i=0;i<arguments.size();i++) {
             argvtopass[i] = const_cast<char*>(arguments[i].c_str());
@@ -151,7 +130,7 @@ else if (fastaseq != ""){
                     }
 
     auto normal_cerr = cerr.rdbuf();
-    std::cerr.rdbuf(NULL);
+    //std::cerr.rdbuf(NULL);
     (*sc)(arguments.size(), argvtopass);
     std::cerr.rdbuf(normal_cerr);
 

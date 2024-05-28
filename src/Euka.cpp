@@ -35,7 +35,7 @@ Euka::~Euka(){
  * @return vector of probabilities for phred scores 0-70
  *
  */
-vector<double> Euka::get_qscore_vec() {
+const vector<double> Euka::get_qscore_vec() {
 
     vector<double> qscore_vec;
     for (int Q=0; Q<100;++Q) {
@@ -553,7 +553,7 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
     if (clade_id_list.size() < 2 || run_mcmc == false){
 
 
-        const vector<long double> init_vec = Euka::compute_init_vec(clade_vec, clade_id_list);
+        const vector<double> init_vec = Euka::compute_init_vec(clade_vec, clade_id_list);
 
         ofstream outbin((outputfilename +"_coverage.tsv").c_str(), ios::trunc);
         ofstream out((outputfilename + "_abundance.tsv").c_str(), ios::trunc);
@@ -848,8 +848,8 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
     else
     {
 
-        const vector<long double> init_vec = Euka::compute_init_vec(clade_vec, clade_id_list);
-        vector<long double > clade_res = MCMC().run(iter, burnin, 0.01, init_vec, clade_vec, clade_id_list);
+        const vector<double> init_vec = Euka::compute_init_vec(clade_vec, clade_id_list);
+        vector<double > clade_res = MCMC().run(iter, burnin, 0.01, init_vec, clade_vec, clade_id_list);
 
     /////// CREATE OUTPUT FILES ///////
         

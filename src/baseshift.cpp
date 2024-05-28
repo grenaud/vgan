@@ -1,5 +1,5 @@
 #include "baseshift.h"
-//#include "Trailmix_struct.h"
+#include "Trailmix_struct.h"
 
 using namespace std;
 
