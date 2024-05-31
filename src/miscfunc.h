@@ -101,6 +101,8 @@ typedef struct {
 static void readNucSubstitionRatesFreq(const string filename,vector<substitutionRates> & subVec){
     igzstream subFP;
 
+cerr << "test3: " << filename << endl;
+
     subFP.open(filename.c_str(), ios::in);
 
     //    unsigned int counterCont=0;
@@ -145,6 +147,9 @@ static void readNucSubstitionRatesFreq(const string filename,vector<substitution
 	}
 	subFP.close();
     }else{
+
+    cerr << "test4: " << filename << endl;
+
 	throw std::runtime_error("Unable to open file "+filename);
     }
 

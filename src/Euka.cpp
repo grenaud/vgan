@@ -360,6 +360,7 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
                       {throw std::runtime_error("[euka] Error, FASTQ2 input file " + fastq2filename + " does not exist");}}
 
 
+    cerr << "[TESTING] IN EUKA, INITING DAMAGE!" << endl;
     Damage dmg;
     dmg.initDeamProbabilities(deam5pfreqE,deam3pfreqE);
 
@@ -472,8 +473,7 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
 
         cerr << "Mapping reads..." << endl;
         Euka::map_giraffe(fastq1filename, fastq2filename, n_threads, interleaved,
-
-                      fifo_A, sc, tmpdir, euka_dir, dbprefix);
+                      fifo_A, sc, tmpdir, euka_dir, dbprefix, deam5pfreqE,deam3pfreqE);
 
     while ((wpid = wait(&status)) > 0);
     exit(0);

@@ -183,7 +183,11 @@ const int Gam2prof::run(int argc, char *argv[], string &cwdProg, shared_ptr<Trai
                 baseshift_data_array.display_prof(dta->tmpdir+"5p.prof", "5p", dta);
                 const string damageProfs3p = dta->tmpdir+"3p.prof";
                 const string damageProfs5p = dta->tmpdir+"5p.prof";
+
+                cerr << "TESTGAM2PROF, DEAM5P: " << damageProfs3p << endl;
+                cerr << "TESTGAM2PROF, DEAM3P: " << damageProfs5p << endl;
                 dta->dmg.initDeamProbabilities(damageProfs3p, damageProfs5p);
+
                                   }
                               }
 

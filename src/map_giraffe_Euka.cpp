@@ -15,7 +15,7 @@ const char get_dummy_qual_score(double &background_error_prob)             {
 
 void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n_threads, bool interleaved,
 		       const char * fifo_A, const vg::subcommand::Subcommand* sc,
-		       const string &tmpdir, const string &cwdProg, const string &prefix){
+		       const string &tmpdir, const string &cwdProg, const string &prefix, const string &deam5pfreqE,const string &deam3pfreqE){
     cerr << "Mapping reads..." << endl;
 
     int retcode;
@@ -29,6 +29,7 @@ void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n
 
     // Map with VG Giraffe to generate a GAM file
     string minimizer_to_use= prefix + ".min";
+    string rymer_to_use= prefix + ".ry";
 
     if (fastq1filename != "" && fastq2filename != "")
 	{
@@ -47,6 +48,14 @@ void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n
 	    arguments.emplace_back(prefix + ".gbwt");
 	    arguments.emplace_back("-x");
 	    arguments.emplace_back(prefix + ".og");
+            arguments.emplace_back("-q");
+            arguments.emplace_back(rymer_to_use);
+            arguments.emplace_back("--deam-3p");
+            arguments.emplace_back(deam3pfreqE);
+            arguments.emplace_back("--deam-5p");
+            arguments.emplace_back(deam5pfreqE);
+            arguments.emplace_back("-j");
+            arguments.emplace_back("0.9");
 	    char** argvtopass = new char*[arguments.size()];
 	    for (int i=0;i<arguments.size();i++) {
 		argvtopass[i] = const_cast<char*>(arguments[i].c_str());
@@ -78,6 +87,15 @@ void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n
 	    if (interleaved) {
 		arguments.emplace_back("-i");
 	    }
+
+            arguments.emplace_back("-q");
+            arguments.emplace_back(rymer_to_use);
+            arguments.emplace_back("--deam-3p");
+            arguments.emplace_back(deam3pfreqE);
+            arguments.emplace_back("--deam-5p");
+            arguments.emplace_back(deam5pfreqE);
+            arguments.emplace_back("-j");
+            arguments.emplace_back("0.9");
 
 	    char** argvtopass = new char*[arguments.size()];
 	    for (int i=0;i<arguments.size();i++) {

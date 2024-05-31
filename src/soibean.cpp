@@ -473,7 +473,7 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
 	// Code for writing to the FIFO
 	if (gamfilename == "") {
 	    //cerr << "Mapping reads..." << endl;
-	    ek.map_giraffe(fastq1filename, fastq2filename, n_threads, interleaved, fifo_A, sc, tmpdir, sbdir, dbprefix);
+	    ek.map_giraffe(fastq1filename, fastq2filename, n_threads, interleaved, fifo_A, sc, tmpdir, sbdir, dbprefix, deam5pfreqE,deam3pfreqE);
 	    //cerr << "and done" << endl;
 	    exit(0);
 	} else {
@@ -505,11 +505,13 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
         }
     }
 
-    auto gam = precompute_GAM(graph,fifo_A,clade_vec,nodevector, nodepaths, path_names, qscore_vec, false, minid, false, dmg.subDeamDiNuc);
-    
+    cerr << "[TESTING] path names size: " << path_names.size() << endl;
+
+    auto gam = precompute_GAM(graph,fifo_A,clade_vec,nodevector, nodepaths, path_names, qscore_vec, false, minid, false, dmg.subDeamDiNuc, n_threads);
+
     //turn all alignment likelihoods for each path into a vector<vector<int>> for the MCMC input
     vector<vector<double>> probMatrix = convertMapsToVector(gam);
-    
+
     cerr << "Number of paths: " << probMatrix[0].size() << endl;
     cerr << "Number of reads: " << gam->size() << endl;
     

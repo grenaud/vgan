@@ -34,6 +34,7 @@ static vector<AlignmentInfo*>* precompute_GAM(
     int minid,
     bool singlesource,
     vector <vector<diNucleotideProb> > &subDeamDiNuc,
+    const unsigned int n_threads,
     shared_ptr<Trailmix_struct> dta = NULL
                                           )
 {
@@ -74,8 +75,8 @@ std::unordered_map<char, int> nucleotide_index = {{'A', 0}, {'C', 1}, {'G', 2}, 
         const vg::Alignment& a = *iter;
         if(a.identity() == 0){continue;}
 
-        double p_correctly_mapped = 1-dta->incorrect_mapping_vec[a.mapping_quality()];
-        p_correctly_mapped = max(p_correctly_mapped, 1e-9);
+        double p_correctly_mapped = (dta == NULL) ? 1 : (1 - dta->incorrect_mapping_vec[a.mapping_quality()]);
+        p_correctly_mapped = max(p_correctly_mapped, 1e-6);
 
         if (a.identity() != 0)
         {
@@ -131,8 +132,10 @@ if (mppg_sizes.size() != a.path().mapping().size()) {
     }
 } else {
     nID = a.path().mapping()[i].position().node_id();
-      pangenome_base = dta->pangenome_map.at(to_string(nID));
-      mappability = dta->mappabilities[pangenome_base];
+
+      auto pangenome_base = (dta == NULL) ? -1.0 : dta->pangenome_map.at(to_string(nID));
+      auto mappability = (dta == NULL) ? 1.0 : dta->mappabilities[pangenome_base];
+
     for (const auto& path : nodepaths.at(nID - minid)) {
         probPaths.insert(path);
     }
@@ -198,12 +201,12 @@ auto modifyPathNameInPrecompute = [&](
 
 MCMC mcmc;
 
-#pragma omp parallel for num_threads(dta->n_threads) private(readInfo)
+#pragma omp parallel for num_threads(n_threads) private(readInfo)
 
 for (size_t m = 0; m < pathNames.size(); ++m) {
 
+if (dta){
 modifyPathNameInPrecompute(dta, pathNames[m], false);
-
 set<int> depths_used;
 auto p = dta->tree->nodes[dta->path_node_map[pathNames[m]]];
 bool in_pruned = mcmc.is_in_pruned(p, dta->depth, dta, depths_used);
@@ -211,6 +214,7 @@ bool in_pruned = mcmc.is_in_pruned(p, dta->depth, dta, depths_used);
 if(!in_pruned){
 continue;
 }
+        }
 
                     // the path is supported
                     bool path_supported = probPaths.find(pathNames[m]) != probPaths.end();
@@ -235,7 +239,9 @@ continue;
                                 info.referenceBase = nodeSeq[s];
                                 info.pathSupport = true;
                                 info.logLikelihood = log(qscore_vec[base_quality]/3) + log(p_correctly_mapped) + log(mappability);
-                                if (dta->cont_mode){info.logLikelihoodNoDamage = log(qscore_vec[base_quality]/3) + log(p_correctly_mapped) + log(mappability);}
+                                 if (dta){
+                                    if (dta->cont_mode){info.logLikelihoodNoDamage = log(qscore_vec[base_quality]/3) + log(p_correctly_mapped) + log(mappability);}
+                                         }
                                  if (info.logLikelihood >= 0.0) {
                                         throw std::runtime_error("info.loglikelihood is greater than 0 N");
                                                                 }
@@ -249,7 +255,9 @@ continue;
                                 info.referenceBase = nodeSeq[s];
                                 info.pathSupport = true;
                                 info.logLikelihood = log(qscore_vec[base_quality]/3) + log(p_correctly_mapped) + log(mappability);
-                                if (dta->cont_mode){info.logLikelihoodNoDamage = log(qscore_vec[base_quality]/3) + log(p_correctly_mapped) + log(mappability);}
+                                 if (dta){
+                                    if (dta->cont_mode){info.logLikelihoodNoDamage = log(qscore_vec[base_quality]/3) + log(p_correctly_mapped) + log(mappability);}
+                                         }
                                  if (info.logLikelihood >= 0.0) {
                                         throw std::runtime_error("info.loglikelihood is greater than 0 SSS");
                                                                 }
@@ -268,7 +276,9 @@ continue;
                                 info.referenceBase = nodeSeq[s];
                                 info.pathSupport = true;
                                 info.logLikelihood = log(qscore_vec[base_quality]/3) + log(p_correctly_mapped) + log(mappability);
-                                if (dta->cont_mode){info.logLikelihoodNoDamage = log(qscore_vec[base_quality]/3) + log(p_correctly_mapped) + log(mappability);}
+                                 if (dta){
+                                    if (dta->cont_mode){info.logLikelihoodNoDamage = log(qscore_vec[base_quality]/3) + log(p_correctly_mapped) + log(mappability);}
+                                         }
                                 readInfo.emplace_back(info);
 
 #ifdef DEBUGANALYSEGAM
@@ -386,7 +396,10 @@ if (log_lik_marg_no_damage < log(0.000001)){log_lik_marg_no_damage = log(0.00000
 
                                 info.logLikelihood = log_lik_marg + log(p_correctly_mapped) + log(mappability);
 
-                                if (dta->cont_mode){info.logLikelihoodNoDamage = log_lik_marg_no_damage  + log(p_correctly_mapped) + log(mappability);}
+                                if (dta){
+                                    if (dta->cont_mode){info.logLikelihoodNoDamage = log_lik_marg_no_damage  + log(p_correctly_mapped) + log(mappability);}
+                                        }
+
                                 if (info.logLikelihood >= 1e-8) {
                                         cerr << "info.logLikelihood: " << info.logLikelihood << endl;
                                         throw std::runtime_error("info.loglikelihood is greater than 0 D");
@@ -423,7 +436,9 @@ if (log_lik_marg_no_damage < log(0.000001)){log_lik_marg_no_damage = log(0.00000
                                     cerr << "p_correctly_mapped: " << p_correctly_mapped << endl;
                                     throw runtime_error("THIS IS INF");
                                                              }
-                                if (dta->cont_mode){info.logLikelihoodNoDamage = log(1 - (qscore_vec[base_quality])) + log(p_correctly_mapped) + log(mappability);}
+                                if (dta){
+                                    if (dta->cont_mode){info.logLikelihoodNoDamage = log(1 - (qscore_vec[base_quality])) + log(p_correctly_mapped) + log(mappability);}
+                                        }
                                 if (isnan(info.logLikelihood) || info.logLikelihood > 1e-5){
                                    throw runtime_error("UNSUPPORTED SHOULD NOT HAPPEN");
                                 }
@@ -444,7 +459,9 @@ if (log_lik_marg_no_damage < log(0.000001)){log_lik_marg_no_damage = log(0.00000
                                 info.referenceBase = nodeSeq[s];
                                 info.pathSupport = false;
                                 info.logLikelihood = log((qscore_vec[base_quality])) + log(p_correctly_mapped) + log(mappability);
-                                if (dta->cont_mode){info.logLikelihoodNoDamage = log((qscore_vec[base_quality])) + log(p_correctly_mapped) + log(mappability);}
+                                 if (dta){
+                                    if (dta->cont_mode){info.logLikelihoodNoDamage = log((qscore_vec[base_quality])) + log(p_correctly_mapped) + log(mappability);}
+                                         }
 {
                                 #pragma omp critical
                                 readInfo.emplace_back(move(info));
@@ -592,6 +609,7 @@ outfile.close();
                         dta->minid, \
                         true, \
                         dta->dmg.subDeamDiNuc,
+                        dta->n_threads,
                         dta
                         );
 

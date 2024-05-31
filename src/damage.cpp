@@ -43,6 +43,9 @@ void Damage::initDeamProbabilities(const string & deam5pfreqE,const string & dea
     vector<substitutionRates> sub5pT;
     vector<substitutionRates> sub3pT;
 
+    cerr << "TEST2, DEAM5P: " << deam5pfreqE << endl;
+    cerr << "TEST2, DEAM3P: " << deam3pfreqE << endl;
+
     readNucSubstitionRatesFreq(deam5pfreqE,sub5pT);
     readNucSubstitionRatesFreq(deam3pfreqE,sub3pT);
 
