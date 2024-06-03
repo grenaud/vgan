@@ -275,20 +275,30 @@ if (!sigNodes.empty()){
       topass.emplace_back(node->longname);
     }
 
+    if (dta->randStart){
+        dta->seed = std::vector<double>(dta->k, 1.0 / dta->k);
+                       }
+    else{
     Trailmix::get_seed_source_estimates(dta, topass);
-    //dta->seed = std::vector<double>(dta->k, 1.0 / dta->k);
-                      }
+         }
+                     }
 
     if (!sigNodes.empty()){
-    params.sources = sigNodes;
-    //std::random_device rd;  // Random number generator
-    //std::mt19937 gen(rd()); // Seed the generator
-    //std::uniform_int_distribution distrib(0, dta->tree->nodes.size() - 1);
 
-    //params.sources.resize(dta->k); // Resize vector to hold k elements
-    //for (int i = 0; i<dta->k; ++i) {
-    //    params.sources[i] = distrib(gen); // Assign random number within the range
-   // }
+    if (dta->randStart){
+            std::random_device rd;  // Random number generator
+    std::mt19937 gen(rd()); // Seed the generator
+    std::uniform_int_distribution distrib(0, dta->tree->nodes.size() - 1);
+
+    params.sources.resize(dta->k); // Resize vector to hold k elements
+    for (int i = 0; i<dta->k; ++i) {
+        params.sources[i] = distrib(gen); // Assign random number within the range
+                                   }
+                       }
+
+    else{
+        params.sources = sigNodes;
+        }
                           }
 
 else {

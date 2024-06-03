@@ -3,10 +3,12 @@
 #include <random>
 #include <limits>
 #include <unordered_set>
+#include "AlignmentInfo.h"
 
 #define MIN2(a,b) (((a)<(b))?(a):(b))
 #define MAX2(a,b) (((a)>(b))?(a):(b))
 #define probably_true(x) __builtin_expect(!!(x), 1)
+
 
 // Compute the mean of a sequence
 inline double mean(const std::vector<double>& v) {
@@ -100,8 +102,6 @@ typedef struct {
 
 static void readNucSubstitionRatesFreq(const string filename,vector<substitutionRates> & subVec){
     igzstream subFP;
-
-cerr << "test3: " << filename << endl;
 
     subFP.open(filename.c_str(), ios::in);
 

@@ -13,7 +13,7 @@
 #include "NodeInfo.h"
 #include "AlignmentInfo.h"
 #include "Clade.h"
-#include "precompute.h"
+#include "precompute_soibean.h"
 #include "subcommand/subcommand.hpp"
 #include "bdsg/odgi.hpp"
 #include "miscfunc.h"

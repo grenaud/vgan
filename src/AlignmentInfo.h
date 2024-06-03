@@ -9,7 +9,6 @@
 #define AlignmentInfo_h
 #include <string>
 #include "alignment.hpp"
-#include "AlignmentInfo.h"
 
 using namespace std;
 

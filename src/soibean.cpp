@@ -17,7 +17,6 @@
 #include "MCMC.h"
 #include "damage.h"
 
-
 //#define DEBUGLCA
 //#define PRINTLCA
 //#define SANITYCHECK
@@ -120,32 +119,6 @@ string soibean::usage(const std::string& cwdProg) const {
 }
 ///////////// Begin of function storage - temporary ////////////////////////////
 
-std::vector<std::vector<double>> soibean::convertMapsToVector(std::vector<AlignmentInfo*>* & gam) {
-    std::vector<std::vector<double>> result;
-
-    if (gam->empty()) {
-        throw std::runtime_error("Error: GAM file is empty.");
-    }
-
-    for (const auto& map : *gam) {
-        std::vector<double> row;
-        for (const auto& pair : map->pathMap) {
-            row.push_back(pair.second); 
-        }
-
-        // Compute the sum of the elements in the row
-        double sum = 0.0;
-        for (int i = 0; i < row.size(); i++) {
-            sum += row[i];
-        }
-
-        // Push the row into the result vector
-        result.push_back(row);
-    }
-
-    return result;
-}
-
 std::vector<int> soibean::generateRandomNumbers(const int maxNum, const int k) {
     std::vector<int> sigNodes;
     std::random_device rd;  
@@ -161,6 +134,32 @@ std::vector<int> soibean::generateRandomNumbers(const int maxNum, const int k) {
     }
 
     return sigNodes;
+}
+
+std::vector<std::vector<double>> soibean::convertMapsToVector(std::vector<AlignmentInfo*>* & gam) {
+    std::vector<std::vector<double>> result;
+
+    if (gam->empty()) {
+        throw std::runtime_error("Error: GAM file is empty.");
+    }
+
+    for (const auto& map : *gam) {
+        std::vector<double> row;
+        for (const auto& pair : map->pathMap) {
+            row.push_back(pair.second);
+        }
+
+        // Compute the sum of the elements in the row
+        double sum = 0.0;
+        for (int i = 0; i < row.size(); i++) {
+            sum += row[i];
+        }
+
+        // Push the row into the result vector
+        result.push_back(row);
+    }
+
+    return result;
 }
 
 double soibean::calculateRhat(const std::vector<double>& means, const std::vector<double>& variances, int chainLength) {
@@ -505,9 +504,7 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
         }
     }
 
-    cerr << "[TESTING] path names size: " << path_names.size() << endl;
-
-    auto gam = precompute_GAM(graph,fifo_A,clade_vec,nodevector, nodepaths, path_names, qscore_vec, false, minid, false, dmg.subDeamDiNuc, n_threads);
+    auto gam = analyse_GAM(graph,fifo_A,clade_vec,nodevector, nodepaths, path_names, qscore_vec, false, minid, false, dmg.subDeamDiNuc, n_threads);
 
     //turn all alignment likelihoods for each path into a vector<vector<int>> for the MCMC input
     vector<vector<double>> probMatrix = convertMapsToVector(gam);

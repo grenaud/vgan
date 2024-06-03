@@ -1,7 +1,34 @@
 #pragma once
+#include "miscfunc.h"
 #include "baseshift.h"
 
 #define PRINTVEC(v) for (int i=0; i<v.size(); ++i){cerr << v[i] << '\t';}cerr << endl << endl;
+
+std::vector<std::vector<double>> convertMapsToVector(std::vector<AlignmentInfo*>* & gam) {
+    std::vector<std::vector<double>> result;
+
+    if (gam->empty()) {
+        throw std::runtime_error("Error: GAM file is empty.");
+    }
+
+    for (const auto& map : *gam) {
+        std::vector<double> row;
+        for (const auto& pair : map->pathMap) {
+            row.emplace_back(pair.second);
+        }
+
+        // Compute the sum of the elements in the row
+        double sum = 0.0;
+        for (int i = 0; i < row.size(); i++) {
+            sum += row[i];
+        }
+
+        // Push the row into the result vector
+        result.emplace_back(row);
+    }
+
+    return result;
+}
 
 std::vector<std::string> buildRpvgArgumentsHaplotypeTranscripts(const std::shared_ptr<Trailmix_struct>& dta) {
     std::vector<std::string> rpvgarguments = {
@@ -66,32 +93,6 @@ vector<string> paths_through_node(const bdsg::ODGI& graph, const bdsg::handle_t&
         paths.emplace_back(graph.get_path_name(path_handle));
     });
     return paths;
-}
-
-std::vector<std::vector<double>> convertMapsToVector(std::vector<AlignmentInfo*>* & gam) {
-    std::vector<std::vector<double>> result;
-
-    if (gam->empty()) {
-        throw std::runtime_error("Error: GAM file is empty.");
-    }
-
-    for (const auto& map : *gam) {
-        std::vector<double> row;
-        for (const auto& pair : map->pathMap) {
-            row.emplace_back(pair.second);
-        }
-
-        // Compute the sum of the elements in the row
-        double sum = 0.0;
-        for (int i = 0; i < row.size(); i++) {
-            sum += row[i];
-        }
-
-        // Push the row into the result vector
-        result.emplace_back(row);
-    }
-
-    return result;
 }
 
 void write_fq_read(auto & dummyFASTQFile, int offset, const int window_size, const string &fastaseq, char dummyqualscore) {

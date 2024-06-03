@@ -84,9 +84,9 @@ void writeMatrixToFile(const std::string& filename, const Matrix& matrix) {
 
 
 // function gets the average for per clade damage profils (specific for either c->t or g->a as well as 5' or 3' end). 
-vector<double> get_avg(vector<double> dam, int l, int no_clades){
+vector <double> get_avg(vector<double> dam, int l, int no_clades){
 
-    vector<double> sum(l, 0.0);
+    vector <double> sum(l, 0.0);
     vector<double> av; 
     
     for (int i = 0; i<dam.size(); i++){
@@ -382,6 +382,7 @@ std::string Trailmix::usage() const {
           << "Markov chain Monte Carlo options:\n"
           << "  \t--chains [INT]\t\t             Define the number of chains for the MCMC (default: 4)\n"
           << "  \t--iter [INT]\t\t             Define the number of iterations for the MCMC (default: 1.000.000)\n"
+          << "  \t--randStart [bool]          Set to get random starting nodes in the tree instead of the signature nodes (default: false)\n"
           << "  \t--burnin [INT]\t\t             Define the burn-in period for the MCMC (default: 100.000)\n"
           << "Initialization options:\n"
           << "  \t--mu [INT,INT,...]\t             Define the fragment length mean per source (for read count proportion estimation) \n"
@@ -434,6 +435,7 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     string prof_out_file_path = getFullPath(cwdProg+"../");
     int lengthToProf = 5;
     int depth = 10;
+    bool randStart=false;
     bool strand_specific = false;
     vector<string> mus = {"120", "120"};
     string rng_seed="NONE";
@@ -536,6 +538,11 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
         if(string(argv[i]) == "--deam3p"  ){
             deam3pfreqE=string(argv[i+1]);
         specifiedDeam=true;
+            continue;
+        }
+
+        if(string(argv[i]) == "--randStart"  || string(argv[i]) == "--randstart"){
+            randStart=true;
             continue;
         }
 

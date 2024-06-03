@@ -360,7 +360,6 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
                       {throw std::runtime_error("[euka] Error, FASTQ2 input file " + fastq2filename + " does not exist");}}
 
 
-    cerr << "[TESTING] IN EUKA, INITING DAMAGE!" << endl;
     Damage dmg;
     dmg.initDeamProbabilities(deam5pfreqE,deam3pfreqE);
 

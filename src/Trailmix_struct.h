@@ -39,6 +39,7 @@ struct Trailmix_struct {
     bool graph_dir_specified = false;
     bool tmfiledirspecified = false;
     bool hcfiledirspecified = false;
+    bool randStart=false;
 
     // Integer variables
     unsigned int n_threads = 1;
@@ -49,7 +50,7 @@ struct Trailmix_struct {
     int chains = 4;
     int depth=3;
 
-    // double variables
+    // Double variables
     double background_error_prob = 0.0001;
 
     // String variables

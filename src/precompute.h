@@ -1,5 +1,4 @@
-#pragma once
-#include "soibean.h"
+#pragma onc
 #include "bdsg/odgi.hpp"
 #include "vg/vg.pb.h"
 #include "vg/io/basic_stream.hpp"
@@ -82,11 +81,6 @@ std::unordered_map<char, int> nucleotide_index = {{'A', 0}, {'C', 1}, {'G', 2}, 
         {
             using BaseInfo = AlignmentInfo::BaseInfo;
             auto&& [graph_seq, read_seq, mppg_sizes] = reconstruct_graph_sequence(graph, a.path(), a.sequence());
-            //PRINTVEC(mppg_sizes)
-            //string graph_seq = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-            //string read_seq =  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-            //vector<int> mppg_sizes(8, 1);
-
             int baseIX = a.path().mapping()[0].position().is_reverse() ? a.sequence().size() - 1 : 0;
             int baseOnRead = baseIX;
             size_t Lseq = graph_seq.size();
@@ -275,9 +269,9 @@ continue;
                                 info.readBase = partReadSeq[s];
                                 info.referenceBase = nodeSeq[s];
                                 info.pathSupport = true;
-                                info.logLikelihood = log(qscore_vec[base_quality]/3) + log(p_correctly_mapped) + log(mappability);
+                                info.logLikelihood = log(0.02);
                                  if (dta){
-                                    if (dta->cont_mode){info.logLikelihoodNoDamage = log(qscore_vec[base_quality]/3) + log(p_correctly_mapped) + log(mappability);}
+                                    if (dta->cont_mode){info.logLikelihoodNoDamage = log(0.02);}
                                          }
                                 readInfo.emplace_back(info);
 
@@ -581,7 +575,6 @@ outfile.close();
             ai->mostProbPath = keysWithHighestValue;
             print_dm = false;
             ai->detailMap = move(detailMap);
-
             read_vec->emplace_back(move(ai));
         } // end of if identity statement
     } // end of iteration through reads in gam file

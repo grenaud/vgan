@@ -297,6 +297,7 @@ pair<unordered_map<string, vector<vector<double>>>, double> MCMC::processMCMCite
 
     if (!baseEstimatesFile.is_open() || !readEstimatesFile.is_open() || !branchestimateFile.is_open()) {
         cerr << "Failed to open files for writing." << endl;
+        cerr << "num: " << num << endl;
         throw runtime_error("File opening failed.");
     }
 

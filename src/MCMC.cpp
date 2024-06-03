@@ -1263,7 +1263,7 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams par
 #endif
                         }
 
-//#ifdef DEBUGPAIN
+#ifdef DEBUGPAIN
 
                         {
                         #pragma omp critical
@@ -1283,7 +1283,7 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams par
                             throw std::runtime_error("Error: Log-likelihood is nan.");
                         }}
 
-//#endif
+#endif
 
                         
                     }
