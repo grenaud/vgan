@@ -92,8 +92,13 @@ public:
     void run_rpvg_haplotypes(shared_ptr<Trailmix_struct>& dta);
     const vector<double> run(int iter, int burnin, double tol, const vector<double> &init_vec, vector<Clade *> * clade_vec, vector<int> &clade_list_id);
     double get_proposal_likelihood(const vector <double> &proposal_vec, vector<Clade *> * clade_vec, vector<int> &clade_list_id);
+
     std::vector<MCMCiteration> run_tree_proportion(RunTreeProportionParams params, std::vector<MCMCiteration> state_t_vec, const bdsg::ODGI& graph, \
                                                      vector<vector<string>> nodepaths, string num, int n_threads, int numPaths, int chainindex, double con);
+
+    std::vector<MCMCiteration> run_tree_proportion(RunTreeProportionParams &params, std::vector<MCMCiteration> &state_t_vec, const bdsg::ODGI& graph, \
+                               const vector<vector<string>> &nodepaths, string num, int n_threads, shared_ptr<Trailmix_struct> &dta, bool running_trailmix, int chain);
+
     std::vector<MCMCiteration> run_tree_proportion_TM(RunTreeProportionParams &params, std::vector<MCMCiteration> &state_t_vec, const bdsg::ODGI& graph, \
                                const vector<vector<string>> &nodepaths, string num, shared_ptr<Trailmix_struct> &dta, bool running_trailmix, int chain);
 
@@ -114,7 +119,7 @@ public:
 
 
  inline const double computeBaseLogLike(const AlignmentInfo* read, RunTreeProportionParams &params, const int basevec, \
-                                   const int base, const string &pathName, const double t, double branch_len)
+                                   const int base, const string &pathName, const double t,  double branch_len, bool cont_mode)
     {
 
         const auto &detail = read->detailMap.at(pathName).at(basevec).at(base);
@@ -126,13 +131,6 @@ public:
         const char refb = detail.referenceBase;
         const char readb = detail.readBase;
 
-// Check if either refb or readb are not A, C, T, or G
-    if (refb != 'A' && refb != 'C' && refb != 'T' && refb != 'G' &&
-        readb != 'A' && readb != 'C' && readb != 'T' && readb != 'G') {
-        //7return log(0.999);
-        cerr << "BASES: " << refb << '\t' << readb << endl;
-        throw runtime_error("[TrailMix] INVALID BASE");
-    }
 
 #ifdef DEBUGPAIN3  // Debugging block start
         cerr << "Debugging Information START" << endl;
@@ -142,7 +140,6 @@ public:
         cerr << "base: " << base << endl;
         cerr << "pathName: " << pathName << endl;
         cerr << setprecision(14)<< "t: " << t << endl;
-        cerr << setprecision(14)<< "branch_len: " << branch_len << endl;
 
         cerr << "Intermediate Variables:" << endl;
         cerr<< setprecision(14) << "purinfreq: " << purinfreq << endl;
@@ -305,8 +302,10 @@ public:
 #endif
 
         if (isnan(log_lik_marg) || isinf(log_lik_marg) || log_lik_marg > 1e-8){
+            cerr << "cont mode? " << cont_mode << endl;
             cerr << setprecision(15) << "log_lik_marg:" << log_lik_marg << " p=" << exp(log_lik_marg) << endl;
             cerr << setprecision(15) << "detail map log like " << detail.logLikelihood << endl;
+            cerr << setprecision(15) << "detail map log like no damage " << detail.logLikelihoodNoDamage << endl;
 
             throw runtime_error("HKY loglikemarg is invalid.");}
 
@@ -314,6 +313,7 @@ public:
 
         return log_lik_marg;
     }
+
 
     double calculateLogWeightedAverage(double logValueChild, double weightChild, double logValueParent, double weightParent) {
 

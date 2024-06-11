@@ -6,27 +6,6 @@
 } while(0)
 
 
-std::string mostCommonElement(const std::vector<std::string>& vec) {
-    std::unordered_map<std::string, int> countMap;
-    std::string mostCommon;
-    int maxCount = 0;
-
-    for (const auto& str : vec) {
-        int& count = countMap[str];
-        count++;
-        if (count > maxCount) {
-            maxCount = count;
-            mostCommon = str;
-        } else if (count == maxCount) {
-            if (str < mostCommon) {
-                mostCommon = str;
-            }
-        }
-    }
-
-    return mostCommon;
-}
-
 std::vector<double> calculateReadCountProportionsFromBaseCounts(const std::vector<std::string>& readLengths, const std::vector<double>& baseCountProportions) {
 
     std::vector<double> factors(readLengths.size(), 0.0);
@@ -357,12 +336,6 @@ pair<unordered_map<string, vector<vector<double>>>, double> MCMC::processMCMCite
             }
         }
 
-        //PRINTVEC(branch_names)
-        const string most_common_branch = mostCommonElement(branch_names);
-
-        //cerr << "Statistics calculation starting for source " << source << endl;
-        //cerr << "ALL PROPS: " << endl;
-        //PRINTVEC(proportionVec);
         double meanBaseTheta = mean(baseProportionVec);
         double meanReadTheta = mean(readProportionVec);
         double meanPos = mean(positionVec);
@@ -391,14 +364,14 @@ pair<unordered_map<string, vector<vector<double>>>, double> MCMC::processMCMCite
            double read_theta_median = getQuantile(readProportionVec, 0.5);
            double read_theta_fq = getQuantile(readProportionVec, 0.05);
            double read_theta_tq = getQuantile(readProportionVec, 0.95);
-           readEstimatesFile << most_common_branch << "\t" << chain << "\t" << meanReadTheta << "\t" << read_theta_fq << "\t" << read_theta_median << "\t" << \
+           readEstimatesFile << branchName << "\t" << chain << "\t" << meanReadTheta << "\t" << read_theta_fq << "\t" << read_theta_median << "\t" << \
            read_theta_tq << "\t" << Theta_ess << "\t" << Theta_autoc << "\t" << theta_var << "\n";
                               }
 
-        baseEstimatesFile << most_common_branch << "\t" << chain << "\t" << meanBaseTheta << "\t" << base_theta_fq << "\t" << base_theta_median << "\t" << \
+        baseEstimatesFile << branchName << "\t" << chain << "\t" << meanBaseTheta << "\t" << base_theta_fq << "\t" << base_theta_median << "\t" << \
                              base_theta_tq << "\t" << Theta_ess << "\t" << Theta_autoc << "\t" << theta_var << "\n";
 
-        branchestimateFile << most_common_branch << "\t" << chain << "\t" << meanPos << "\t" << Pos_fq << "\t" << Pos_median << "\t" << Pos_tq << \
+        branchestimateFile << branchName << "\t" << chain << "\t" << meanPos << "\t" << Pos_fq << "\t" << Pos_median << "\t" << Pos_tq << \
                          "\t" << Pos_ess << "\t" << Pos_autoc << "\t" << Pos_var << "\t" << dist_ess << "\n";
 
         //cerr << "Writing to file for branch " << branchName << " completed." << endl;

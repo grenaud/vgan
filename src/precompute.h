@@ -200,14 +200,7 @@ MCMC mcmc;
 for (size_t m = 0; m < pathNames.size(); ++m) {
 
 if (dta){
-modifyPathNameInPrecompute(dta, pathNames[m], false);
-set<int> depths_used;
-auto p = dta->tree->nodes[dta->path_node_map[pathNames[m]]];
-bool in_pruned = mcmc.is_in_pruned(p, dta->depth, dta, depths_used);
-
-if(!in_pruned){
-continue;
-}
+    modifyPathNameInPrecompute(dta, pathNames[m], false);
         }
 
                     // the path is supported

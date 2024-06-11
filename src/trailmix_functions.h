@@ -404,8 +404,10 @@ if (isnan(props[0])){
 }
 
 normalize(props);
+if (dta->k > 1){
 cerr << "Initial source proportion estimate: " << endl;
 PRINTVEC(props)
+               }
 assert(props.size() == dta->k);
 
 // Check for nan and replace with 1/k if needed
