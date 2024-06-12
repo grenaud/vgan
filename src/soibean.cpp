@@ -62,7 +62,7 @@ string soibean::usage(const std::string& cwdProg) const {
     std::string execDir = getFullPath(cwdProg);
 
     // Construct the paths by appending the specific paths to the executable directory path
-    std::string makeGraphFilesCmd = execDir + "../share/vgan/soibean_dir/make_graph_files.sh";
+    std::string makeGraphFilesCmd = execDir + "../share/soibean_dir/make_graph_files.sh";
 
 
     return string("") +
@@ -207,8 +207,8 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
   string tmpdir = "/tmp/";
   bool sbdirspecified = false;
   bool treedirspecified = false;
-  string sbdir = getFullPath(cwdProg+"../share/vgan/soibean_dir/");
-  string treedir = getFullPath(cwdProg+"../share/vgan/soibean_dir/tree_dir/");
+  string sbdir = getFullPath(cwdProg+"../share/soibean_dir/");
+  string treedir = getFullPath(cwdProg+"../share/soibean_dir/tree_dir/");
   string dbprefixS = "soibean_db";
   string outputfilename = "beanOut";
   int lengthToProf = 5;
@@ -223,8 +223,8 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
   int k = 1;
   size_t cutk = 0;
 
-  string deam5pfreqE  = getFullPath(cwdProg+"../share/vgan/damageProfiles/none.prof");
-  string deam3pfreqE  =  getFullPath(cwdProg+"../share/vgan/damageProfiles/none.prof");
+  string deam5pfreqE  = getFullPath(cwdProg+"../share/damageProfiles/none.prof");
+  string deam3pfreqE  =  getFullPath(cwdProg+"../share/damageProfiles/none.prof");
 
 
   for(int i=1;i<(argc);i++)

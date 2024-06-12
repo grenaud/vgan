@@ -1,18 +1,23 @@
 #pragma once
 #include "MCMC.h"
-#include "MCMC_functions.h"
 #include "Euka.h"
 #include "libgab.h"
+#include "MCMC_functions.h"
 #include <algorithm>
-#include <gzstream.h>
-//#define DEBUGGENERATEVEC
-//#define VERBOSE_MCMC
-//#define DEBUGMCMCDig
-//#define DEBUGMCMCPOS
-//#define DEBUGMCMCPOS2
-//#define DEBUGPAIN
 
-#define PRINTVEC(v) for (int i=0; i<v.size(); ++i){cout << setprecision(10) << v[i] << '\t';}cout << endl << endl;
+#define DEBUGGENERATEVEC
+//#define VERBOSE_MCMC
+#define DEBUGMCMC
+//#define DEBUGMCMCPOS
+#define PRINTVEC(v) for (int i=0; i<v.size(); ++i){cerr << setprecision(10) << v[i] << '\t';}cerr << endl << endl;
+
+#define PRINT_SET(SET) \
+    do { \
+        std::cerr << "Set contents:\n"; \
+        for (const auto& elem : SET) { \
+            std::cerr << " - " << elem << '\n'; \
+        } \
+    } while (0)
 
 MCMC::MCMC(){
 
@@ -22,119 +27,43 @@ MCMC::~MCMC(){
 
 }
 
-bool MCMC::is_in_pruned_verbose(spidir::Node* p, const int depth, shared_ptr<Trailmix_struct> &dta, set<int> depths_used) {
-    std::cerr << "Entering is_in_pruned with depth: " << depth << " and node: " << (p ? p->longname : "NULL") << std::endl;
 
-    if (depth == -1) {
-        //std::cerr << "Depth is -1, returning true." << std::endl;
-        return true;
+void printComparativeDetailMap(const auto &read, const auto& detailMap, const std::vector<std::string>& keys, const std::string& filePath) {
+    std::ofstream outFile(filePath, std::ios::app);  // Open file in append mode
+    if (!outFile) {
+        std::cerr << "Failed to open file at " << filePath << std::endl;
+        return;
     }
 
-    // Check if the current node is in the set
-    if (dta->in_pruned_set.find(p->longname) != dta->in_pruned_set.end()) {
-        //std::cerr << "Node " << p->longname << " is in pruned set." << std::endl;
-        // Before returning true, check if the depth is already used
-        bool inserted = depths_used.insert(depth).second;
-        //std::cerr << "Depth " << depth << (inserted ? " is not " : " is ") << "already used." << std::endl;
-        return inserted;
-    } else {
-        //std::cerr << "Node " << p->longname << " is not in pruned set." << std::endl;
-    }
-
-    // If depth is 0, stop the recursion
-    if (depth == 0) {
-        //std::cerr << "Depth is 0, stopping recursion and returning false." << std::endl;
-        return false;
-    }
-
-    // Check the parent node
-    if (p->parent) {
-        //std::cerr << "Checking parent node of " << p->longname << std::endl;
-        if (is_in_pruned(p->parent, depth - 1, dta, depths_used)) {
-            //std::cerr << "Parent node or its ancestors are in pruned set, returning true." << std::endl;
-            return true;
+    for (const auto& key : keys) {
+        auto it = detailMap.find(key);
+        if (it == detailMap.end()) {
+            outFile << "Key '" << key << "' not found in detailMap." << std::endl;
+            continue;
         }
-    } else {
-        std::cerr << "No parent node for " << p->longname << ", skipping parent check." << std::endl;
-    }
 
-    // Check children if it's not a leaf
-    if (!p->isLeaf()) {
-        std::cerr << "Node " << p->longname << " is not a leaf, checking children." << std::endl;
-        for (int i = 0; i < p->nchildren; ++i) {
-            spidir::Node* child = p->children[i];
-            if (child) {
-                std::cerr << "Checking child " << i << " of " << p->longname << std::endl;
-                if (is_in_pruned(child, depth - 1, dta, depths_used)) {
-                    std::cerr << "Child node or its descendants are in pruned set, returning true." << std::endl;
-                    return true;
-                }
-            } else {
-                std::cerr << "Child " << i << " of " << p->longname << " is NULL, skipping." << std::endl;
-            }
-        }
-    } else {
-        std::cerr << "Node " << p->longname << " is a leaf, skipping children check." << std::endl;
-    }
+        const auto& baseLists = it->second;
 
-    std::cerr << "Exiting is_in_pruned for node " << p->longname << " with false." << std::endl;
-    return false;
-}
-
-
-bool MCMC::is_in_pruned(spidir::Node* p, const int depth, shared_ptr<Trailmix_struct> &dta, set<int> depths_used) {
-    if (depth == -1) {
-        return true;
-    }
-    // Check if the current node is in the set
-    if (dta->in_pruned_set.find(p->longname) != dta->in_pruned_set.end()) {
-        // Before returning true, check if the depth is already used
-        if (!depths_used.insert(depth).second) {
-            // Depth already used, return false
-            return false;
-        }
-        return true;
-    }
-    // If depth is 0, stop the recursion
-    if (depth == 0) {
-        return false;
-    }
-
-    // Check the parent node
-    if (p->parent && is_in_pruned(p->parent, depth - 1, dta, depths_used)) {
-        return true;
-    }
-
-    // Check children if it's not a leaf
-    if (!p->isLeaf()) {
-        for (int i = 0; i < p->nchildren; ++i) {
-            spidir::Node* child = p->children[i];
-            if (child && is_in_pruned(child, depth - 1, dta, depths_used)) {
-                return true;
+        for (const auto& baseList : baseLists) {
+            for (const auto& base : baseList) {
+                outFile << "Key: " << key
+                        << ", Read Base: " << base.readBase
+                        << ", Ref Base: " << base.referenceBase
+                        << ", Path Support: " << (base.pathSupport ? "Yes" : "No")
+                        << ", Log Likelihood: " << base.logLikelihood
+                        << std::endl;
             }
         }
     }
-
-    return false;
 }
 
 
-void MCMC::generateNumbers(double num1) {
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
-    
-    std::normal_distribution<double> dis(num1, 0.1);
-
-    double lower_bound = 0.00001;
-    double upper_bound = 0.999999;
-
-    do {
-        num1 = dis(gen);
-    } while (num1 <= lower_bound || num1 >= upper_bound);
-
-    
+bool getRandomBool() {
+    std::random_device rd; // Obtain a random number from hardware
+    std::mt19937 gen(rd()); // Seed the generator
+    std::uniform_int_distribution<> distr(0, 1); // Define the range
+    return distr(gen) != 0;
 }
-
 
 
 void MCMC::updatePosition(PosTree &current_position, double move_distance, bool move_forward) {
@@ -454,8 +383,7 @@ const std::vector<double> MCMC::sample_normal_euka(std::vector<double>& x, doubl
     return result;
 }
 
-
-// samples the proportion of the sources
+// samples the proportion of the sources 
 std::vector<double> MCMC::sample_normal(std::vector<double>& x, double alpha) {
     constexpr double epsilon = 1e-9;
     std::vector<double> result;
@@ -491,8 +419,7 @@ std::vector<double> MCMC::sample_normal(std::vector<double>& x, double alpha) {
 std::vector<MCMCiteration> MCMC::run_tree_proportion_TM(RunTreeProportionParams &params, std::vector<MCMCiteration> &state_t_vec, const bdsg::ODGI& graph, \
                                const vector<vector<string>> &nodepaths, string num, shared_ptr<Trailmix_struct> &dta, bool running_trailmix, int chain) {
 
-
-    const unsigned int n_sources = params.sources.size();
+const unsigned int n_sources = params.sources.size();
     cerr << "number of sources " << n_sources << endl;
     if (n_sources > 10){throw runtime_error("We cannot handle this many sources");}
 
@@ -530,9 +457,12 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion_TM(RunTreeProportionParams 
 
     for (unsigned int iteration = 0; iteration <= params.maxIter; iteration++) {
 
-        if (iteration % 1000 == 0){
+//{
+//#pragma omp critical
+        if (iteration % 10000 == 0){
             cerr << "ITERATION: " << iteration << endl;
-                                  }
+                                   }
+//}
 
         state_t_1 = state_t;
 
@@ -545,11 +475,11 @@ unsigned int componentIndex = std::rand() % state_t_1.n_components;
 
 float randomFloat = 0.01 + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX/(0.99 - 0.01)));
 
-            if (state_t_1.positions_tree[componentIndex].pos = dta->tree->root){
+            if (state_t_1.positions_tree[componentIndex].pos->longname == "Node1"){
                 int num_children = state_t_1.positions_tree[componentIndex].pos->nchildren;
                 int random_index = rand() % num_children;
                 state_t_1.positions_tree[componentIndex].pos = state_t_1.positions_tree[componentIndex].pos->children[random_index];
-                                                                               }
+                                                                                  }
 
             // Determine the mean based on the iteration
             double proposal_mean = state_t_1.positions_tree[componentIndex].pos_branch;
@@ -612,6 +542,7 @@ float randomFloat = 0.01 + static_cast<float>(rand()) / (static_cast<float>(RAND
             }
         }
 
+
         unsigned int read_counter=0;
         double logLike = 0.0;
 
@@ -642,7 +573,7 @@ if (read->detailMap.find(pathNames[0]) == read->detailMap.end()) {
         for (int base = 0; base < read->detailMap[pathNames[0]][basevec].size(); ++base) {
             loopentered = true;
             if (read->detailMap[pathNames[0]][basevec][base].pathSupport) {
-                 readLogLike += computeBaseLogLike(read, params, basevec, base, pathNames[0], t2, t);
+                 readLogLike += computeBaseLogLike( read, params, basevec, base, pathNames[0], t2, t, dta->cont_mode);
             } else {
                  readLogLike += read->detailMap[pathNames[0]][basevec][base].logLikelihood;
             }
@@ -657,7 +588,7 @@ if (read->detailMap.find(parentpathNames[0]) == read->detailMap.end()) {
     for (unsigned int basevec = 0; basevec < read->detailMap[parentpathNames[0]].size(); ++basevec) {
         for (int base = 0; base < read->detailMap[parentpathNames[0]][basevec].size(); ++base) {
             if (read->detailMap[parentpathNames[0]][basevec][base].pathSupport) {
-                readLogLikeP += computeBaseLogLike(read, params, basevec, base, parentpathNames[0], t1, t);
+                readLogLikeP += computeBaseLogLike( read, params, basevec, base, parentpathNames[0], t1, t, dta->cont_mode);
             } else {
                  readLogLikeP += read->detailMap[parentpathNames[0]][basevec][base].logLikelihood;
             }
@@ -724,7 +655,7 @@ if (dta->cont_mode && pathNames.size() == 2) {
                                             read->detailMap[pathNames[y]][basevec][base].logLikelihoodNoDamage;
 
                 if (read->detailMap[pathNames[y]][basevec][base].pathSupport) {
-                    readLogLike += computeBaseLogLike(read, params, basevec, base, pathNames[y], t2, t);
+                    readLogLike += computeBaseLogLike( read, params, basevec, base, pathNames[y], t2, t, dta->cont_mode);
                 } else {
                     readLogLike += logLikelihoodValue;
                 }
@@ -735,7 +666,7 @@ if (dta->cont_mode && pathNames.size() == 2) {
                                           read->detailMap[parentpathNames[y]][basevec][base].logLikelihoodNoDamage;
 
         if (read->detailMap[parentpathNames[y]][basevec][base].pathSupport) {
-            readLogLikeP += computeBaseLogLike(read, params, basevec, base, parentpathNames[y], t1, t);
+            readLogLikeP += computeBaseLogLike( read, params, basevec, base, parentpathNames[y], t1, t, dta->cont_mode);
                                                                             }
          else {
             readLogLikeP += parentLogLikelihoodValue;
@@ -793,7 +724,7 @@ for (unsigned int basevec = 0; basevec < read->detailMap[pathNames[y]].size(); +
 
     for (unsigned int base = 0; base < itPath->second[basevec].size(); ++base) {
         if (itPath->second[basevec][base].pathSupport) {
-            readLogLike += computeBaseLogLike(read, params, basevec, base, pathNames[y], t2, t);
+            readLogLike += computeBaseLogLike( read, params, basevec, base, pathNames[y], t2, t, dta->cont_mode);
         } else {
             readLogLike += itPath->second[basevec][base].logLikelihood;
         }
@@ -809,7 +740,7 @@ if (itParentPath == read->detailMap.end()) {
     for (unsigned int basevec = 0; basevec < itParentPath->second.size(); ++basevec) {
         for (unsigned int base = 0; base < itParentPath->second[basevec].size(); ++base) {
             if (itParentPath->second[basevec][base].pathSupport) {
-                readLogLike += computeBaseLogLike(read, params, basevec, base, parentpathNames[y], t1, t);
+                readLogLike += computeBaseLogLike( read, params, basevec, base, parentpathNames[y], t1, t, dta->cont_mode);
             } else {
                 readLogLikeP += itParentPath->second[basevec][base].logLikelihood;
             }
@@ -851,7 +782,6 @@ logLike += inter;
 //////////////////////////////////////////////////////////  END LOOP OVER READS ///////////////////////////////////////////////////////////////////////
 
 #ifdef VERBOSE_MCMC
-         //if (logLike >= 0.0){throw runtime_error("SINGLE SOURCE SHOULDNT HAPPEN");}
          if (iteration % 100 == 1){
             cerr << endl;
             cerr << setprecision(16) << "proposal SD: " << proposal_sd << "  acceptance rate: " << acceptance_rate << endl;
@@ -865,10 +795,6 @@ logLike += inter;
         likelihood_t_1 = logLike;
         state_t_1.logLike = likelihood_t_1;
         double acceptance_prob = (state_t_1.logLike - state_t.logLike > 0) ? 1.0 : exp((state_t_1.logLike - state_t.logLike));
-        //acceptance_prob = max(acceptance_prob, 0.0001);
-        //acceptance_prob = min(acceptance_prob, 0.9999);
-        //cerr << "AP: " << acceptance_prob << endl;
-        //if (    (state_t_1.logLike - state_t.logLike > 0) && ( (state_t_1.logLike - state_t.logLike) > 200.0)     ){acceptance_prob = 0.0000000001;}
         const double u = dis(gen);
 
         if (u <= acceptance_prob || iteration == 0) {
@@ -927,11 +853,6 @@ logLike += inter;
         acceptance_rate = static_cast<double>(n_accept) / total_proposals;
     }
 
-//for (auto & p : state_t.positions_tree){
-//    if (p.pos->longname != ""){
-//        dta->paths_to_surject.emplace_back(p.pos->longname);
-//                              }
-//}
 
 if (state_t_vec.empty()){
 cerr << "State_t_vec is empty!" << endl;
@@ -942,9 +863,7 @@ return state_t_vec;
 
 }
 
-
-std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams params, std::vector<MCMCiteration> state_t_vec, const bdsg::ODGI& graph, \
-                                                     vector<vector<string>> nodepaths, string num, int n_threads, int numPaths, int chainindex, double con) {
+std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams params, std::vector<MCMCiteration> state_t_vec, const bdsg::ODGI& graph, vector<vector<string>> nodepaths, string num, int n_threads, int numPaths, int chainindex, double con) {
 
     const unsigned int n_sources = params.sources.size();
     cerr << "number of sources " << n_sources << endl;
@@ -1205,7 +1124,7 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams par
                         if (read->detailMap[pathNames[0]][basevec][base].pathSupport)
                         {
                             counter++;
-                            readLogLike += computeBaseLogLike(read, params, basevec, base, pathNames[0], t2, t);
+                            readLogLike += computeBaseLogLike( read, params, basevec, base, pathNames[0], t2, t, con);
 
                             
                             
@@ -1236,7 +1155,7 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams par
                         if(read->detailMap[parentpathNames[0]][basevec][base].pathSupport)
                         {
                             counter++;
-                            readLogLikeP += computeBaseLogLike(read, params,basevec, base, parentpathNames[0], t1, t);
+                            readLogLikeP += computeBaseLogLike(read, params,basevec, base, parentpathNames[0], t1, t, con);
 
 
 #ifdef DEBUGPAIN
@@ -1267,17 +1186,16 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams par
 
                         {
                         #pragma omp critical
-                            //cerr << pathNames[0] << endl;
                         if (readLogLike > 0 || std::isnan(readLogLike) || std::isinf(readLogLike) || readLogLikeP > 0 || std::isnan(readLogLikeP) || std::isinf(readLogLikeP)){
 
 
                             cerr << std::setprecision(14)<< "readLogLike " << readLogLike << " readLogLikeP " << readLogLikeP << endl;
-                            //cerr << "path " << pathNames << " parent " << parentpathNames << endl;
+                            cerr << "path " << pathNames << " parent " << parentpathNames << endl;
                             cerr << std::setprecision(14)<< "t " << t << " t1 " << t1 << " t2 " << t2 << endl;
                             cerr << std::setprecision(14)<< "pre calc log like " << read->detailMap[pathNames[0]][basevec][base].logLikelihood << endl;
                             cerr << std::setprecision(14)<< "parent pre calc log like " << read->detailMap[parentpathNames[0]][basevec][base].logLikelihood << endl;
-                            double test = computeBaseLogLike(read, params,basevec, base, pathNames[0], t2, t);
-                            double what = computeBaseLogLike(read, params,basevec, base, parentpathNames[0], t1, t);
+                            double test = computeBaseLogLike(read, params,basevec, base, pathNames[0], t2, t2);
+                            double what = computeBaseLogLike(read, params,basevec, base, parentpathNames[0], t1, t1);
                             cerr << std::setprecision(14)<< "path calc " << test << endl;
                             cerr << std::setprecision(14)<< "parent path calc " << what << endl;
                             throw std::runtime_error("Error: Log-likelihood is nan.");
@@ -1344,7 +1262,7 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams par
                             if (read->detailMap[pathNames[y]][basevec][base].pathSupport)
                             {
                                 counter++;
-                                readLogLike += computeBaseLogLike(read, params,basevec, base, pathNames[y], t2, t);
+                                readLogLike += computeBaseLogLike(read, params,basevec, base, pathNames[y], t2, t, con);//;
                                 
                                 
                             }
@@ -1356,7 +1274,7 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams par
                             if(read->detailMap[parentpathNames[y]][basevec][base].pathSupport)
                             {
                                 counter++;
-                                readLogLikeP += computeBaseLogLike(read, params,basevec, base, parentpathNames[y], t1, t);
+                                readLogLikeP += computeBaseLogLike(read, params,basevec, base, parentpathNames[y], t1, t, con); //
                                 
                                 
                             }
@@ -1366,24 +1284,24 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams par
                                 readLogLikeP += read->detailMap[parentpathNames[y]][basevec][base].logLikelihood;
                             }
 
-//#ifdef DEBUGPAIN
+#ifdef DEBUGPAIN
 
                             if (readLogLike > 0.0 || std::isnan(readLogLike) || std::isinf(readLogLike) || readLogLikeP > 0.0 || std::isnan(readLogLikeP) || std::isinf(readLogLikeP)){
                             //cerr << pathNames[y] << endl;
                             //if (parentpathNames[y] == "NC_062361.1_Hippotragus_niger_roosevelti_voucher_ZMUC_H.R.Siegismund_1646_haplogroup_Eastern_1_mitocho" || pathNames[y] == "NC_062361.1_Hippotragus_niger_roosevelti_voucher_ZMUC_H.R.Siegismund_1646_haplogroup_Eastern_1_mitocho"){
                                 cerr << std::setprecision(14)<<"state_t_1.proportions[y]" << state_t_1.proportions[y] << endl;
                                 cerr << std::setprecision(14)<< "readLogLike " << readLogLike << " readLogLikeP " << readLogLikeP << endl;
-                                //cerr << "path " << pathNames << " parent " << parentpathNames << endl;
+                                cerr << "path " << pathNames << " parent " << parentpathNames << endl;
                                 cerr << std::setprecision(14)<< "t " << t << " t1 " << t1 << " t2 " << t2 << endl;
                                 cerr << std::setprecision(14)<< "pre calc log like " << read->detailMap[pathNames[y]][basevec][base].logLikelihood << endl;
                                 cerr << std::setprecision(14)<< "parent pre calc log like " << read->detailMap[parentpathNames[y]][basevec][base].logLikelihood << endl;
-                                double test = computeBaseLogLike(read, params,basevec, base, pathNames[y], t2, t);
-                                double what = computeBaseLogLike(read, params,basevec, base, parentpathNames[y], t1, t);
+                                double test = computeBaseLogLike(read, params,basevec, base, pathNames[y], t2, t, con);
+                                double what = computeBaseLogLike(read, params,basevec, base, parentpathNames[y], t1, t, con);
                                 cerr << std::setprecision(14)<< "path calc " << test << endl;
                                 cerr << std::setprecision(14)<< "parent path calc " << what << endl;
 
                                 throw runtime_error("Problem in the likelihood compuation! Intermediate log likelihood is -nan, -inf or positive.");}
-//#endif
+#endif
 
                         }
                             
@@ -1513,9 +1431,6 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams par
 }
 
 
-
-
-//////////////// START EUKA MCMC ///////////////////////////////////
 // function to generate the proposal vector for the MCMC runs
 const vector<double> MCMC::generate_proposal(vector<double> &current_vec, const double &alpha, const bool branch_pos){
 	// checking that vector sums up to 1
@@ -1638,16 +1553,14 @@ double MCMC::get_proposal_likelihood(const vector <double> &proposal_vec, vector
 }
 
 
-
 const vector<double > MCMC::run(int iter, int burnin, double tol, const vector<double> &init_vec, vector<Clade *> * clade_vec, vector<int> &clade_list_id){
 
 	MCMC mcmc;
 
 	vector <double> current_best = init_vec;
-	//vector <double> current_best = {0.0909090909,0.0909090909, 0.0909090909, 0.0909090909, 0.0909090909,0.0909090909,0.0909090909,0.0909090909,0.0909090909,0.0909090909,0.0909090909};
 	vector <double> proposal_vec;
 
-    double current_log_likelihood = -9999999;
+    double current_log_likelihood = -99999999999;
     double acceptance_prob = 0;
     double u=0;
     std::random_device rd;
@@ -1667,10 +1580,10 @@ const vector<double > MCMC::run(int iter, int burnin, double tol, const vector<d
     cerr << "Computing MCMC:" << endl;
 	for (int iteration = 0; iteration<iter; iteration++){
 
-		printprogressBarCerr( float(iteration + 1)/float(iter) );
+		//printprogressBarCerr( float(iteration + 1)/float(iter) );
 
 		proposal_vec = mcmc.generate_proposal(current_best, 0.1, false);
-        double proposal_log_likelihood = mcmc.get_proposal_likelihood(proposal_vec, clade_vec, clade_list_id);
+        const double proposal_log_likelihood = mcmc.get_proposal_likelihood(proposal_vec, clade_vec, clade_list_id);
 
        // we are not adding proposal vectors to the struct before after the burin in period
 		if (iteration > burnin){
@@ -1739,6 +1652,7 @@ const vector<double > MCMC::run(int iter, int burnin, double tol, const vector<d
 	vector<double> posterior_estimate;
 	vector<double> sorted_clade; 
 
+
 	// The posterior mean as well as the confidence intervalls will be calculated per clade (each clade is independent from each other)
 	//We are lọoping through the abundance vector with j
 	// 
@@ -1784,8 +1698,14 @@ const vector<double > MCMC::run(int iter, int burnin, double tol, const vector<d
 
 		
 	}
-	
+
 	cerr<<".. done"<<endl;
 	return posterior_estimate;
 
 }
+
+
+
+
+
+

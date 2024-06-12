@@ -372,7 +372,6 @@ std::string Trailmix::usage() const {
           << "\t-i\t\t\t\t     Input FASTQ (-fq1) is interleaved\n"
           << "\t-k\t\t\t\t     Number of distinct contributing haplogroups\n"
           << "\t-o [STR]\t\t\t     Output file (default: stdout)\n"
-          << "\t--depth [INT]\t\t\t     Tree depth to whitelist the MCMC search space (-1 for no restriction)\n"
           << "Non-algorithm parameters:\n"
           << "\t-s [STR]\t\t\t     Sample name\n"
           << "\t--dbprefix <prefix>\t\t     Specify the prefix for the database files\n"
@@ -382,7 +381,7 @@ std::string Trailmix::usage() const {
           << "Markov chain Monte Carlo options:\n"
           << "  \t--chains [INT]\t\t             Define the number of chains for the MCMC (default: 4)\n"
           << "  \t--iter [INT]\t\t             Define the number of iterations for the MCMC (default: 1.000.000)\n"
-          << "  \t--randStart [bool]          Set to get random starting nodes in the tree instead of the signature nodes (default: false)\n"
+          << "  \t--randStart [bool]\t             Set to get random starting nodes in the tree instead of the signature nodes (default: false)\n"
           << "  \t--burnin [INT]\t\t             Define the burn-in period for the MCMC (default: 100.000)\n"
           << "Initialization options:\n"
           << "  \t--mu [INT,INT,...]\t             Define the fragment length mean per source (for read count proportion estimation) \n"
@@ -434,7 +433,6 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     unsigned int k=1;
     string prof_out_file_path = getFullPath(cwdProg+"../");
     int lengthToProf = 5;
-    int depth = 10;
     bool randStart=false;
     bool strand_specific = false;
     vector<string> mus = {"120", "120"};
@@ -523,12 +521,6 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
             continue;
                                    }
 
-     if(string(argv[i]) == "--depth"){
-            depth=stod(argv[i+1]);
-            continue;
-                                   }
-
-
         if(string(argv[i]) == "--deam5p"  ){
             deam5pfreqE=string(argv[i+1]);
         specifiedDeam=true;
@@ -610,6 +602,7 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     dta->samplename=samplename;
     dta->fastq1filename=fastq1filename;
     dta->fastq2filename=fastq2filename;
+    dta->randStart = randStart;
     dta->tmpdir = tmpdir + "vgan_" + random_string(7) + "/";
     dta->rpvg_gamfilename = dta->tmpdir + random_string(7);
     if (!fs::is_directory(dta->tmpdir) || !fs::exists(dta->tmpdir)) {
@@ -644,7 +637,6 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     dta->iter=iter;
     dta->burnin=burnin;
     dta->chains=chains;
-    dta->depth=depth;
     dta->deam5pfreqE = deam5pfreqE;
     dta->deam3pfreqE = deam3pfreqE;
     dta->dmg.initDeamProbabilities(deam5pfreqE,deam3pfreqE);

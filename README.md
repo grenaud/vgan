@@ -1,7 +1,9 @@
 [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?styl=flat)](http://bioconda.github.io/recipes/vgan/README.html)
 # vgan
 
-vgan is a suite of tools for pangenomics. We currently support two main subcommands: Haplocart (for modern human mtDNA haplogroup classification) and euka (for bilaterian abundance estimation of ancient environmental DNA). The underlying data structure is the VG graph (see https://github.com/vgteam/vg).
+vgan is a suite of tools for pangenomics. We currently support four main subcommands: Haplocart (for modern human mtDNA haplogroup classification); euka (for bilaterian abundance estimation of ancient environmental DNA);
+soibean (for sedaDNA mitochondrial mixtures of eukaryotes); and TrailMix (for hominin ancient mtDNA samples, possibly mixtures).
+The underlying data structure is the VG graph (see https://github.com/vgteam/vg).
 
 # Installation:
 
@@ -388,7 +390,7 @@ Example for more conservative parameter settings:
 
 
 ## euka Options: 
-A list of all of eukas options:
+A list of all of euka's options:
 
 <pre>
   Input options:
@@ -628,8 +630,40 @@ The tree file can be found in ```$HOME/share/vgan/soibean_dir/tree_dir```.
 - Please remember, if the graph file and its indexes are used by multiple users, the graph.dist file needs to be writeable for all. You can use the following command:
 ```
 chmod +w [graph.dist]
+
 ```
 
+# TrailMix
+
+## TrailMix notes
+
+## TrailMix Options
+
+<pre>
+
+Algorithm parameters:
+        -fq1 [STR]                           FASTQ input file
+        -fq2 [STR]                           FASTQ second input file (for paired-end reads)
+        -g [STR]                             GAM input file
+        -i                                   Input FASTQ (-fq1) is interleaved
+        -k                                   Number of distinct contributing haplogroups
+        -o [STR]                             Output file (default: stdout)
+Non-algorithm parameters:
+        -s [STR]                             Sample name
+        --dbprefix <prefix>                  Specify the prefix for the database files
+        -t                                   Number of threads
+        -v                                   Verbose mode
+        -z                                   Temporary directory (default: /tmp/)
+Markov chain Monte Carlo options:
+        --chains [INT]                       Define the number of chains for the MCMC (default: 4)
+        --iter [INT]                         Define the number of iterations for the MCMC (default: 1.000.000)
+        --randStart [bool]                   Set to get random starting nodes in the tree instead of the signature nodes (default: false)
+        --burnin [INT]                       Define the burn-in period for the MCMC (default: 100.000)
+Initialization options:
+        --mu [INT,INT,...]                   Define the fragment length mean per source (for read count proportion estimation)
+        --library-type [STR]                 Strand-specific library type (fr: read1 forward, rf: read1 reverse) (default: unstranded)
+
+</pre>
 
 # Unit tests:
 
