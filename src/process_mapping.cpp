@@ -98,7 +98,7 @@ const vector<double> p_no_seq_error = Haplocart::get_p_no_seq_error_mapping(dta,
 
 				log_lik_if_supported += log_prod;
 		      }
-                          log_likelihood_vec[path_idx] += 0; //log_lik_if_supported;
+                          log_likelihood_vec[path_idx] += log_lik_if_supported;
 		  }
 
 	  else if (!is_supported)           {
@@ -109,7 +109,7 @@ const vector<double> p_no_seq_error = Haplocart::get_p_no_seq_error_mapping(dta,
                          const double llu = get_log_lik_if_unsupported(mppg, quality_scores);
                                                                      }
 
-                  log_likelihood_vec[path_idx] += -100.0; //get_log_lik_if_unsupported(mppg, quality_scores);
+                  log_likelihood_vec[path_idx] += get_log_lik_if_unsupported(mppg, quality_scores);
 		                            }
 
 return log_likelihood_vec;

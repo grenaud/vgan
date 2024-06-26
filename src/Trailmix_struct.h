@@ -36,9 +36,7 @@ struct Trailmix_struct {
     bool interleaved=false;
     bool dump_json=false;
     bool auto_mode=false;
-    bool graph_dir_specified = false;
-    bool tmfiledirspecified = false;
-    bool hcfiledirspecified = false;
+    bool graphdirspecified = false;
     bool randStart=false;
 
     // Integer variables
@@ -54,10 +52,8 @@ struct Trailmix_struct {
     double background_error_prob = 0.0001;
 
     // String variables
-    string hcfiledir = "../share/hcfiles/";
-    string tmfiledir = "../share/tmfiles/";
+    string graph_dir = "../share/tmfiles/";
     string graph_prefix = "graph";
-    string graph_dir = hcfiledir;
     string graphfilename = graph_prefix + ".og";
     string treePath;
 
@@ -95,6 +91,7 @@ struct Trailmix_struct {
     string strand_specific_library_type = "rf";
 
     // Loaded data
+    vector<vector<bool>> path_supports;
     string deam3pfreqE;
     string deam5pfreqE;
     std::vector<Matrix> substitution_matrices;

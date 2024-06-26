@@ -10,9 +10,11 @@
 #include "readGAM.h"
 #include "subcommand/subcommand.hpp"
 #include "bdsg/odgi.hpp"
-//#include "Trailmix_struct.h"
 
 using namespace std;
+
+
+
 
 class Haplocart{
 private:
@@ -102,7 +104,7 @@ void load_path_names(shared_ptr<Trailmix_struct> &dta);
  *
  */
 
- const vector<vector<bool>> load_path_supports(shared_ptr<Trailmix_struct> &dta);
+// const vector<vector<bool>> load_path_supports(shared_ptr<Trailmix_struct> &dta);
 //void load_path_supports(shared_ptr<Trailmix_struct> &dta);
 
 /**
@@ -151,7 +153,7 @@ const pair<vector<string>, vector<string>> read_fasta(const string &fastafilenam
 
 void map_giraffe(string &fastaseq, string &fastq1filename, string &fastq2filename, const int n_threads, bool interleaved,
                         double background_error_prob, const string & samplename, const char * fifo_A, const vg::subcommand::Subcommand* sc,
-                        const string & tmpdir, const string &graph_dir_path, const bool quiet);
+                        const string & tmpdir, const string &graph_dir_path, const bool quiet, const string &deam3pfreqE, const string &deam5pfreqE);
 
 /**
  * @brief Get dummy quality score from background error probability
@@ -325,12 +327,135 @@ void write_fq_read(auto & dummyFASTQFile, int offset, const int window_size, con
 
 bool contains_no_inf(const std::vector<double>& v);
 
+void load_path_supports(shared_ptr<Trailmix_struct> &dta);
+
+void modifyPathNameInPlace(shared_ptr<Trailmix_struct> &dta, string &path_name, bool first=false){
+     string original_path_name = path_name;
+
+    // Special case: a single letter followed by underscore
+    std::regex pattern2("^([A-Za-z])_$");
+    path_name = std::regex_replace(path_name, pattern2, "$1");
+
+    // Handle the special path format
+    std::regex pattern3("\\+([0-9]+)\\+\\(([0-9]+)\\)");
+    path_name = std::regex_replace(path_name, pattern3, "_$1__$2_");
+
+    // Now replace special characters
+    std::replace(path_name.begin(), path_name.end(), '+', '_');
+    std::replace(path_name.begin(), path_name.end(), '\'', '_');
+    std::replace(path_name.begin(), path_name.end(), '*', '_');
+    std::replace(path_name.begin(), path_name.end(), '@', '_');
+    std::replace(path_name.begin(), path_name.end(), '(', '_');
+    std::replace(path_name.begin(), path_name.end(), ')', '_');
+
+    if (!path_name.empty() && path_name.back() == '*') {
+        path_name.back() = '_';
+    }
+
+   if (path_name.size() == 1){path_name = path_name + "_";}
+
+    // Remove .1 or .2 at the end
+    std::regex patternEnd("\\.(1|2)$");
+    path_name = std::regex_replace(path_name, patternEnd, "");
+
+    if(first){
+    dta->originalPathNames[path_name] = original_path_name;
+             }
+
+}
+
+void readPHG(shared_ptr<Trailmix_struct> &dta) {
+
+    cerr << "[TrailMix] Deserializing graph: " << dta->graphfilename << endl;
+    cerr << "GRAPH DIR: " << dta->graph_dir << endl;
+    dta->graph.deserialize(dta->graph_dir+dta->graphfilename);
+    cerr << "[TrailMix] Done deserializing" << endl;
+    dta->minid = dta->graph.min_node_id();
+    dta->maxid = dta->graph.max_node_id();
+
+    // create path support file
+    size_t N_nodes = dta->graph.get_node_count();
+
+    unsigned int p_index = 0;
+    dta->graph.for_each_path_handle([&](const handlegraph::path_handle_t &path_handle) {
+    string path_name = dta->graph.get_path_name(path_handle);
+    modifyPathNameInPlace(dta, path_name, true);
+
+size_t pos = 0;
+        dta->path_names.emplace_back(path_name);
+        p_index++;
+    });
+
+    const size_t N_paths = dta->path_names.size();
+
+    vector<vector<bool>> node_path_matrix(N_nodes, vector<bool>(N_paths, false));
+
+    for (size_t path_id = 0; path_id < N_paths; ++path_id) {
+        // Get the nodes in the path
+        gbwt::vector_type path_nodes = dta->gbwt->extract(path_id);
+        for (const auto& node_id : path_nodes) {
+            //cout << node_id << " ";
+            // Convert the GBWT node ID to the node handle in the graph
+            bdsg::handle_t handle = dta->graph.get_handle(node_id);
+            // Determine the index in the node_path_matrix
+            int64_t index = dta->graph.get_id(handle) - 1;
+            //cout << index << endl;
+            if (index >= 0 && index < N_nodes) {
+                node_path_matrix[index][path_id] = true;
+                                //cout << "I get positive too " << endl;
+            }
+
+        }
+        //cout << endl;
+
+    }
+
+    int nbpaths = dta->path_names.size();
+
+    for(int64 i=dta->minid;i<=dta->maxid;++i){
+        //cerr << i << endl;
+        NodeInfo * nodetoadd = new NodeInfo(i,nbpaths,0);
+        const auto nodehandle = dta->graph.get_handle(i);
+        string seqtoadd = dta->graph.get_sequence(nodehandle);
+        nodetoadd->seq = seqtoadd;
+        long unsigned int j;
+        for (j = 0; j < nbpaths; ++j) {
+            //nodetoadd->pathsgo[j] = node_path_matrix[i - 1][j];
+        }
+        dta->nodevector.emplace_back(move(nodetoadd));
+
+        //std::this_thread::sleep_for (std::chrono::milliseconds(10));
+    }
+
+    assert(dta->nodevector.size() != 0);
+    assert(dta->minid != 0);
+    // Check if at least one true value exists
+    bool hasTrueValue = false;
+    for (const auto& row : node_path_matrix) {
+        for (bool value : row) {
+            if (value) {
+                hasTrueValue = true;
+                                break;
+            }
+        }
+        if (hasTrueValue) {
+            break;
+        }
+    }
+
+    assert(dta->path_names.size() != 0);
+
+   return;
+}
+
+
+
 Haplocart();
 Haplocart(const Haplocart & other) = delete;
 ~Haplocart();
 Haplocart & operator= (const Haplocart & other) = delete;
 
-const string usage();
+const string usage() const;
 void run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta);
 
 };

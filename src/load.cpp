@@ -188,7 +188,7 @@ void Trailmix::load_tpms(shared_ptr<Trailmix_struct> &dta) {
 
 
 void Haplocart::load_path_names(shared_ptr<Trailmix_struct> &dta){
-string path_name_path = getFullPath(dta->hcfiledir+"graph_paths");
+string path_name_path = getFullPath(dta->graph_dir+"graph_paths");
 igzstream myfile;
 myfile.open(path_name_path.c_str(), ios::in);
 string line;
@@ -204,7 +204,7 @@ return;
 }
 
 void Haplocart::load_mappabilities(std::shared_ptr<Trailmix_struct> &dta) {
-    std::string mappability_path = getFullPath(dta->hcfiledir + "mappability.tsv");
+    std::string mappability_path = getFullPath(dta->graph_dir + "mappability.tsv");
     igzstream myfile;
     myfile.open(mappability_path.c_str(), ios::in);
     std::string line;
@@ -228,7 +228,7 @@ void Haplocart::load_mappabilities(std::shared_ptr<Trailmix_struct> &dta) {
 
 
 void Haplocart::load_pangenome_map(shared_ptr<Trailmix_struct> &dta){
-const string pangenome_map_path = getFullPath(dta->hcfiledir+"parsed_pangenome_mapping");
+const string pangenome_map_path = getFullPath(dta->graph_dir+"parsed_pangenome_mapping");
 igzstream myfile;
 myfile.open(pangenome_map_path.c_str(), ios::in);
 string line;
@@ -464,8 +464,9 @@ const vector<vector<bool>> Euka::load_path_supports_Euka(const string & pathsupp
     return path_supports;
 }
 
-const vector<vector<bool>> Haplocart::load_path_supports(shared_ptr<Trailmix_struct> &dta) {
-vector<vector<bool>> path_supports(16000);
+
+void Haplocart::load_path_supports(shared_ptr<Trailmix_struct> &dta) {
+vector<vector<bool>> path_supports(15725);
 const string path_support_path = getFullPath(dta->graph_dir+"path_supports");
 igzstream myfile;
 myfile.open(path_support_path.c_str(), ios::in);
@@ -473,14 +474,14 @@ string line;
 int index = 0;
 while (getline(myfile, line))
   {
-     for (int j=0; j<6402; ++j) {
+     for (int j=0; j<12852; ++j) {
          char supported = line[j];
          if (supported == '1') {path_supports[index].emplace_back(true);}
          else {path_supports[index].emplace_back(false);}
                                  }
    index += 1;
   }
-return path_supports;
+dta->path_supports = move(path_supports);
 }
 
 void Haplocart::load_parents(shared_ptr<Trailmix_struct> &dta) {

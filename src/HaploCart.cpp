@@ -10,9 +10,17 @@
 #include "config/allocator_config.hpp"
 #include "io/register_libvg_io.hpp"
 #include "Dup_Remover.h"
+#include "vgan_utils.h"
+#include <vg/io/vpkg.hpp>
 
 using namespace google::protobuf;
 using namespace vg;
+
+
+bool unixSortComparator(const std::string& a, const std::string& b) {
+    return std::use_facet<std::collate<char>>(std::locale("en_US.UTF-8")).compare(
+        a.data(), a.data() + a.size(), b.data(), b.data() + b.size()) < 0;
+}
 
 Haplocart::Haplocart(){
 
@@ -22,35 +30,41 @@ Haplocart::~Haplocart(){
 
 }
 
-const string Haplocart::usage() {
+const string Haplocart::usage() const{
 
-    return string(string("") + "vgan Haplocart [options]"+
+    return string(string("") + "vgan haplocart [options]"+
                   "\n\nHaplocart predicts the mitochondrial haplogroup for reads originating from an uncontaminated modern human sample."+
+		  "\n\nExamples:\n"+
+		  "\n\tvgan haplocart --hc-files /home/username/share/vgan/hcfiles/ -f myfasta.fa\n"+
+		  "\n\tvgan haplocart --hc-files /home/username/share/vgan/hcfiles/ -fq1 seqreads_fwd.fq.gz -fq2 seqreads_rev.fq.gz\n"+
                   "\n\n"+
                   "Options:\n\n"+
                   "  Algorithm parameters\n"+
                   "  \t"+"-e [FLOAT]" + "\t\t\t"+ "Background error probability for FASTA input (default 0.0001)\n" +
                   "  Input/Output\n"+
+                  "  \t"+"--hc-files [STR]" + "\t\t" + "HaploCart graph directory location (default: \"../share/vgan/hcfiles/\")\n" +
                   "  \t"+"-f [STR]" + "\t\t\t" + "FASTA consensus input file\n" +
                   "  \t"+"-fq1 [STR]" + "\t\t\t" + "FASTQ input file\n" +
                   "  \t"+"-fq2 [STR]" + "\t\t\t" + "FASTQ second input file (for paired-end reads)\n" +
                   "  \t"+"-g [STR]" + "\t\t\t" + "GAM input file\n" +
                   "  \t"+"-i " + "\t\t\t\t" + "Input FASTQ (-fq1) is interleaved\n" +
+                  "  \t"+"-jf " + "\t\t\t\t" + "JSON output file (must be used with -j)\n" +
                   "  \t"+"-o [STR]" + "\t\t\t" + "Output file (default: stdout)\n" +
                   "  \t"+"-s [STR]" + "\t\t\t" + "Sample name\n" +
                   "  \t" + "-pf" + "\t\t\t\t" + "[STR] Posterior output file (default: stdout)\n" +
-                  "  \t"+"-z"+ "\t\t\t\t" + "Temporary directory (default: /tmp/)\n"
+                  "  \t"+"-z"+ "\t\t\t\t" + "Temporary directory (default: /tmp/)\n" +
                   "  Non-algorithm parameters\n"+
+                  "  \t"+"-j" + "\t\t\t\t"+ "Output JSON file of alignments \n" +
+                  "  \t"+"-np" + "\t\t\t\t"+ "Do not compute clade-level posterior probabilities \n" +
                   "  \t"+"-t" + "\t\t\t\t"+ "Number of threads (-t -1 for all available)\n" +
-                  "  \t"+"-q" + "\t\t\t\t"+ "quiet mode\n"
-                  "  \t"+"-p" + "\t\t\t\t" + "Compute posterior probabilities for the prediction and its ancestral clades\n"
+                  "  \t"+"-q" + "\t\t\t\t"+ "Quiet mode\n"
 		  );
 
 }
 
 void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
 
-/*
+    vector<double> log_likelihood_vec;
     std::ios_base::sync_with_stdio(false);
     preflight_check();
     configure_memory_allocator();
@@ -61,7 +75,6 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
         cerr << "error[vg]: Could not register libvg types with libvgio" << endl;
         exit(1);
                                       }
-*/
 
     dta->background_error_prob=0.0001;
     int i=0;
@@ -70,20 +83,6 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
     vector<string> fasta_seqs{""};
     vector<string> fasta_ids{""};
     auto start = std::chrono::system_clock::now();
-
-      // Load a bunch of stuff
-        if (!dta->running_trailmix) {
-        Haplocart::load_pangenome_map(dta);
-        Haplocart::load_path_names(dta);
-        Haplocart::readPathHandleGraph(dta);
-        Haplocart::precompute_incorrect_mapping_probs(dta);
-        dta->nbpaths = dta->path_names.size();
-        load_mappabilities(dta);
-        dta->qscore_vec = get_qscore_vec();
-                                    }
-
-    vector<double> log_likelihood_vec;
-    log_likelihood_vec.resize(dta->nbpaths, 0.0);
 
     if(dta->reads_already_processed){goto infer;}
 
@@ -129,11 +128,11 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
                                  }
 
     if(string(argv[i]) == "--hc-files"){
-            dta->graph_prefix=argv[i+1];
-	    dta->graph_dir_specified=true;
-            if (dta->graph_prefix.back() != '/'){dta->graph_prefix += '/';}
+            dta->graph_dir=argv[i+1];
+	    dta->graphdirspecified=true;
+            if (dta->graph_dir.back() != '/'){dta->graph_dir += '/';}
             continue;
-                                       }
+                               }
 
     if(string(argv[i]) == "-i"){
             dta->interleaved = true;
@@ -145,8 +144,8 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
             continue;
                                  }
 
-    if(string(argv[i]) == "-p"){
-            dta->compute_posteriors = true;
+    if(string(argv[i]) == "-np"){
+            dta->compute_posteriors = false;
             continue;
                                }
 
@@ -181,6 +180,7 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
 
     if(string(argv[i]) == "-w"){
             dta->webapp = true;
+            dta->n_threads=62;
             std::cerr.rdbuf(NULL);
             continue;
                                }
@@ -193,6 +193,30 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
 
                               }
 
+    if(dta->compute_posteriors){cerr << "Posterior calculation for updated database not yet implemented." << endl;}
+
+    dta->compute_posteriors = false;
+    dta->deam5pfreqE  =  getFullPath(dta->cwdProg+"../share/damageProfiles/none.prof");
+    dta->deam3pfreqE  =  getFullPath(dta->cwdProg+"../share/damageProfiles/none.prof");
+
+    std::cerr << "Loading GBWT index..." << std::endl << std::flush;
+    dta->gbwt = vg::io::VPKG::load_one<gbwt::GBWT>(dta->graph_dir + "graph.gbwt");
+    dta->gbwtgraph = vg::io::VPKG::load_one<gbwtgraph::GBWTGraph>(dta->graph_dir + "graph.gg");
+    std::cerr << "GBWT index loaded." << std::endl << std::flush;
+
+       // Load a bunch of stuff
+        if (!dta->running_trailmix) {
+        Haplocart::load_pangenome_map(dta);
+        //readPHG(dta);
+        Haplocart::precompute_incorrect_mapping_probs(dta);
+        Haplocart::load_path_names(dta);
+        dta->nbpaths = dta->path_names.size();
+        load_mappabilities(dta);
+        dta->qscore_vec = get_qscore_vec();
+        Haplocart::readPathHandleGraph(dta);
+                                    }
+
+    log_likelihood_vec.resize(dta->nbpaths, 0.0);
 
     if (!dta->webapp && !dta->quiet && !dta->running_trailmix)
      cerr <<
@@ -210,7 +234,7 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
     dta->samplename=dta->samplename.substr(idx_ + 1);
 
     // Handle erroneous input
-    //if (dta->fastq1filename == "" && dta->fastq2filename != "") {cerr << "[HaploCart] Error, cannot invoke -fq2 without -fq1" << '\n'; return 1;}
+    if (dta->fastq1filename == "" && dta->fastq2filename != "") {throw runtime_error("[HaploCart] Error, cannot invoke -fq2 without -fq1");}
 
     // Check that input files exist
 
@@ -237,6 +261,8 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
                                                                                                                                               }
     if (dta->quiet == false) {cerr << "Predicting sample: " << dta->samplename << '\n';}
     if (dta->quiet == false) {cerr << "Using " << dta->n_threads << " threads" << '\n';}
+
+    dta->graphfilename = getFullPath(dta->graph_dir + dta->graph_prefix+ ".og");
 
     if (dta->fastafilename != "") {
         std::tie(fasta_seqs, fasta_ids) = Haplocart::read_fasta(dta->fastafilename);
@@ -277,7 +303,7 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
             if (!dta->reads_already_processed) {
                 Haplocart::map_giraffe(fasta_seqs[i], dta->fastq1filename, dta->fastq2filename, dta->n_threads,
                                     dta->interleaved, dta->background_error_prob, dta->samplename, dta->fifo_A, dta->sc, dta->tmpdir, \
-                                    dta->graph_dir, dta->quiet);
+                                    dta->graph_dir, dta->quiet, dta->deam3pfreqE, dta->deam5pfreqE);
                                                }
            while ((dta->wpid = wait(&dta->status)) > 0);
            exit(0);
@@ -356,7 +382,6 @@ infer:
         vector<double> final_vec(log_likelihood_vec.size(), 0.0);
         #pragma omp parallel for num_threads(dta->n_threads) private(i) private(log_likelihood_vec) schedule(dynamic)
         for(size_t i=0;i!=dta->algnvector->size();++i){
-            //cerr << "On read: " << i << endl;
             // Discard unmapped reads
             if (dta->algnvector->at(i) -> identity < 1e-10) {continue;}
 
@@ -371,22 +396,27 @@ infer:
         assert(contains_no_inf(final_vec));
 
 
+  if (true) {
+        std::cerr << "Writing log likelihoods to disk" << std::endl;
+        std::vector<int> indices(final_vec.size());
+        std::iota(indices.begin(), indices.end(), 0);
+        
+        // Sort by log likelihoods
+        std::sort(indices.begin(), indices.end(), [&](int A, int B) -> bool {
+            return final_vec[A] > final_vec[B];
+        });
 
-         if (true){
-            cerr << "Writing log likelihoods to disk" << endl;
-            std::vector<int> indices(final_vec.size());
-            std::iota(indices.begin(), indices.end(), 0);
-            std::sort(indices.begin(), indices.end(),
-            [&](int A, int B) -> bool {
-                return final_vec[A] > final_vec[B];
-            });
-            cerr << setprecision(10) << endl;
-            ofstream debug_out("debug.txt");
-            for (int k=0; k!=final_vec.size(); ++k)       {
-                debug_out << dta->path_names[indices[k]] << '\t' << final_vec[indices[k]] << '\n';
-                                                          }
-                  }
+        std::cerr << std::setprecision(10) << std::endl;
+        std::ofstream debug_out("debug.txt");
 
+        // Ensure fixed-point notation and high precision
+        debug_out << std::fixed << std::setprecision(10);
+
+        for (int k = 0; k != final_vec.size(); ++k) {
+            int idx = indices[k];
+            debug_out << dta->path_names[idx] << '\t' << final_vec[idx] << '\n';
+        }
+    }
 
         const unsigned int maxh_index = max_element(final_vec.begin(), final_vec.end()) - final_vec.begin();
         const string proposed_haplotype = dta->path_names[maxh_index];

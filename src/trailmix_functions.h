@@ -1,40 +1,13 @@
 #pragma once
-#include "miscfunc.h"
 #include "baseshift.h"
 
 #define PRINTVEC(v) for (int i=0; i<v.size(); ++i){cerr << v[i] << '\t';}cerr << endl << endl;
 
-std::vector<std::vector<double>> convertMapsToVector(std::vector<AlignmentInfo*>* & gam) {
-    std::vector<std::vector<double>> result;
-
-    if (gam->empty()) {
-        throw std::runtime_error("Error: GAM file is empty.");
-    }
-
-    for (const auto& map : *gam) {
-        std::vector<double> row;
-        for (const auto& pair : map->pathMap) {
-            row.emplace_back(pair.second);
-        }
-
-        // Compute the sum of the elements in the row
-        double sum = 0.0;
-        for (int i = 0; i < row.size(); i++) {
-            sum += row[i];
-        }
-
-        // Push the row into the result vector
-        result.emplace_back(row);
-    }
-
-    return result;
-}
-
 std::vector<std::string> buildRpvgArgumentsHaplotypeTranscripts(const std::shared_ptr<Trailmix_struct>& dta) {
     std::vector<std::string> rpvgarguments = {
-        "rpvg", "-g", dta->tmfiledir + "/graph.xg", "-p", dta->tmfiledir + "/graph.gbwt",
+        "rpvg", "-g", dta->graph_dir + "/graph.xg", "-p", dta->graph_dir + "/graph.gbwt",
         "-a", dta->rpvg_gamfilename, "-o", dta->tmpdir + "rpvg_ht", "-i", "haplotype-transcripts",
-        "-f", dta->tmfiledir + "/pantranscriptome.txt", "-u", "-s", "-t",
+        "-f", dta->graph_dir + "/pantranscriptome.txt", "-u", "-s", "-t",
         std::to_string(dta->n_threads), "--path-node-cluster", "--use-hap-gibbs",
     };
 
@@ -44,7 +17,7 @@ std::vector<std::string> buildRpvgArgumentsHaplotypeTranscripts(const std::share
     }
 
     rpvgarguments.insert(rpvgarguments.end(), {
-        "-y", std::to_string(dta->k), "-m", "80", "-d", "20", "--score-not-qual",
+        "-y", std::to_string(dta->k), "-m", "60", "-d", "20", "--score-not-qual",
         "--min-noise-prob", "1e-10", "--vgan-temp-dir", dta->tmpdir, "-b",
             "--prob-precision", "1e-8", "--filt-best-score", "1e-4"
     });
@@ -59,10 +32,10 @@ std::vector<std::string> buildRpvgArgumentsHaplotypeTranscripts(const std::share
 
 std::vector<std::string> buildRpvgArguments(const std::shared_ptr<Trailmix_struct>& dta) {
     std::vector<std::string> rpvgarguments = {
-        "rpvg", "-g", dta->tmfiledir + "/graph.xg", "-p", dta->tmfiledir + "/graph.gbwt",
+        "rpvg", "-g", dta->graph_dir + "/graph.xg", "-p", dta->graph_dir + "/graph.gbwt",
         "-a", dta->rpvg_gamfilename, "-o", dta->tmpdir + "rpvg_hap", "-i", "haplotypes",
         "-u", "-s", "-t", std::to_string(dta->n_threads), "--filt-best-score", "1e-4",
-        "--min-noise-prob", "1e-10", "-m", "80", "-d", "20", "--path-node-cluster", "--use-hap-gibbs",
+        "--min-noise-prob", "1e-10", "-m", "60", "-d", "20", "--path-node-cluster", "--use-hap-gibbs",
     };
 
     if (dta->rng_seed != "NONE") {
@@ -93,6 +66,32 @@ vector<string> paths_through_node(const bdsg::ODGI& graph, const bdsg::handle_t&
         paths.emplace_back(graph.get_path_name(path_handle));
     });
     return paths;
+}
+
+std::vector<std::vector<double>> convertMapsToVector(std::vector<AlignmentInfo*>* & gam) {
+    std::vector<std::vector<double>> result;
+
+    if (gam->empty()) {
+        throw std::runtime_error("Error: GAM file is empty.");
+    }
+
+    for (const auto& map : *gam) {
+        std::vector<double> row;
+        for (const auto& pair : map->pathMap) {
+            row.emplace_back(pair.second);
+        }
+
+        // Compute the sum of the elements in the row
+        double sum = 0.0;
+        for (int i = 0; i < row.size(); i++) {
+            sum += row[i];
+        }
+
+        // Push the row into the result vector
+        result.emplace_back(row);
+    }
+
+    return result;
 }
 
 void write_fq_read(auto & dummyFASTQFile, int offset, const int window_size, const string &fastaseq, char dummyqualscore) {
@@ -153,7 +152,6 @@ const string fa2fq(const string & fastaseq, const char & dummyqualscore, const s
      return tempfqfilename;
                                                                                      }
 
-
 void Trailmix::map_giraffe(const string &fastaseq, shared_ptr<Trailmix_struct> &dta){
 
     if (!dta->quiet) {cerr << "Mapping reads..." << endl;}
@@ -161,14 +159,14 @@ void Trailmix::map_giraffe(const string &fastaseq, shared_ptr<Trailmix_struct> &
     int retcode;
     vector<string> arguments;
     arguments.emplace_back("vg");
-    arguments.emplace_back("giraffe");
+    arguments.emplace_back("safari");
 
     auto normal_cout = cout.rdbuf();
     ofstream cout(dta->fifo_A);
     std::cout.rdbuf(cout.rdbuf());
     // Map with VG Giraffe to generate a GAM file
-    string minimizer_to_use=  dta->tmfiledir + "graph.min";
-    string rymer_to_use=  dta->tmfiledir + "graph.ry";
+    string minimizer_to_use=  dta->graph_dir + "graph.min";
+    string rymer_to_use=  dta->graph_dir + "graph.ry";
 
 
 if (dta->fastq1filename != "" && dta->fastq1filename != "")
@@ -178,9 +176,9 @@ if (dta->fastq1filename != "" && dta->fastq1filename != "")
         arguments.emplace_back("-f");
         arguments.emplace_back(dta->fastq1filename);
         arguments.emplace_back("-Z");
-        arguments.emplace_back(getFullPath(dta->tmfiledir + "graph.giraffe.gbz"));
+        arguments.emplace_back(getFullPath(dta->graph_dir + "graph.giraffe.gbz"));
         arguments.emplace_back("-d");
-        arguments.emplace_back(getFullPath(dta->tmfiledir + "graph.dist"));
+        arguments.emplace_back(getFullPath(dta->graph_dir + "graph.dist"));
         arguments.emplace_back("-m");
         arguments.emplace_back(minimizer_to_use);
         arguments.emplace_back("-q");
@@ -209,9 +207,9 @@ else if (dta->fastq1filename != "" && dta->fastq1filename == "")
                arguments.emplace_back("-f");
                arguments.emplace_back(dta->fastq1filename);
                arguments.emplace_back("-Z");
-               arguments.emplace_back(getFullPath(dta->tmfiledir + "graph.giraffe.gbz"));
+               arguments.emplace_back(getFullPath(dta->graph_dir + "graph.giraffe.gbz"));
                arguments.emplace_back("-d");
-               arguments.emplace_back(getFullPath(dta->tmfiledir + "graph.dist"));
+               arguments.emplace_back(getFullPath(dta->graph_dir + "graph.dist"));
                arguments.emplace_back("-m");
                arguments.emplace_back(minimizer_to_use);
                arguments.emplace_back("-q");
@@ -252,9 +250,9 @@ else if (fastaseq != ""){
     arguments.emplace_back("-f");
     arguments.emplace_back(dummy_fastq_file);
     arguments.emplace_back("-Z");
-    arguments.emplace_back(getFullPath(dta->tmfiledir + "graph.giraffe.gbz"));
+    arguments.emplace_back(getFullPath(dta->graph_dir + "graph.giraffe.gbz"));
     arguments.emplace_back("-d");
-    arguments.emplace_back(getFullPath(dta->tmfiledir + "graph.dist"));
+    arguments.emplace_back(getFullPath(dta->graph_dir + "graph.dist"));
     arguments.emplace_back("-m");
     arguments.emplace_back(minimizer_to_use);
     arguments.emplace_back("-q");
@@ -295,7 +293,6 @@ char** convert_to_char_array(const vector<string>& arguments) {
     }
     return argvtopass;
 }
-
 
 void Trailmix::run_gam2prof(shared_ptr<Trailmix_struct>& dta) {
     //vector<string> g2parguments = {"vgan", "gam2prof", "--running-trailmix"};
@@ -388,8 +385,7 @@ vector<double> props(sigpaths.size(), 0.0);
 
 for (unsigned int source=0; source < sigpaths.size(); ++source){
     string path_name = sigpaths[source];
-
-    Trailmix::modifyPathNameInPlace(dta, path_name);
+    modifyPathNameInPlace(dta, path_name);
     //path_name.erase(std::remove(path_name.begin(), path_name.end(), ' '), path_name.end());
           const int find_idx = find_index(dta->tpms, path_name);
           if(find_idx == -1){

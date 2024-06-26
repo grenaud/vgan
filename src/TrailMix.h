@@ -27,6 +27,8 @@ void run_gam2prof(shared_ptr<Trailmix_struct>& dta);
 const double get_likelihood_of_source(const shared_ptr<Trailmix_struct> &dta, const unsigned int &branch, const unsigned int &branch_parent, \
                                            const double &proposed_branch_position, double &theta);
 const double sum_log_likelihoods(vector<double> &log_lik_vec);
+void readPHG(shared_ptr<Trailmix_struct> &dta);
+void modifyPathNameInPlace(shared_ptr<Trailmix_struct> &dta, string &path_name, bool first=false);
 void load_read_probs(shared_ptr<Trailmix_struct> &dta);
 void precompute_incorrect_mapping_probs(shared_ptr<Trailmix_struct> &dta);
 void readPathHandleGraph (shared_ptr<Trailmix_struct> &dta);
@@ -34,12 +36,10 @@ void get_seed_source_estimates(shared_ptr<Trailmix_struct> &dta, const vector<st
 void compute_read_coverage(shared_ptr<Trailmix_struct> &dta);
 void writeDeconvolvedReads(shared_ptr<Trailmix_struct> &dta, const string &input_file, const string &output_file, vector<int> reads_to_include);
 void write_output(std::shared_ptr<Trailmix_struct> &dta);
-void readPathHandleGraph_trailmix (shared_ptr<Trailmix_struct> &dta);
 void create_path_node_map(shared_ptr<Trailmix_struct> &dta);
 void place_sources(shared_ptr<Trailmix_struct> &dta);
 void infer(shared_ptr<Trailmix_struct> &dta);
 void pack(shared_ptr<Trailmix_struct> &dta);
-void modifyPathNameInPlace(shared_ptr<Trailmix_struct> &dta, string &path_name, bool first=false);
 void load_hap_combos(shared_ptr<Trailmix_struct> &dta);
 void load_tpms(shared_ptr<Trailmix_struct> &dta);
 void initializeParams(RunTreeProportionParams &params, shared_ptr<Trailmix_struct>& dta);

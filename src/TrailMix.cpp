@@ -12,6 +12,7 @@
 #include "preflight.hpp"
 #include "config/allocator_config.hpp"
 #include "io/register_libvg_io.hpp"
+#include "vgan_utils.h"
 #include "tree.h"
 #include "precompute.h"
 #include <vg/io/vpkg.hpp>
@@ -151,7 +152,7 @@ void output_combined_damagefile(
 }
 
 void Trailmix::load_pangenome_map(shared_ptr<Trailmix_struct> &dta){
-const string pangenome_map_path = getFullPath(dta->tmfiledir+"parsed_pangenome_mapping");
+const string pangenome_map_path = getFullPath(dta->graph_dir+"parsed_pangenome_mapping");
 igzstream myfile;
 myfile.open(pangenome_map_path.c_str(), ios::in);
 string line;
@@ -174,7 +175,7 @@ return;
 }
 
 void Trailmix::load_mappabilities(std::shared_ptr<Trailmix_struct> &dta) {
-    std::string mappability_path = getFullPath(dta->tmfiledir + "mappability.tsv");
+    std::string mappability_path = getFullPath(dta->graph_dir + "mappability.tsv");
     igzstream myfile;
     myfile.open(mappability_path.c_str(), ios::in);
     std::string line;
@@ -231,10 +232,10 @@ void Trailmix::modifyPathNameInPlace(shared_ptr<Trailmix_struct> &dta, string &p
 
 }
 
-void Trailmix::readPathHandleGraph_trailmix (shared_ptr<Trailmix_struct> &dta) {
+void Trailmix::readPHG(shared_ptr<Trailmix_struct> &dta) {
 
     cerr << "[TrailMix] Deserializing graph: " << dta->graphfilename << endl;
-    dta->graph.deserialize(dta->graphfilename);
+    dta->graph.deserialize(dta->graph_dir+dta->graphfilename);
     cerr << "[TrailMix] Done deserializing" << endl;
     dta->minid = dta->graph.min_node_id();
     dta->maxid = dta->graph.max_node_id();
@@ -314,7 +315,6 @@ size_t pos = 0;
    return;
 }
 
-
 void run_vg_surject(shared_ptr<Trailmix_struct> &dta, const string &path_to_surject) {
     cout << "[TrailMix] Starting run_vg_surject function with system call" << endl;
 
@@ -329,7 +329,7 @@ void run_vg_surject(shared_ptr<Trailmix_struct> &dta, const string &path_to_surj
     // Prepare the system command
     stringstream command_stream;
     command_stream << vg_binary_path << " surject"
-                   << " -x " << dta->tmfiledir << dta->graph_prefix << ".xg"
+                   << " -x " << dta->graph_dir << dta->graph_prefix << ".xg"
                    << " -t " << dta->n_threads
                    << " -b"  // BAM output
                    << " -p " << path_to_surject
@@ -381,7 +381,7 @@ std::string Trailmix::usage() const {
           << "Markov chain Monte Carlo options:\n"
           << "  \t--chains [INT]\t\t             Define the number of chains for the MCMC (default: 4)\n"
           << "  \t--iter [INT]\t\t             Define the number of iterations for the MCMC (default: 1.000.000)\n"
-          << "  \t--randStart [bool]\t             Set to get random starting nodes in the tree instead of the signature nodes (default: false)\n"
+          << "  \t--randStart [bool]          Set to get random starting nodes in the tree instead of the signature nodes (default: false)\n"
           << "  \t--burnin [INT]\t\t             Define the burn-in period for the MCMC (default: 100.000)\n"
           << "Initialization options:\n"
           << "  \t--mu [INT,INT,...]\t             Define the fragment length mean per source (for read count proportion estimation) \n"
@@ -417,10 +417,10 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     string gamfilename, samplename, fastafilename, fastq1filename, fastq2filename, posteriorfilename;
     string TM_outputfilename = "TM_out";
     string tmpdir = "/tmp/";
-    string tmfiledir = "../share/tmfiles/";
-    string graphfilename = tmfiledir + "graph.og";
+    string graph_dir = "../share/tmfiles/";
+    string graphfilename = "graph.og";
     unsigned int n_threads = 1;
-    bool tmfiledirspecified = false;
+    bool graphdirspecified = false;
     std::vector<bool> sourceAssignments;
     string deam5pfreqE  = getFullPath(cwdProg+"../share/damageProfiles/none.prof");
     string deam3pfreqE  =  getFullPath(cwdProg+"../share/damageProfiles/none.prof");
@@ -521,6 +521,7 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
             continue;
                                    }
 
+
         if(string(argv[i]) == "--deam5p"  ){
             deam5pfreqE=string(argv[i+1]);
         specifiedDeam=true;
@@ -572,8 +573,8 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
 
     }
 
-    if(!tmfiledirspecified){
-	tmfiledir  =  cwdProg +  tmfiledir;
+    if(!graphdirspecified){
+	graph_dir  =  cwdProg +  graph_dir;
     }
 
     if (fastafilename != "" && k != 1){throw runtime_error("[TrailMix] For consensus FASTA input, k must equal 1 (single-source)");}
@@ -582,8 +583,8 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     shared_ptr dta = make_unique<Trailmix_struct>();
 
     std::cerr << "Loading GBWT index..." << std::endl << std::flush;
-    std::string gbwt_index_file = dta->tmfiledir + "graph.gbwt";
-    std::string gbwtgraph_index_file = dta->tmfiledir + "graph.gg";
+    std::string gbwt_index_file = dta->graph_dir + "graph.gbwt";
+    std::string gbwtgraph_index_file = dta->graph_dir + "graph.gg";
     dta->gbwt = vg::io::VPKG::load_one<gbwt::GBWT>(gbwt_index_file);
     dta->gbwtgraph = vg::io::VPKG::load_one<gbwtgraph::GBWTGraph>(gbwtgraph_index_file);
     std::cerr << "GBWT index loaded." << std::endl << std::flush;
@@ -597,7 +598,7 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     dta->strand_specific = strand_specific;
     dta->strand_specific_library_type = strand_specific_library_type;
     dta->graphfilename=graphfilename;
-    readPathHandleGraph_trailmix(dta);
+    readPHG(dta);
     dta->fastafilename=fastafilename;
     dta->samplename=samplename;
     dta->fastq1filename=fastq1filename;
@@ -612,10 +613,10 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     dta->graphfilename = graphfilename;
     dta->TM_outputfilename=TM_outputfilename;
     dta->n_threads=n_threads;
-    dta->tmfiledir = tmfiledir;
+    dta->graph_dir = graph_dir;
     dta->k = k;
-    dta->tmfiledirspecified = tmfiledirspecified;
-    dta->treePath = dta->tmfiledir + "haps.treefile";
+    dta->graphdirspecified = graphdirspecified;
+    dta->treePath = dta->graph_dir + "haps.treefile";
     dta->mus=mus;
     auto tree = make_tree_from_dnd(dta);
 
