@@ -78,8 +78,7 @@ public:
                                std::unordered_set<const spidir::Node*>& visited);
     pair<unordered_map<string, vector<vector<double>>>, double> processMCMCiterations(
                              shared_ptr<Trailmix_struct> &dta, const vector<MCMCiteration>& MCMCiterations,int k,const string &num,int chain,\
-                             spidir::Tree* tr, int numofleafs, \
-                             bool include_read_props);
+                             spidir::Tree* tr, int numofleafs);
     const double calculateEuclideanDistance(const std::vector<double> &vec1, const std::vector<double> &vec2);
     double calculateRhat(const std::vector<double>& means, const std::vector<double>& variances, int chainLength, int numChains);
     const double calculateDistanceToAncestor(spidir::Node* startNode, spidir::Node* ancestor);
@@ -92,16 +91,14 @@ public:
     void run_rpvg_haplotypes(shared_ptr<Trailmix_struct>& dta);
     const vector<double> run(int iter, int burnin, double tol, const vector<double> &init_vec, vector<Clade *> * clade_vec, vector<int> &clade_list_id);
     double get_proposal_likelihood(const vector <double> &proposal_vec, vector<Clade *> * clade_vec, vector<int> &clade_list_id);
-
     std::vector<MCMCiteration> run_tree_proportion(RunTreeProportionParams params, std::vector<MCMCiteration> state_t_vec, const bdsg::ODGI& graph, \
                                                      vector<vector<string>> nodepaths, string num, int n_threads, int numPaths, int chainindex, double con);
-
     std::vector<MCMCiteration> run_tree_proportion(RunTreeProportionParams &params, std::vector<MCMCiteration> &state_t_vec, const bdsg::ODGI& graph, \
                                const vector<vector<string>> &nodepaths, string num, int n_threads, shared_ptr<Trailmix_struct> &dta, bool running_trailmix, int chain);
-
+    std::vector<MCMCiteration> run_tree_proportion(RunTreeProportionParams &params, std::vector<MCMCiteration> &state_t_vec, const bdsg::ODGI& graph, \
+                             const vector<vector<string>> &nodepaths, string num, shared_ptr<Trailmix_struct> &dta, bool running_trailmix, int chain);
     std::vector<MCMCiteration> run_tree_proportion_TM(RunTreeProportionParams &params, std::vector<MCMCiteration> &state_t_vec, const bdsg::ODGI& graph, \
-                               const vector<vector<string>> &nodepaths, string num, shared_ptr<Trailmix_struct> &dta, bool running_trailmix, int chain);
-
+                             const vector<vector<string>> &nodepaths, string num, shared_ptr<Trailmix_struct> &dta, bool running_trailmix, int chain);
     void updatePosition(PosTree &current_position, double move_distance, bool move_forward);
     inline const std::vector<double> getPatristicDistances(const spidir::Tree* tr, spidir::Node* node, int numofLeafs, double posonbranch);
 

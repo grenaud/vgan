@@ -753,15 +753,16 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
                 }
                 
                 std::cerr << "Running chain number: " << chainIndex << std::endl;
-                // Run the MCMC process for this chain
-                std::vector<MCMCiteration> chainiter = mcmc.run_tree_proportion(params, chainVec, graph, nodepaths, num, n_threads, probMatrix[0].size(), chainIndex, con);
 
-                
+                shared_ptr<Trailmix_struct> dta;
+
+                // Run the MCMC process for this chain
+                std::vector<MCMCiteration> chainiter = mcmc.run_tree_proportion(params, chainVec, graph, nodepaths, num, n_threads, \
+                                                                                probMatrix[0].size(), chainIndex, con);
 
                 // Process the MCMC iterations to get the statistics map for this chain
-                shared_ptr<Trailmix_struct> dta;
                 pair<unordered_map<string, vector<vector<double>>>, double> intermStatsMapPair = mcmc.processMCMCiterations(dta, chainiter, subVector.size(), num, \
-                                                                                                                            chainIndex, taxatreePtr, leafcounter, false);
+                                                                                                                            chainIndex, taxatreePtr, leafcounter);
 
                 unordered_map<string, vector<vector<double>>> intermStatsMap = intermStatsMapPair.first;
                 chainLogLikes.emplace_back(intermStatsMapPair.second);

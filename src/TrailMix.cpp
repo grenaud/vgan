@@ -384,7 +384,6 @@ std::string Trailmix::usage() const {
           << "  \t--randStart [bool]          Set to get random starting nodes in the tree instead of the signature nodes (default: false)\n"
           << "  \t--burnin [INT]\t\t             Define the burn-in period for the MCMC (default: 100.000)\n"
           << "Initialization options:\n"
-          << "  \t--mu [INT,INT,...]\t             Define the fragment length mean per source (for read count proportion estimation) \n"
           << "  \t--library-type [STR] \t\t     Strand-specific library type (fr: read1 forward, rf: read1 reverse) (default: unstranded)\n"
           << "Contamination Mode Options:\n"
           << "  \t--contamination-mode, --cont-mode    Enable contamination mode, requires exactly two sources\n"
@@ -435,7 +434,6 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     int lengthToProf = 5;
     bool randStart=false;
     bool strand_specific = false;
-    vector<string> mus = {"120", "120"};
     string rng_seed="NONE";
     string strand_specific_library_type = "";
     bool k_unset=true;
@@ -478,18 +476,6 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
             continue;
       }
 
-       else if (std::string(argv[i]) == "--mu") {
-            mus.clear();
-            if (k_unset) {
-                throw runtime_error("k must be set before parsing --mu values");
-            }
-            if (i + k >= argc) {
-                throw runtime_error("Insufficient values provided for --mu");
-            }
-            for (unsigned int j = 0; j < k; ++j) {
-                mus.push_back(argv[++i]);
-            }
-        }
 
        if(string(argv[i]) == "-o"){
             TM_outputfilename = argv[i+1];
@@ -515,6 +501,12 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
                  }
             continue;
                                  }
+
+        if(string(argv[i]) == "-z"){
+            tmpdir = argv[i+1];
+            if (tmpdir.back() != '/') {tmpdir += '/';}
+            continue;
+                               }
 
     if(string(argv[i]) == "--debug"){
             debug=true;
@@ -593,7 +585,6 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     //Haplocart hc;
     //dta->running_trailmix=true;
 
-    dta->mus = mus;
     dta->source_assignments = sourceAssignments;
     dta->strand_specific = strand_specific;
     dta->strand_specific_library_type = strand_specific_library_type;
@@ -617,7 +608,6 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     dta->k = k;
     dta->graphdirspecified = graphdirspecified;
     dta->treePath = dta->graph_dir + "haps.treefile";
-    dta->mus=mus;
     auto tree = make_tree_from_dnd(dta);
 
     if (tree.nodes.size() == 0){

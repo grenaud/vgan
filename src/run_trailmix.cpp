@@ -70,9 +70,10 @@ waitpid(dta->pid1, &status, 0);
 
 dta->algnvector = readGAM(dta);
 
+
 /*
 if (dta->quiet == false && dta->fastafilename=="") {cerr << "Removing PCR duplicates ..." << '\n';}
-shared_ptr<vector<bool>> thing = Dup_Remover().remove_duplicates_internal(dta->algnvector, dta->n_threads, dta->quiet);
+shared_ptr<vector<bool>> thing = Dup_Remover().remove_duplicates_internal(dta->algnvector, 1, dta->quiet);
 
 auto& vec = *(dta->algnvector); // Access the vector object
 auto it = vec.begin();
@@ -160,56 +161,15 @@ for (const auto& p : dta->tpms) {
     tpms_map[p.first] = p.second;
 }
 
-bool in_pruned = false;
+#endif
 
-for (int m = 0; m < dta->path_names.size(); ++m) {
-    in_pruned = false; // Reset in_pruned at the beginning of each iteration
+if (dta->debug) {
+      cerr << "Number of hap combos: " << dta->hap_combos.size() << endl;
+                }
 
-    auto it = tpms_map.find(dta->path_names[m]);
-    if (it != tpms_map.end()) {
-        if (!isnan(it->second) && it->second > 1.0) {
-            in_pruned = true;
-        }
-    }
-
-bool in_pruned=false;
-
-for (int m = 0; m < dta->path_names.size(); ++m) {
-    in_pruned = false; // Reset in_pruned at the beginning of each iteration
-
-    auto it = tpms_map.find(dta->path_names[m]);
-    if (it != tpms_map.end()) {
-        if (!isnan(it->second) && it->second > 1.0) {
-            in_pruned = true;
-            //std::cerr << "TPM for '" << dta->path_names[m] << "' is " << it->second << " and is valid and greater than 1." << std::endl;
-        }
-    }
-
-    if (in_pruned) {
-        string toadd = dta->path_names[m];
-        dta->in_pruned_set.insert(toadd);
-        //std::cerr << "Inserting '" << dta->path_names[m] << "' into in_pruned_set as its TPM is valid and greater than 1." << std::endl;
-    }
-}
-
-}
-           #endif
-
-
-//std::cerr << "PRUNED SET SIZE: " << dta->in_pruned_set.size() << std::endl;
-//cerr << "PRUNED SET CONTENTS: " << endl;
-//PRINT_SET(dta->in_pruned_set);
-
-            if (dta->debug) {
-                cerr << "Number of hap combos: " << dta->hap_combos.size() << endl;
-            }
-
-//cerr << "Precomputing..." << endl;
-
-                auto gam = precompute_GAM_trailmix(dta);
-
-//cerr << "Done with precomputations" << endl;
-
+cerr << "Precomputing..." << endl;
+auto gam = precompute_GAM_trailmix(dta);
+cerr << "Done with precomputations" << endl;
 
 double max_posterior = -1.0; // start with a very low value; assuming posterior probabilities are non-negative
 vector<int> sigNodes;
@@ -314,16 +274,25 @@ else {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-
-
             // This map will store the vectors of statistics for all chains, with branch names as keys
             unordered_map<string, vector<vector<vector<double>>>> branchStatsMap;
             vector<double> chainLogLikes;
-              // Open diagnostics file for this chain
-                ofstream diagnostics;
-                diagnostics.open(prefix + "Diagnostics.txt");
-                diagnostics << "Source\tMax Log-likelihood\tFor Chain\tProportion Rhat\tBranch Placement Rhat" << endl;
+
+            // Open diagnostics file for this chain
+            std::ofstream diagnostics;
+            std::string filename = prefix + "Diagnostics.txt";
+
+            // Check if file exists
+            bool file_exists = std::filesystem::exists(filename);
+
+            // Open file in append mode
+            diagnostics.open(filename, std::ios_base::app);
+
+            // Write header only if file is newly created
+            if (!file_exists) {
+                 diagnostics << "Source\tProportion Rhat\tBranch Placement Rhat" << std::endl;
+            }
+
 
             for (unsigned int chain = 0; chain < params.chains; ++chain) {
                 initializeParams(params, dta);
@@ -336,11 +305,9 @@ else {
 
                   // Process the MCMC iterations to get the statistics map for this chain
                 pair<unordered_map<string, vector<vector<double>>>, double> intermStatsMapPair = \
-                    move(mcmc.processMCMCiterations(dta, chainiter, dta->k, prefix, chain, dta->tree, dta->n_leaves, dta->include_read_props));
-
+                    move(mcmc.processMCMCiterations(dta, chainiter, dta->k, prefix, chain, dta->tree, dta->n_leaves));
 
                 auto &intermStatsMap = intermStatsMapPair.first;
-
                 chainLogLikes.emplace_back(intermStatsMapPair.second);
                 // For each branch name, add the current chain's statistics vector to the main map
                 for (const auto& branchStat : intermStatsMap) {
@@ -362,6 +329,8 @@ else {
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+
+
 // Now, calculate R-hat statistics for each branch across all chains
             int numChains = params.chains;
             int chainLength = dta->iter - dta->burnin; // Assume all chains have the same length
@@ -381,8 +350,6 @@ else {
 
                 for (int chain = 0; chain < numChains; ++chain) {
 
-cerr << "Processing chain: " << chain << endl;
-
 if (allChainStats.size() <= chain) {
     continue;
 }
@@ -400,47 +367,29 @@ if (allChainStats[chain][0].size() < 4) {
 
 }
 
-                double maxLogLike = chainLogLikes[0];
-
-                int maxIndex = 0;
-                for (int h = 0; h <chainLogLikes.size(); ++h){
-                    if(chainLogLikes[h] > maxLogLike){
-                        maxLogLike = chainLogLikes[h];
-                        maxIndex = h;
-                    }
-                }
-
                 // Calculate R-hat for proportions
 
                 double PropRhat = mcmc.calculateRhat(Propmeans, Propvariances, chainLength, params.chains);
-                if(isnan(PropRhat)){
-                    cerr << "Warning: R-hat for the proportion estimate is not computed because we are handling a single source." << endl;
-                }
-                else if (PropRhat == -1){
-                    cerr << "Warning: The R-hat for proportion cannot be computed for a single chain." << endl;
-                }
-                else if(PropRhat > 1.05){
+
+                if(PropRhat > 1.05){
                     std::cerr << "Warning: R-hat for proportion of branch " << branchName << " is above 1.05, indicating that the chains have not converged for the parameter." << std::endl;
                 }
 
                 // Calculate R-hat for positions
 
                 double PosRhat = mcmc.calculateRhat(Posmeans, Posvariances, chainLength, params.chains);
-                if(isnan(PosRhat)){
-                    cerr << "Warning: R-hat cannot be computed. The value for the parameter is identical in every iteration." << endl;
-                }
-                else if (PosRhat == -1){
-                    cerr << "Warning: The R-hat for position cannot be computed for a single chain." << endl;
-                }
-                else if(PosRhat > 1.05){
+
+                if(PosRhat > 1.05){
                     std::cerr << "Warning: R-hat for position of branch " << branchName << " is above 1.05, indicating that the chains have not converged for the parameter." << std::endl;
                 }
 
-                ofstream diagnostics2;
-                diagnostics2.open(prefix + "Diagnostics.txt", std::ios_base::app);
                 // Write the R-hat statistics for this branch to the diagnostics file
-                diagnostics2 << branchName << '\t' << maxLogLike << '\t' << maxIndex << '\t' << PropRhat << '\t' << PosRhat << endl;
+                if (PosRhat != -1){
+                    diagnostics << branchName << '\t' << PropRhat << '\t' << PosRhat << endl;
+                                  }
 
             }
+
+diagnostics.close();
 
 }

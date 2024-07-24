@@ -6,30 +6,6 @@
 } while(0)
 
 
-std::vector<double> calculateReadCountProportionsFromBaseCounts(const std::vector<std::string>& readLengths, const std::vector<double>& baseCountProportions) {
-
-    std::vector<double> factors(readLengths.size(), 0.0);
-    double factorSum = 0.0;
-
-    // Calculate a factor for each haplotype that reflects its read length and base count proportion
-    for (size_t i = 0; i < readLengths.size(); ++i) {
-        double length = std::stod(readLengths[i]);
-        // The factor is essentially the base count proportion divided by read length, this reflects
-        // the contribution of each read length to the base count proportion, inversely.
-        factors[i] = baseCountProportions[i] / length;
-        factorSum += factors[i];
-    }
-
-    // Normalize these factors to sum to 1, to get the read count proportions
-    std::vector<double> readCountProportions(readLengths.size(), 0.0);
-    for (size_t i = 0; i < readLengths.size(); ++i) {
-        readCountProportions[i] = factors[i] / factorSum;
-    }
-
-    return readCountProportions;
-}
-
-
 void modifyPathNameInPlace(string &path_name){
      string original_path_name = path_name;
 
@@ -90,11 +66,11 @@ const double MCMC::calculateDistanceToAncestor(spidir::Node* startNode, spidir::
     }
 }
 
-double MCMC::getQuantile(const std::vector<double>& sortedData, double q) {
+double getQuantile2(const std::vector<double>& sortedData, double q) {
     if (sortedData.empty()) {
         throw std::runtime_error("Vector is empty");
     }
-    
+
     if (q < 0.0 || q > 1.0) {
         throw std::invalid_argument("Quantile must be between 0 and 1");
     }
@@ -260,8 +236,7 @@ pair<unordered_map<string, vector<vector<double>>>, double> MCMC::processMCMCite
     const string &num,
     int chain,
     spidir::Tree* tr,
-    int numofleafs,
-    bool include_read_props) {
+    int numofleafs) {
 
     unordered_map<string, vector<vector<double>>> branchStatisticsMap;
     double chainloglike = numeric_limits<double>::lowest();
@@ -269,20 +244,13 @@ pair<unordered_map<string, vector<vector<double>>>, double> MCMC::processMCMCite
 
     // Open files for writing statistics
     baseEstimatesFile.open(num + "BaseProportionEstimates.txt", ios::app | ios::out);
-    if(include_read_props){
-        readEstimatesFile.open(num + "ReadProportionEstimates.txt", ios::app | ios::out);
-                          }
     branchestimateFile.open(num + "BranchEstimate.txt", ios::app | ios::out);
 
-    if (!baseEstimatesFile.is_open() || (include_read_props && !readEstimatesFile.is_open()) || !branchestimateFile.is_open()){
+    if (!baseEstimatesFile.is_open() || !branchestimateFile.is_open()){
         cerr << "Failed to open files for writing." << endl;
         cerr << "num: " << num << endl;
         throw runtime_error("File opening failed.");
     }
-
-    if(include_read_props){
-        readEstimatesFile << "Source\tChain\tMean Prop Est\t5% CI\tMedian Prop Est\t95% CI\tESS\tAutocorrelation\tVariance\n";
-                          }
 
     baseEstimatesFile << "Source\tChain\tMean Prop Est\t5% CI\tMedian Prop Est\t95% CI\tESS\tAutocorrelation\tVariance\n";
     branchestimateFile << "Source\tChain\tMean Branch Position\t5% CI\tMedian Branch Position\t95% CI\tESS\tAutocorrelation\tVariance\tESS for the source estimation\n";
@@ -298,7 +266,7 @@ pair<unordered_map<string, vector<vector<double>>>, double> MCMC::processMCMCite
     for (int source = 0; source < k; ++source) {
         cerr << "Processing source: " << source + 1 << endl;
 
-        vector<double> baseProportionVec, readProportionVec, positionVec, euc_distances;
+        vector<double> baseProportionVec, readProportionVec, position_vec, euc_distances;
         string branchName;
         vector<double> initialPatristicDistances = vector<double>(numofleafs, 1.0);
         vector<string> branch_names;
@@ -318,14 +286,9 @@ pair<unordered_map<string, vector<vector<double>>>, double> MCMC::processMCMCite
             //modifyPathNameInPlace(branchName);
             branch_names.emplace_back(branchName);
 
-           if (include_read_props){
-            auto readprops = calculateReadCountProportionsFromBaseCounts(dta->mus, iteration.proportions);
-            readProportionVec.emplace_back(readprops[source]);
-                                  }
-
             auto baseprops = iteration.proportions;
             baseProportionVec.emplace_back(baseprops[source]);
-            positionVec.emplace_back(iteration.positions_tree[source].pos_branch);
+            position_vec.emplace_back(iteration.positions_tree[source].pos_branch);
 
             double posonbranch = iteration.positions_tree[source].pos->dist * iteration.positions_tree[source].pos_branch;
             const vector<double> patristic_distances = getPatristicDistances(tr, iteration.positions_tree[source].pos, numofleafs, posonbranch);
@@ -336,45 +299,35 @@ pair<unordered_map<string, vector<vector<double>>>, double> MCMC::processMCMCite
             }
         }
 
-        double meanBaseTheta = mean(baseProportionVec);
-        double meanReadTheta = mean(readProportionVec);
-        double meanPos = mean(positionVec);
-        double Theta_autoc = autocorrelation(baseProportionVec, 1);
-        double Pos_autoc = autocorrelation(positionVec, 1);
-        double Theta_ess = effectiveSampleSize(baseProportionVec);
-        double Pos_ess = effectiveSampleSize(positionVec);
-        double dist_ess = effectiveSampleSize(euc_distances);
-        double theta_var = variance(baseProportionVec, meanBaseTheta);
-        double Pos_var = variance(positionVec, meanPos);
 
-        //cerr << "Calculated statistics for branch " << branchName << ": MeanTheta=" << meanTheta << ", MeanPos=" << meanPos << endl;
+        double meanBaseTheta = mean(baseProportionVec);
+        double meanPos = mean(position_vec);
+        cerr << "autocorrelations..." << endl;
+        double Theta_autoc = autocorrelation(baseProportionVec, 1);
+        double Pos_autoc = autocorrelation(position_vec, 1);
+        cerr << "...Done. ESS: " << endl;
+        double Theta_ess = effectiveSampleSize(baseProportionVec);
+        double Pos_ess = effectiveSampleSize(position_vec);
+        double dist_ess = effectiveSampleSize(euc_distances);
+        cerr << "...Done" << endl;
+        double theta_var = variance(baseProportionVec, meanBaseTheta);
+        double Pos_var = variance(position_vec, meanPos);
 
         sort(baseProportionVec.begin(), baseProportionVec.end());
-        sort(readProportionVec.begin(), readProportionVec.end());
-        sort(positionVec.begin(), positionVec.end());
+        sort(position_vec.begin(), position_vec.end());
 
-        double base_theta_median = getQuantile(baseProportionVec, 0.5);
-        double Pos_median = getQuantile(positionVec, 0.5);
-        double base_theta_fq = getQuantile(baseProportionVec, 0.05);
-        double base_theta_tq = getQuantile(baseProportionVec, 0.95);
-        double Pos_fq = getQuantile(positionVec, 0.05);
-        double Pos_tq = getQuantile(positionVec, 0.95);
-
-       if (include_read_props){
-           double read_theta_median = getQuantile(readProportionVec, 0.5);
-           double read_theta_fq = getQuantile(readProportionVec, 0.05);
-           double read_theta_tq = getQuantile(readProportionVec, 0.95);
-           readEstimatesFile << branchName << "\t" << chain << "\t" << meanReadTheta << "\t" << read_theta_fq << "\t" << read_theta_median << "\t" << \
-           read_theta_tq << "\t" << Theta_ess << "\t" << Theta_autoc << "\t" << theta_var << "\n";
-                              }
+        double base_theta_median = getQuantile2(baseProportionVec, 0.5);
+        double Pos_median = getQuantile2(position_vec, 0.5);
+        double base_theta_fq = getQuantile2(baseProportionVec, 0.05);
+        double base_theta_tq = getQuantile2(baseProportionVec, 0.95);
+        double Pos_fq = getQuantile2(position_vec, 0.05);
+        double Pos_tq = getQuantile2(position_vec, 0.95);
 
         baseEstimatesFile << branchName << "\t" << chain << "\t" << meanBaseTheta << "\t" << base_theta_fq << "\t" << base_theta_median << "\t" << \
                              base_theta_tq << "\t" << Theta_ess << "\t" << Theta_autoc << "\t" << theta_var << "\n";
 
         branchestimateFile << branchName << "\t" << chain << "\t" << meanPos << "\t" << Pos_fq << "\t" << Pos_median << "\t" << Pos_tq << \
                          "\t" << Pos_ess << "\t" << Pos_autoc << "\t" << Pos_var << "\t" << dist_ess << "\n";
-
-        //cerr << "Writing to file for branch " << branchName << " completed." << endl;
 
         vector<double> sourceStatistic = {meanBaseTheta, theta_var, meanPos, Pos_var};
         branchStatisticsMap[branchName].emplace_back(sourceStatistic);

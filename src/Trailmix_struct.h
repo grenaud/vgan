@@ -86,7 +86,6 @@ struct Trailmix_struct {
         // RPVG parameters
     string rng_seed = "NONE";
     string rpvg_gamfilename;
-    vector<string> mus = {"100"};
     bool strand_specific = false;
     string strand_specific_library_type = "rf";
 
