@@ -6,7 +6,6 @@ suppressPackageStartupMessages({
   library(rentrez)
   library(RColorBrewer)
   library(gridExtra)
-  library(ggmagnify)
   library(ggfx)
   library(cowplot)
 })
