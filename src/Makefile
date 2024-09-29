@@ -193,7 +193,7 @@ libgabmade:
 # Build vg if the stamp file doesn't exist
 vgmade:
 	# Build vg as per its build instructions
-	cd $(VGDIR) && ./source_me.sh && (cd dep/sparsehash && ./configure) && make -j $(NPROCS)
+	cd $(VGDIR) && ./source_me.sh && (cd deps/sparsehash && ./configure) && make -j $(NPROCS)
 	touch vgmade
 
 # Build rpvg if the stamp file doesn't exist
@@ -218,7 +218,7 @@ vgan: vgmade rpvgmade libgabmade $(VGAN_PREREQS)
 	$(MAKE) autocomp
 	$(CXX) $(CLUSTER_FLAGS) -o $(BIN_DIR)vgan $(FLAGS_DYNAMIC) $(CLUSTER_LINKER_FLAGS)
 
-test: $(TEST_PREREQS) vgmade
+test: $(TEST_PREREQS) vgmade libgabmade
 	$(MAKE) autocomp
 	$(CXX) -o $(BIN_DIR)test $(FLAGS_TEST) $(CLUSTER_LINKER_FLAGS)
 
