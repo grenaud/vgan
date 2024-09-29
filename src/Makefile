@@ -160,7 +160,7 @@ autocomp:
 
 hcfiles: hcfilesmade
 
-hcfilesmade: | vgmade
+hcfilesmade: vgmade
 	wget -nc -l1 --recursive --no-parent -P ../share/vgan/ ftp://ftp.healthtech.dtu.dk/public/haplocart/hcfiles/
 	mv -fv ../share/vgan/ftp.healthtech.dtu.dk/public/haplocart/hcfiles/* ../share/vgan/hcfiles
 	rm -rf ../share/vgan/ftp.healthtech.dtu.dk
@@ -168,7 +168,7 @@ hcfilesmade: | vgmade
 
 eukafiles: eukafilesmade
 
-eukafilesmade: | vgmade
+eukafilesmade: vgmade
 	wget -nc -l0 --recursive --no-parent -P ../share/vgan/ ftp://ftp.healthtech.dtu.dk/public/euka_files/
 	mv -fv ../share/vgan/ftp.healthtech.dtu.dk/public/euka_files/* ../share/vgan/euka_dir
 	rm -rf ../share/vgan/ftp.healthtech.dtu.dk
@@ -176,7 +176,7 @@ eukafilesmade: | vgmade
 
 soibeanfiles: soibeanfilesmade
 
-soibeanfilesmade: | vgmade
+soibeanfilesmade: vgmade
 	rm -rf ../share/vgan/soibean_dir/tree_dir
 	wget -nc -l0 --recursive --no-parent -P ../share/vgan/ ftp://ftp.healthtech.dtu.dk/public/soibean_files/
 	mv -fv ../share/vgan/ftp.healthtech.dtu.dk/public/soibean_files/* ../share/vgan/soibean_dir
@@ -193,11 +193,11 @@ libgabmade:
 # Build vg if the stamp file doesn't exist
 vgmade:
 	# Build vg as per its build instructions
-	cd $(VGDIR) && make -j $(NPROCS)
+	cd $(VGDIR) && ./source_me.sh && (cd dep/sparsehash && ./configure) && make -j $(NPROCS)
 	touch vgmade
 
 # Build rpvg if the stamp file doesn't exist
-rpvgmade: | vgmade
+rpvgmade: vgmade
 	mkdir -p $(RPVGDIR)
 	wget -nc -l0 --recursive --no-parent -P $(RPVGDIR) ftp://ftp.healthtech.dtu.dk/public/rpvg/
 	mv -fv $(RPVGDIR)ftp.healthtech.dtu.dk/public/rpvg/* $(RPVGDIR)
@@ -211,14 +211,14 @@ spimapmade:
 	cd $(SPIMAPDIR)src && make -j $(NPROCS)
 	touch spimapmade
 
-static: libgabmade rpvgmade spimapmade $(VGAN_PREREQS) | vgmade
+static: libgabmade rpvgmade spimapmade $(VGAN_PREREQS) vgmade
 	$(CXX) -o $(BIN_DIR)vgan $(FLAGS_STATIC)
 
-vgan: vgmade libgabmade $(VGAN_PREREQS)
+vgan: vgmade rpvgmade libgabmade $(VGAN_PREREQS)
 	$(MAKE) autocomp
 	$(CXX) $(CLUSTER_FLAGS) -o $(BIN_DIR)vgan $(FLAGS_DYNAMIC) $(CLUSTER_LINKER_FLAGS)
 
-test: $(TEST_PREREQS) | vgmade
+test: $(TEST_PREREQS) vgmade
 	$(MAKE) autocomp
 	$(CXX) -o $(BIN_DIR)test $(FLAGS_TEST) $(CLUSTER_LINKER_FLAGS)
 
