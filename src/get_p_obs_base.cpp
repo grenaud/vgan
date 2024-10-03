@@ -61,11 +61,43 @@ const long double Haplocart::get_p_obs_base(const int pangenome_base, const char
   // In the paper this is given in years, so we multiply by 30 to get mutations per generation
   mu *= 30;
 
-  const double match = pow((1-mu), generations);
-  const double tv = (1 - pow((1-mu), generations)) * (22/23);
-  const double ts = (1 - pow((1-mu), generations)) * (1/46);
-  long double ret = match * (1-epsilon) + (epsilon * (2*tv + ts));
-  return ret;
+  double P_no_mutation = pow(1 - mu, generations);
+    double P_mutation = 1 - P_no_mutation;
+
+    double R = 22.0 / 23.0; // Transition/transversion ratio
+    double P_transition = 22.0 / 23.0;
+    double P_transversion = (1.0-23.0) * 2;
+
+    double P_no_error = 1 - epsilon;
+    double P_error = epsilon / 3.0; // Equal probability for other bases
+
+auto isTransition = [](char base1, char base2) {
+    return (base1 == 'A' && base2 == 'G') || 
+           (base1 == 'G' && base2 == 'A') ||
+           (base1 == 'C' && base2 == 'T') || 
+           (base1 == 'T' && base2 == 'C');
+};
+
+
+    double total_prob = 0.0;
+    for (char true_base : {'A', 'C', 'G', 'T'}) {
+        // Probability of true base given reference base
+        double P_true_given_ref;
+        if (true_base == graph_base) {
+            P_true_given_ref = P_no_mutation;
+        } else if (isTransition(graph_base, true_base)) {
+            P_true_given_ref = P_mutation * P_transition;
+        } else {
+            P_true_given_ref = P_mutation * P_transversion;
+        }
+
+        // Probability of read base given true base
+        double P_read_given_true = (mapping_base == true_base) ? P_no_error : P_error;
+
+        total_prob += P_true_given_ref * P_read_given_true;
+    }
+
+  return total_prob;
 }
 
 
