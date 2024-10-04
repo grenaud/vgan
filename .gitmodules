@@ -4,3 +4,6 @@
 [submodule "dep/vg"]
 	path = dep/vg
 	url = https://github.com/vgteam/vg.git
+[submodule "dep/rpvg"]
+	path = dep/rpvg
+	url = https://github.com/jonassibbesen/rpvg.git

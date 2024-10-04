@@ -198,12 +198,10 @@ vgmade:
 
 # Build rpvg if the stamp file doesn't exist
 rpvgmade: vgmade
-	mkdir -p $(RPVGDIR)
-	wget -nc -l0 --recursive --no-parent -P $(RPVGDIR) ftp://ftp.healthtech.dtu.dk/public/rpvg/
-	mv -fv $(RPVGDIR)ftp.healthtech.dtu.dk/public/rpvg/* $(RPVGDIR)
-	rm -rf $(RPVGDIR)ftp.healthtech.dtu.dk
-	# Build rpvg as per its build instructions
-	cd $(RPVGDIR) && make -j $(NPROCS)
+	cp $(RPVGDIR)../rpvg_src/*.cpp $(RPVGDIR)src
+	cp $(RPVGDIR)../rpvg_src/*.hpp $(RPVGDIR)src
+	mkdir -p $(RPVGDIR)build
+	(cd ../dep/rpvg/build && cmake .. && ${MAKE} -j $(NPROCS))
 	touch rpvgmade
 
 # Build spimap if the stamp file doesn't exist
