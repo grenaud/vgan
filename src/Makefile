@@ -206,7 +206,7 @@ rpvgmade: vgmade
 
 # Build spimap if the stamp file doesn't exist
 spimapmade:
-	cd $(SPIMAPDIR)src && make -j $(NPROCS)
+	cd $(SPIMAPDIR) && make -j $(NPROCS)
 	touch spimapmade
 
 static: libgabmade rpvgmade spimapmade $(VGAN_PREREQS) vgmade
