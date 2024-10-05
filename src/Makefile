@@ -40,7 +40,7 @@ CLUSTER_LINKER_FLAGS := -L${RPVGDIR}lib/ \
                         -ldl
 
 # Prerequisites
-VGAN_PREREQS := MCMC.o   soibean.o soibean_functions.o \
+VGAN_PREREQS := MCMC.o run_trailmix.o TrailMix.o soibean.o soibean_functions.o \
                 compute_init_vec.o haplocart_functions.o map_giraffe_Euka.o damage.o \
                 Euka.o gam2prof.o vgan.o Clade.o update_likelihood.o HaploCart.o \
                 get_posterior.o process_mapping.o fa2fq.o get_p_obs_base.o \
@@ -60,7 +60,7 @@ TEST_PREREQS := test.o $(VGAN_PREREQS)
 FLAGS_STATIC := ${SPIMAPDIR}src/treevis.o ${SPIMAPDIR}src/newick.o \
                 ${SPIMAPDIR}src/logging.o ${SPIMAPDIR}src/parsing.o \
                 soibean.o soibean_functions.o haplocart_functions.o MCMC.o \
-                compute_init_vec.o gam2prof.o map_giraffe_Euka.o damage.o Euka.o \
+                compute_init_vec.o TrailMix.o run_trailmix.o gam2prof.o map_giraffe_Euka.o damage.o Euka.o \
                 vgan.o Clade.o update_likelihood.o HaploCart.o  get_posterior.o \
                 process_mapping.o fa2fq.o get_p_obs_base.o read_fasta.o \
                 map_giraffe.o  rmdup.o load.o readPathHandleGraph.o NodeInfo.o \
@@ -109,7 +109,7 @@ FLAGS_STATIC := ${SPIMAPDIR}src/treevis.o ${SPIMAPDIR}src/newick.o \
 
 FLAGS_DYNAMIC := ${SPIMAPDIR}src/treevis.o ${SPIMAPDIR}src/newick.o \
                  ${SPIMAPDIR}src/logging.o ${SPIMAPDIR}src/parsing.o \
-                 haplocart_functions.o   \
+                 haplocart_functions.o TrailMix.o run_trailmix.o  \
                  map_giraffe_Euka.o rmdup.o damage.o Euka.o vgan.o Clade.o \
                  update_likelihood.o HaploCart.o get_posterior.o \
                  process_mapping.o fa2fq.o MCMC.o compute_init_vec.o \
