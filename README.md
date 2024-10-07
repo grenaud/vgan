@@ -647,6 +647,8 @@ TrailMix is a tool for phylogenetic placement and mixture proportion estimation 
 
 ## TrailMix Options
 
+Below are the full TrailMix user options.
+
 ```
 Algorithm parameters:
         -fq1 [STR]                           FASTQ input file
