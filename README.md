@@ -641,6 +641,46 @@ The tree file can be found in ```$HOME/share/vgan/soibean_dir/tree_dir```.
 chmod +w [graph.dist]
 ```
 
+# TrailMix
+
+TrailMix is a tool for phylogenetic placement and mixture proportion estimation from mitochondrial aDNA mixtures of human or archaic hominin origin.
+
+## TrailMix Options
+
+```
+Algorithm parameters:
+        -fq1 [STR]                           FASTQ input file
+        -fq2 [STR]                           FASTQ second input file (for paired-end reads)
+        -g [STR]                             GAM input file
+        -i                                   Input FASTQ (-fq1) is interleaved
+        -k                                   Number of distinct contributing haplogroups
+        -o [STR]                             Output file (default: stdout)
+        -pt [FLOAT]                             Posterior threshold for ancient DNA (aligned with SAFARI)
+        --depth [INT]                        Tree depth to whitelist the MCMC search space (-1 for no restriction)
+Non-algorithm parameters:
+        -s [STR]                             Sample name
+        --dbprefix <prefix>                  Specify the prefix for the database files
+        --tm-files [STR]                      Specify the TrailMix file directory (default: "../share/vgan/tmfiles/")
+        -t                                   Number of threads
+        -v                                   Verbose mode
+        -z                                   Temporary directory (default: /tmp/)
+Markov chain Monte Carlo options:
+        --chains [INT]                       Define the number of chains for the MCMC (default: 4)
+        --iter [INT]                         Define the number of iterations for the MCMC (default: 1.000.000)
+        --randStart [bool]          Set to get random starting nodes in the tree instead of the signature nodes (default: false)
+        --burnin [INT]                       Define the burn-in period for the MCMC (default: 100.000)
+Initialization options:
+        --library-type [STR]                 Strand-specific library type (fr: read1 forward, rf: read1 reverse) (default: unstranded)
+Contamination Mode Options:
+        --contamination-mode, --cont-mode    Enable contamination mode, requires exactly two sources
+        --is-ancient [BOOL_VECTOR]   Assignments of sources, represented as a boolean vector, comma-delimited, where 1 means ancient (e.g. 0,1).
+```
+
+
+## Quickstart
+```
+TO ADD
+```
 
 # Unit tests:
 
@@ -670,6 +710,13 @@ or
 ```
 make test
 ./../bin/test --run_test=Soibean
+```
+
+or
+
+```
+make test
+./../bin/test --run_test=TrailMix
 ```
 
 # General notes:
