@@ -2,16 +2,23 @@
 #include "MCMC.h"
 #include "Euka.h"
 #include "libgab.h"
+#include "MCMC_functions.h"
 #include <algorithm>
-#include <gzstream.h>
+
+//#define DEBUG
 //#define DEBUGGENERATEVEC
 //#define VERBOSE_MCMC
-//#define DEBUGMCMCDig
+//#define DEBUGMCMC
 //#define DEBUGMCMCPOS
-//#define DEBUGMCMCPOS2
-//#define DEBUGPAIN
+#define PRINTVEC(v) for (int i=0; i<v.size(); ++i){cerr << setprecision(10) << v[i] << '\t';}cerr << endl << endl;
 
-#define PRINTVEC(v) for (int i=0; i<v.size(); ++i){cout << setprecision(10) << v[i] << '\t';}cout << endl << endl;
+#define PRINT_SET(SET) \
+    do { \
+        std::cerr << "Set contents:\n"; \
+        for (const auto& elem : SET) { \
+            std::cerr << " - " << elem << '\n'; \
+        } \
+    } while (0)
 
 MCMC::MCMC(){
 
@@ -20,162 +27,148 @@ MCMC::MCMC(){
 MCMC::~MCMC(){
 
 }
-pair<unordered_map<string, vector<vector<double>>>, double> MCMC::processMCMCiterations(const std::vector<MCMCiteration> MCMCiterations, int k, string num, int chain, const spidir::Tree* tr, int numofleafs) {
 
 
-    unordered_map<string, vector<vector<double>>> branchStatisticsMap;
-
-    vector<vector<double>> chainStatistic;
-
-    std::ofstream estimatesFile, branchestimateFile;
-
-
-    unsigned int chainIndex = 0;
-
-    
-    estimatesFile.open(num+"ProportionEstimates"+to_string(k)+".txt", std::ios::app | std::ios::out);
-    branchestimateFile.open(num+"BranchEstimate"+to_string(k)+".txt", std::ios::app | std::ios::out);
-    
-
-    // Check if the files are open
-    if (!estimatesFile.is_open() || !branchestimateFile.is_open()) {
-        std::cerr << "Failed to open the files." << std::endl;
-        // Handle error appropriately
+void printComparativeDetailMap(const auto &read, const auto& detailMap, const std::vector<std::string>& keys, const std::string& filePath) {
+    std::ofstream outFile(filePath, std::ios::app);  // Open file in append mode
+    if (!outFile) {
+        std::cerr << "Failed to open file at " << filePath << std::endl;
+        return;
     }
-    // Write column names to both files.
-    estimatesFile << "Source\tChain\tMean Proportion Estimate\t5% CI\tMedian Proportion Estimate\t95% CI\tEffective Sample Size\tAutocorrelation\tVariance\n";
-    branchestimateFile << "Source\tChain\tMean Branch Position\t5% CI\tMedian Branch Position\t95% CI\tEffective Sample Size\tAutocorrelation\tVariance\tEffective Sample Size for the source estimation\n";
-    double chainloglike = MCMCiterations[0].logLike;
-    for (int source = 0; source < k; ++source) {
 
-        vector<double> sourceStatistic = {};
-        vector<long double> proportionVec = {};
-        vector<long double> positionVec = {};
-        string branchName;
-        vector<double> initialPatristicDistances;
-        vector<long double> euc_distances;
-        initialPatristicDistances = vector<double>(numofleafs, 1.0);
-        
-        size_t totalIterations = MCMCiterations.size();
-        size_t startIdx = totalIterations > 500 ? totalIterations - 500 : 0;
+    for (const auto& key : keys) {
+        auto it = detailMap.find(key);
+        if (it == detailMap.end()) {
+            outFile << "Key '" << key << "' not found in detailMap." << std::endl;
+            continue;
+        }
 
-        for (size_t idx = 0; idx < totalIterations; ++idx) {
-            const auto& iteration = MCMCiterations[idx];
-        
+        const auto& baseLists = it->second;
 
-            if(iteration.logLike > chainloglike){
-                chainloglike = iteration.logLike;
+        for (const auto& baseList : baseLists) {
+            for (const auto& base : baseList) {
+                outFile << "Key: " << key
+                        << ", Read Base: " << base.readBase
+                        << ", Ref Base: " << base.referenceBase
+                        << ", Path Support: " << (base.pathSupport ? "Yes" : "No")
+                        << ", Log Likelihood: " << base.logLikelihood
+                        << std::endl;
             }
-            branchName = iteration.positions_tree[source].pos->longname;
-            if (branchStatisticsMap.find(branchName) == branchStatisticsMap.end()) {
-                // If not, initialize it with an empty vector of vectors
-                branchStatisticsMap[branchName] = vector<vector<double>>();
-            }   
-            
-           
-            proportionVec.emplace_back(iteration.proportions[source]);
-            positionVec.emplace_back(iteration.positions_tree[source].pos_branch);
-            double t1 = iteration.positions_tree[source].pos->dist * iteration.positions_tree[source].pos_branch;
-            double posonbranch = iteration.positions_tree[source].pos->dist - t1;
-
-            
-            const vector<double> patristic_distances = getPatristicDistances(tr,iteration.positions_tree[source].pos, numofleafs, posonbranch);
-            //PRINTVEC(patristic_distances)
-            long double euc_dist = calculateEuclideanDistance(patristic_distances, initialPatristicDistances);
-            euc_distances.emplace_back(euc_dist); 
-
-            
-
         }
-
-        
-        //unsorted vec
-        long double meanTheta = mean(proportionVec);
-        long double meanPos = mean(positionVec);
-        long double Theta_autoc = autocorrelation(proportionVec, 1);
-        long double Theta_ess = effectiveSampleSize(proportionVec);
-        if(Theta_ess < 100){
-            cerr << "Warning: The effective sample size for the proportion estimation of chain "<< chain << " is below 100. The estimation of the proportion for the branch " << branchName << " can not be ensured. A rerun using a higher number of iterations is recommended." << endl;
-        }
-        long double Theat_var = variance(proportionVec, meanTheta);
-        long double Pos_autoc = autocorrelation(positionVec, 1);
-        long double Pos_ess = effectiveSampleSize(positionVec);
-        //cout << "Pos vect size " << positionVec.size() << endl;
-        if(Pos_ess < 100){
-            cerr << "Warning: The effective sample size for the estimation of the branch position for chain "<< chain << " is below 100. The estimation of the position for the branch " << branchName << " can not be ensured. A rerun using a higher number of iterations is recommended." << endl;
-        }
-        long double dist_ess = effectiveSampleSize(euc_distances);
-        //cout << "euc_distances size " << euc_distances.size() << endl;
-        if(dist_ess < 100){
-            cerr << "Warning: The effective sample size for the estimation of the branch for chain "<< chain << " is below 100. The estimation of the branch " << branchName << " as a source can not be ensured." << endl;
-        }
-        long double Pos_var = variance(positionVec, meanPos);
-
-        //now we need to sort for quantiles
-        sort(positionVec.begin(), positionVec.end());
-        sort(proportionVec.begin(), proportionVec.end());
-        long double Theta_fq = getQuantile2(proportionVec, 0.05);
-        long double Theta_tq = getQuantile2(proportionVec, 0.95);
-        
-        long double Theta_median = getQuantile2(proportionVec, 0.5);
-        long double Pos_fq = getQuantile2(positionVec, 0.05);
-        long double Pos_median = getQuantile2(positionVec, 0.5);
-        long double Pos_tq = getQuantile2(positionVec, 0.95);
-
-        //estimation of autocorrelation and effective sample size. 
-        //rule of thump: higher ESS and lower correlation is good, indicating better mixing between sample. 
-        
-
-        
-        estimatesFile << branchName << '\t' << chain <<'\t' << meanTheta << '\t' << Theta_fq << '\t' << Theta_median << '\t' << Theta_tq << '\t' << Theta_ess << '\t' << Theta_autoc <<'\t' << Theat_var <<'\n';
-        branchestimateFile << branchName << '\t' << chain <<'\t' << meanPos << '\t' << Pos_fq << '\t' << Pos_median << '\t' << Pos_tq <<'\t' << Pos_ess << '\t' << Pos_autoc <<'\t' << Pos_var <<'\t'<<dist_ess<<'\n';
-        
+    }
+}
 
 
-        sourceStatistic.emplace_back(meanTheta);
-        sourceStatistic.emplace_back(Theat_var);
-        sourceStatistic.emplace_back(meanPos);
-        sourceStatistic.emplace_back(Pos_var);
+bool getRandomBool() {
+    std::random_device rd; // Obtain a random number from hardware
+    std::mt19937 gen(rd()); // Seed the generator
+    std::uniform_int_distribution<> distr(0, 1); // Define the range
+    return distr(gen) != 0;
+}
 
 
-        branchStatisticsMap[branchName].emplace_back(sourceStatistic);
+bool MCMC::is_in_pruned_set(spidir::Node* p, shared_ptr<Trailmix_struct> &dta) {
+
+if (dta->in_pruned_set.find(p->longname) != dta->in_pruned_set.end()) {
+    return true;
+}
+
+return false;
+
+}
+
+
+void MCMC::add_nodes_at_depth(spidir::Node* p, const int depth, shared_ptr<Trailmix_struct> &dta) {
+    #ifdef DEBUG
+    static std::ofstream debugFile("prune_debug.txt", std::ios::app);
+    #endif
+
+    // Base case: add the current node if the depth is less than or equal to the target depth
+    if (depth >= 0) {
+        dta->in_pruned_set.insert(p->longname);
+        if (p->parent){dta->in_pruned_set.insert(p->parent->longname);}
+        #ifdef DEBUG
+        debugFile << "Added node: " << p->longname
+                  << " at depth: " << depth
+                  << " (reason: base case)" << std::endl;
+                  if (p->parent){debugFile << " also adding parent: " << p->parent->longname << endl;}
+        #endif
     }
 
-    return make_pair(branchStatisticsMap, chainloglike);
+    // Continue exploring if depth is greater than 0
+    if (depth > 0) {
+        // Explore the parent node if it exists
+        if (p->parent) {
+            #ifdef DEBUG
+            debugFile << "Exploring parent of node: " << p->longname
+                      << " at depth: " << depth << std::endl;
+            #endif
 
+            add_nodes_at_depth(p->parent, depth - 1, dta);
+        }
 
+        // Explore children nodes if it's not a leaf
+        if (!p->isLeaf()) {
+            for (int i = 0; i < p->nchildren; ++i) {
+                spidir::Node* child = p->children[i];
+                if (child) {
+                    #ifdef DEBUG
+                    debugFile << "Exploring child " << i
+                              << " of node: " << p->longname
+                              << " at depth: " << depth << std::endl;
+                    #endif
+
+                    add_nodes_at_depth(child, depth - 1, dta);
+                } else {
+                    #ifdef DEBUG
+                    debugFile << "Child " << i
+                              << " of node: " << p->longname
+                              << " is null, skipping." << std::endl;
+                    #endif
+                }
+            }
+        } else {
+            #ifdef DEBUG
+            debugFile << "Node: " << p->longname
+                      << " is a leaf, not exploring children." << std::endl;
+            #endif
+        }
+    } else {
+        #ifdef DEBUG
+        debugFile << "Depth is 0 or less for node: " << p->longname
+                  << ", no further exploration." << std::endl;
+        #endif
+    }
 }
 
-            
+ double MCMC::calculateLogWeightedAverage(double logValueChild, double weightChild, double logValueParent, double weightParent) {
 
-void MCMC::generateNumbers(double num1) {
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
-    
-    std::normal_distribution<double> dis(num1, 0.1);
+        // Log-sum-exp trick to compute log(a + b) from log(a) and log(b)
+        double maxLogValue = std::max(logValueChild + std::log(weightChild), logValueParent + std::log(weightParent));
+        double logSumExp = maxLogValue + std::log(std::exp(logValueChild + std::log(weightChild) - maxLogValue) + std::exp(logValueParent + std::log(weightParent) - maxLogValue));
+        double logWeightSum = std::log(weightChild + weightParent);
 
-    double lower_bound = 0.00001;
-    double upper_bound = 0.999999;
+        if (std::isinf(logWeightSum)) {
+            std::cerr << "Error: Denominator is zero. Cannot compute log weighted average." << std::endl;
+            return -std::numeric_limits<double>::infinity();
+        }
 
-    do {
-        num1 = dis(gen);
-    } while (num1 <= lower_bound || num1 >= upper_bound);
+        double logWeightedAverage = logSumExp - logWeightSum;
 
-    
-}
-
+        return logWeightedAverage;
+    }
 
 
-void MCMC::updatePosition(PosTree &current_position, double move_distance, bool move_forward) {
+inline void MCMC::updatePosition(PosTree &current_position, double move_distance, bool move_forward) {
 #ifdef DEBUGMCMCPOS
     //current_position.pos_branch = 0.5;
     std::cerr << "---- Function Called ----" << std::endl;
-    
+
     // Initial validations
     std::cerr<< std::setprecision(14) << "Initial pos_branch: " << current_position.pos_branch << std::endl;
     std::cerr<< std::setprecision(14) << "Initial move_distance: " << move_distance << std::endl;
     std::cerr << std::setprecision(14)<< "Initial move_forward: " << std::boolalpha << move_forward << std::endl;
-#endif 
+#endif
     if (current_position.pos_branch < 0.0 || current_position.pos_branch > 1.0) {
         throw std::runtime_error("Error: Initial pos_branch is out of valid range.");
                                                                                 }
@@ -202,7 +195,7 @@ void MCMC::updatePosition(PosTree &current_position, double move_distance, bool 
 #ifdef DEBUGMCMCPOS
         std::cerr << "Moving Forward..." << std::endl;
 
-#endif      
+#endif
             //double updateMoveDist = abs(current_position.pos_branch - move_distance_abs);
             if (current_position.pos_branch + move_distance_abs < 1.0) {
 #ifdef DEBUGMCMCPOS
@@ -222,7 +215,7 @@ void MCMC::updatePosition(PosTree &current_position, double move_distance, bool 
 #endif
                 if (current_position.pos->children == nullptr) {
                     // This is a leaf node, no further movement is possible
-                    //current_position.pos_branch = 0.99999; 
+                    //current_position.pos_branch = 0.99999;
                     //move_distance_abs = 0.0;
                     move_forward = false;
                     continue;
@@ -238,7 +231,7 @@ void MCMC::updatePosition(PosTree &current_position, double move_distance, bool 
                 int random_index = rand() % num_children;
 #ifdef DEBUGMCMCPOS
                 cerr << "Moving from parent " << current_position.pos->longname << endl;
-#endif 
+#endif
                 current_position.pos = current_position.pos->children[random_index];
 #ifdef DEBUGMCMCPOS
                 cerr << "Moved to child " << current_position.pos->longname << endl;
@@ -254,7 +247,7 @@ void MCMC::updatePosition(PosTree &current_position, double move_distance, bool 
                 if (remaining_distance > 1.0) {
                     current_position.pos_branch = 1.0;
                     move_distance_abs = remaining_distance - 1.0;
-                    
+
 #ifdef DEBUGMCMCPOS
                     cerr << std::setprecision(14)<< "remaining distance exceeded the branch length of " << 1 << endl;
                     cerr << std::setprecision(14)<< "The new move_distance_abs is " << move_distance_abs << endl;
@@ -263,7 +256,7 @@ void MCMC::updatePosition(PosTree &current_position, double move_distance, bool 
                 } else {
 #ifdef DEBUGMCMCPOS
                     cerr << "The remaining_distance is not longer than the next branch length. Calculating next position on the branch. " << endl;
-                    cerr << std::setprecision(14)<< "remaining_distance " << remaining_distance << " next_branch_length " << next_branch_length << endl; 
+                    cerr << std::setprecision(14)<< "remaining_distance " << remaining_distance << " next_branch_length " << next_branch_length << endl;
 #endif              //current_position.pos_branch = 0.0;
                     current_position.pos_branch = remaining_distance;
                     move_distance_abs = 0.0;
@@ -310,8 +303,8 @@ void MCMC::updatePosition(PosTree &current_position, double move_distance, bool 
                     if (next_branch_length < 0.0) {
                         throw std::runtime_error("Error: next branch length cannot be negative.");
                     }
-                    continue;  
-                     
+                    continue;
+
                 }else{
                     possible_nodes.push_back(current_position.pos->parent);
 
@@ -351,7 +344,7 @@ void MCMC::updatePosition(PosTree &current_position, double move_distance, bool 
 #endif
                     }
 
-                    //setting the parent node as the new position 
+                    //setting the parent node as the new position
                     current_position.pos = current_position.pos->parent;
                     double parent_branch_length = current_position.pos->dist;
 
@@ -363,7 +356,7 @@ void MCMC::updatePosition(PosTree &current_position, double move_distance, bool 
                         current_position.pos_branch = 0.0;
                         move_distance_abs = remaining_distance - 1.0;
                         continue;
-                        
+
                     } else {
 #ifdef DEBUGMCMCPOS
                         std::cerr << "Remaining distance: " << remaining_distance << std::endl;
@@ -406,13 +399,13 @@ void MCMC::updatePosition(PosTree &current_position, double move_distance, bool 
                             throw std::runtime_error("Error: pos_branch is out of valid range after increment.");
                         }
                         move_distance_abs = 0.0;
-                    } else { // would exceed the leaf 
+                    } else { // would exceed the leaf
 #ifdef DEBUGMCMCPOS
                         std::cerr << "Insufficient distance on the current branch. Need to move to child node." << std::endl;
 #endif
                         if (current_position.pos->children == nullptr) {
                             // This is a leaf node, no further movement is possible
-                            //current_position.pos_branch = 0.99999; 
+                            //current_position.pos_branch = 0.99999;
                             //move_distance_abs = 0.0;
                             move_forward = false;
                             continue;
@@ -428,7 +421,7 @@ void MCMC::updatePosition(PosTree &current_position, double move_distance, bool 
                         int random_index = rand() % num_children;
 #ifdef DEBUGMCMCPOS
                         cerr << "Moving from parent " << current_position.pos->longname << endl;
-#endif 
+#endif
                         current_position.pos = current_position.pos->children[random_index];
 #ifdef DEBUGMCMCPOS
                         cerr << "Moved to child " << current_position.pos->longname << endl;
@@ -444,15 +437,15 @@ void MCMC::updatePosition(PosTree &current_position, double move_distance, bool 
                         if (remaining_distance > 1.0) {
                             current_position.pos_branch = 1.0;
                             move_distance_abs = remaining_distance - 1.0;
-                            
+
 #ifdef DEBUGMCMCPOS
                             cerr << std::setprecision(14)<< "remaining distance exceeded the branch length of " << 1 << endl;
                             cerr << std::setprecision(14)<< "The new move_distance_abs is " << move_distance_abs << endl;
 #endif
-                        
+
                         }
                     }
-                
+
                 }
             }
         }
@@ -460,7 +453,7 @@ void MCMC::updatePosition(PosTree &current_position, double move_distance, bool 
         std::cerr << std::setprecision(14) << "Updated move_distance_abs: " << move_distance_abs << std::endl;
         std::cerr << std::setprecision(14)<< "Updated pos_branch: " << current_position.pos_branch << std::endl;
 #endif
-        
+
     }
     if (current_position.pos_branch < 0.0 || current_position.pos_branch > 1.0) {
             throw std::runtime_error("Error: pos_branch is out of valid range after movement.");
@@ -469,21 +462,21 @@ void MCMC::updatePosition(PosTree &current_position, double move_distance, bool 
 }
 
 
-const std::vector<long double> MCMC::sample_normal_euka(std::vector<long double>& x, long double alpha) {
-    std::vector<long double> result;
-    std::vector<std::normal_distribution<long double>> dists;
+const std::vector<double> MCMC::sample_normal_euka(std::vector<double>& x, double alpha) {
+    std::vector<double> result;
+    std::vector<std::normal_distribution<double>> dists;
     static std::default_random_engine generator(std::chrono::system_clock::now().time_since_epoch().count()); // initialize with a random seed
     for (size_t i = 0; i < x.size(); ++i) {
-        long double stdev = alpha; // define alpha as a fraction of max_branch_lens
-        std::normal_distribution<long double> dist(x[i], stdev);
-        long double sample = dist(generator);
+        double stdev = alpha; // define alpha as a fraction of max_branch_lens
+        std::normal_distribution<double> dist(x[i], stdev);
+        double sample = dist(generator);
         //cerr << "SAMPLE: " << sample << endl;
-        result.emplace_back(std::max(0.0000001L, std::min(sample, alpha)));
+        result.emplace_back(std::max(0.0000001, std::min(sample, alpha)));
     }
     return result;
 }
 
-// samples the proportion of the sources 
+// samples the proportion of the sources
 std::vector<double> MCMC::sample_normal(std::vector<double>& x, double alpha) {
     constexpr double epsilon = 1e-9;
     std::vector<double> result;
@@ -518,15 +511,16 @@ std::vector<double> MCMC::sample_normal(std::vector<double>& x, double alpha) {
 
 
 
+std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams &params, std::vector<MCMCiteration> &state_t_vec, const bdsg::ODGI& graph, \
+                               const vector<vector<string>> &nodepaths, string num, shared_ptr<Trailmix_struct> &dta, bool running_trailmix, int chain) {
 
-std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams params, std::vector<MCMCiteration> state_t_vec, const bdsg::ODGI& graph, vector<vector<string>> nodepaths, string num, int n_threads, int numPaths, int chainindex, double con) {
 
     const unsigned int n_sources = params.sources.size();
     cerr << "number of sources " << n_sources << endl;
-    //cerr << "con " << con << endl;
-    
-    int total_proposals = 0;
-    int n_accept = 0;
+    if (n_sources > 10){throw runtime_error("We cannot handle this many sources");}
+
+    unsigned int total_proposals = 0;
+    unsigned int n_accept = 0;
     double acceptance_rate = 0.5;
     MCMCiteration state_t_1;
     double likelihood_t_1;
@@ -535,621 +529,545 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams par
     std::uniform_real_distribution<> dis(0.0, 1.0);
     std::vector<PosTree> current_positions(n_sources);
     std::vector<double> random_numbers(n_sources);
-    MCMCiteration state_t = initializeState(params);
-    int accept_count = 0;
+    MCMCiteration state_t = initializeState(params, dta->seed);
+    auto initial_state = state_t;
+    state_t_vec.emplace_back(initial_state);
 
-    double proposal_sd; 
-    double initSD;
+    ofstream mcmcout(num+"Result"+to_string(n_sources)+"_chain"+to_string(chain)+".mcmc");
+    std::ios_base::sync_with_stdio(false);
+    mcmcout.tie(nullptr);
 
-    if(numPaths <= 30.0){
-        initSD = 3.0;
-    }else{
-        initSD = numPaths * (3.0/30.0);
-    }
-
-    double step = (initSD - 0.1)/ (params.burn - 1);
-    double step2 = (0.1 - 1e-5)/((params.maxIter - params.burn)- 1);
-
-    ogzstream mcmcout;
-    mcmcout.open((num+"Result"+to_string(n_sources)+to_string(chainindex)+".mcmc").c_str(), ios::out);
     for (int sou = 1; sou< n_sources + 1; ++sou){
-        mcmcout << "Source_" << sou << '\t' << "Log-likelihood" << '\t' << "proportion" << '\t' << "branch_position_derived" << '\t'; 
+        mcmcout << "Source_" << sou << '\t' << "Node_" << sou << '\t' << "Loglikelihood" << '\t' << "proportion_" << sou << '\t' << "branch_position_derived_" << sou;
+        if (sou != n_sources){mcmcout << '\t';}
     }
     mcmcout << endl;
 
-    ogzstream mcmcdetail;
-
-    mcmcdetail.open((num+"Trace"+to_string(n_sources)+to_string(chainindex)+".detail.mcmc").c_str(), ios::out);
+    ofstream mcmcdetail(num+"Trace"+to_string(n_sources)+".detail.mcmc");
     for (int sou = 1; sou< n_sources + 1; ++sou){
-        mcmcdetail << "Source_" << sou << '\t' << "Log-likelihood" << '\t' << "proportion_" << sou << '\t' << "branch_position_derived_" << sou << '\t' << "Move" << '\t'; 
+        mcmcdetail << "Source_" << sou << '\t' << "Node_" << sou << '\t' << "Likelihood" << '\t' << "proportion_" << sou << '\t' << \
+                      "branch_position_derived_" << sou << '\t' << "Acceptance_prob" << '\t' << "Move";
+        if (sou != n_sources){mcmcdetail << '\t';}
     }
     mcmcdetail << endl;
 
-    for (unsigned int iteration = 0; iteration <= params.maxIter; iteration++)
-    {
-        // Ensure that 'params.burn' is less than 'params.maxIter'
-        if (params.burn >= params.maxIter) {
-            throw runtime_error("Number of brun in iteration exceedes the number of total iterations. Exiting. ");
-        }
+    for (unsigned int iteration = 0; iteration <= params.maxIter; iteration++) {
 
-        double step = (initSD - 0.1) / std::max(static_cast<unsigned int>(1), params.burn - 1);
-
-        double step2 = (0.1 - 1e-5) / std::max(static_cast<unsigned int>(1), (params.maxIter - params.burn) - 1);
-
+//{
+//#pragma omp critical
+        if (iteration % 1000 == 0){
+            cerr << "ITERATION: " << iteration << endl;
+                                  }
+//}
 
         state_t_1 = state_t;
 
-        if (iteration < params.burn){
+ get_proposal_sd(proposal_sd, acceptance_rate, iteration, params.maxIter, params.burn);
 
-             proposal_sd = std::max(1e-5, initSD - iteration * step);
-            //cerr << proposal_sd << endl;
-        }else{
-            if (iteration % 100000 == 0){
-                proposal_sd = 1;
-            }else{
-                proposal_sd = std::max(1e-5, 0.1 - (iteration - params.burn) * step2);
-            }
-            
-            //proposal_sd = 0.1;
-        }
+ srand(time(0)); // Initialize random seed
 
-        //cerr <<std::setprecision(14)<< proposal_sd << endl;
+// Choose a random component index
+unsigned int componentIndex = std::rand() % state_t_1.n_components;
 
-        if (iteration != 0){
-            
-        
+float randomFloat = 0.01 + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX/(0.99 - 0.01)));
 
+            if (state_t_1.positions_tree[componentIndex].pos->longname == "Node1"){
+                int num_children = state_t_1.positions_tree[componentIndex].pos->nchildren;
+                int random_index = rand() % num_children;
+                state_t_1.positions_tree[componentIndex].pos = state_t_1.positions_tree[componentIndex].pos->children[random_index];
+                                                                                  }
 
-            for (unsigned int i = 0; i < state_t_1.n_components; i++) {
-                
-                std::normal_distribution<double> distribution_bl(0, proposal_sd); //state_t_1.positions_tree[i].pos_branch,
-                double proposed_position = distribution_bl(gen);
-#ifdef DEBUGMCMCPOS2
-                cerr << std::setprecision(14) << "sd " << proposal_sd << endl;
-                cerr << std::setprecision(14)<<"proposed position " << proposed_position << endl;
-                cerr << std::setprecision(14)<<"state t position " << state_t.positions_tree[i].pos_branch << endl;
-                cerr << std::setprecision(14)<<"state_t_1 position " << state_t_1.positions_tree[i].pos_branch << endl;
-#endif
-                if (proposed_position < 0.0) {
-                    //if(proposed_position > 0.0){
-                        //double newP = proposed_position - state_t_1.positions_tree[i].pos_branch;
-                        //proposed_position = newP;
-#ifdef DEBUGMCMCPOS2
-                        //cerr<< std::setprecision(14) << "Moving Backwards on the same branch with positive move " << proposed_position << endl;
-#endif 
-                    //}
-    //                 if (state_t_1.positions_tree[i].pos->parent == nullptr && state_t_1.positions_tree[i].pos_branch <= 0.0000001) {
+            // Determine the mean based on the iteration
+            double proposal_mean = state_t_1.positions_tree[componentIndex].pos_branch;
+            std::normal_distribution<double> distribution_bl(proposal_mean, proposal_sd);
+            double proposed_position = distribution_bl(gen);
+            if (proposed_position < 0.0) {
+                if (state_t_1.positions_tree[componentIndex].pos->parent == nullptr) {
 
-    //                     const auto rootChildren = state_t_1.positions_tree[i].pos->children;
-    //                     std::uniform_int_distribution<int> distribution(0.0, state_t_1.positions_tree[i].pos->nchildren);
-    //                     const unsigned int selectedChildIndex = distribution(gen);
-    //                     state_t_1.positions_tree[i].pos = rootChildren[selectedChildIndex];
-    //                     double proposed_position_abs = abs(proposed_position);
-    //                     //updatePosition(state_t_1.positions_tree[i], proposed_position, true);
-    //                     state_t_1.positions_tree[i].pos_branch = proposed_position_abs;
-    // #ifdef DEBUGMCMCPOS2
-    //                     cerr<< std::setprecision(14) << "The position is at root nullptr; new pos branch is " << state_t_1.positions_tree[i].pos_branch << endl;
-    // #endif                    
-    //                 } else {
-#ifdef DEBUGMCMCPOS2
-                        cerr << "Backwards move!" << endl;
-#endif
-                        updatePosition(state_t_1.positions_tree[i], -proposed_position, false);
-#ifdef DEBUGMCMCPOS2
-                        cerr<< std::setprecision(14) << "new position on the tree (function1) " << state_t_1.positions_tree[i].pos_branch << endl;
-#endif
-                }else{
-                        /*    
+                    const auto rootChildren = state_t_1.positions_tree[componentIndex].pos->children;
+                    std::uniform_int_distribution<int> distribution(0.0, state_t_1.positions_tree[componentIndex].pos->nchildren);
+                    const unsigned int selectedChildIndex = distribution(gen);
+                    state_t_1.positions_tree[componentIndex].pos = rootChildren[selectedChildIndex];
+                    double proposed_position_abs = abs(proposed_position);
+                    state_t_1.positions_tree[componentIndex].pos_branch = proposed_position_abs;
+                } else {
+                        updatePosition(state_t_1.positions_tree[componentIndex], -proposed_position, false);
+                }
+            } else {
+                if (proposed_position > state_t_1.positions_tree[componentIndex].pos_branch) {
+                    if (state_t_1.positions_tree[componentIndex].pos->isLeaf() && state_t_1.positions_tree[componentIndex].pos_branch == 0.9999999) {
+                        continue;
+                    } else {
+                        updatePosition(state_t_1.positions_tree[componentIndex], proposed_position, true);
                     }
                 } else {
-                    if (proposed_position > state_t_1.positions_tree[i].pos_branch) {
-                        if (state_t_1.positions_tree[i].pos->isLeaf() && state_t_1.positions_tree[i].pos_branch >= 0.99999999999) {
-    #ifdef DEBUGMCMCPOS2
-                        cerr << "Hit the leaf" << endl;
-                        cerr << "branch position after hitting the leaf " << state_t_1.positions_tree[i].pos_branch << endl;
-    #endif                        
-                            //state_t_1.positions_tree[i].pos_branch = 0.999999;
-                            continue;
-                        } else {*/
-    #ifdef DEBUGMCMCPOS2
-                        cerr << "Forward move!" << endl;
-    #endif
-                            updatePosition(state_t_1.positions_tree[i], proposed_position, true);
-    #ifdef DEBUGMCMCPOS2
-                        cerr<< std::setprecision(14) << "new position on the tree (function2) " << state_t_1.positions_tree[i].pos_branch << endl;
-    #endif
-
-                        }
-    //                 } else {
-    //                     state_t_1.positions_tree[i].pos_branch = proposed_position;
-    //                     //updatePosition(state_t_1.positions_tree[i], proposed_position, false);
-    // #ifdef DEBUGMCMCPOS2
-    //                     cerr<< std::setprecision(14) << "new position on the tree " << state_t_1.positions_tree[i].pos_branch << endl;
-    // #endif
-    //                 }
-    //             }
-                if (state_t_1.positions_tree[i].pos_branch == 1.0){
-                    state_t_1.positions_tree[i].pos_branch == 0.99999999;
-                    //cerr << "The tree position is shit" << endl;
-                }
-                //cerr <<"child in loop "<< state_t_1.positions_tree[i].pos->longname << endl;
-                //cerr <<"parent in loop "<< state_t_1.positions_tree[i].pos->parent->longname << endl;
+                    state_t_1.positions_tree[componentIndex].pos_branch = proposed_position;
+                       }
             }
-        }
-        
+
         std::vector<double> tmp_theta;
         for (auto& p : state_t_1.positions_tree) {
             tmp_theta.emplace_back(p.theta);
-            
         }
 
-
-        
-     
-        tmp_theta = sample_normal(tmp_theta, 0.01);
+        tmp_theta = sample_normal(tmp_theta, 0.1);
         for (int idx = 0; idx < current_positions.size(); ++idx) {
             state_t_1.positions_tree[idx].theta = tmp_theta[idx];
-            //generateNumbers(state_t_1.positions_tree[idx].pos_branch);
         }
-
 
 
         state_t_1.proportions = tmp_theta;
         vector<string> pathNames;
         vector<string> parentpathNames;
-        for (auto & p : state_t_1.positions_tree){
 
-            pathNames.emplace_back(p.pos->longname);
-            //cerr << "first pathNames " << p.pos->longname << endl; 
-            
+        if (state_t_1.positions_tree.empty()){throw runtime_error("TREE POSITIONS ARE EMPTY");}
+
+const int max_prune_iterations = 100000;
+bool pruned = false; // Initially, we do not know if it's pruned, so set to false
+unsigned int iteration_counter = 0; // Ensure iteration_counter is defined outside the loop
+set<int> depths_used;
+
+if (dta->depth != -1){
+
+while (!pruned && iteration_counter < max_prune_iterations) {
+
+ pruned = true;
+
+    // Check if all positions are pruned
+    for (auto &p : state_t_1.positions_tree) {
+        if (!is_in_pruned_set(p.pos, dta)) {
+            pruned = false; // Found an unpruned position
+        }
+    }
+
+     // Check if all positions are pruned
+    for (auto &p : state_t_1.positions_tree) {
+        if (p.pos->parent){
+           if (!is_in_pruned_set(p.pos->parent, dta)) {
+               pruned = false; // Found an unpruned position
+           }
+                          }
+    }
+
+    // Exit the while loop if all positions are pruned
+    if (pruned) {
+        break;
+    }
+
+    // If not all positions are pruned, modify them
+    for (auto &p : state_t_1.positions_tree) {
+        bool random_bool = getRandomBool();
+        double proposal_mean = p.pos_branch;
+        std::normal_distribution<double> distribution_bl(proposal_mean, proposal_sd);
+        double proposed_position = distribution_bl(gen);
+
+        if (proposed_position < 0.0) {
+            proposed_position *= -1;
+            //std::cerr << "Negative position adjusted: " << proposed_position << std::endl;
+        }
+
+        updatePosition(p, proposed_position, random_bool);
+        //std::cerr << "Position updated: " << proposed_position << std::endl;
+    }
+
+    iteration_counter++; // Increment at the end of each iteration
+
+    if (iteration_counter == max_prune_iterations) {
+        //std::cerr << "MAX PRUNE ITERATIONS REACHED. Proceeding with current positions." << std::endl;
+    }
+}
+
+    // Check if all positions are pruned
+    for (auto &p : state_t_1.positions_tree) {
+        //if (!is_in_pruned(p.pos, dta->depth, dta, depths_used_placeholder)) {
+         if (!is_in_pruned_set(p.pos, dta)) {
+            pruned = false; // Found an unpruned position
+          }
+
+         if (p.pos->parent){
+             if(!is_in_pruned_set(p.pos->parent, dta)){
+                 pruned = false;
+             }
+         }
+    }
+
+}
+
+         for (auto & p : state_t_1.positions_tree){
+                pathNames.emplace_back(p.pos->longname);
+
             if (p.pos->parent != nullptr) {
                 parentpathNames.emplace_back(p.pos->parent->longname);
 
             }else{
+                //cerr << "placing back parent: " << p.pos->longname << endl;
+                 if (p.pos->longname == ""){
+                cerr << "Node number: " << p.pos->name << endl;
+                throw runtime_error("Longname is empty 2");
+                                           }
                 parentpathNames.emplace_back(p.pos->longname);
             }
         }
-        
-#ifdef DEBUGMCMC
-        cerr << "state_t_1.proportions " << state_t_1.proportions[0] << " " << state_t_1.proportions[1] << endl;
-        cerr << "pathNames " << pathNames[0] << " " << pathNames[1] << endl;
-#endif
 
-#ifdef DEBUGPAIN
-
-        //state_t_1.positions_tree[0].pos_branch = 0.9999;
-        //state_t_1.positions_tree[0].pos_branch = 1 - 0.9999;
-
-        //pathNames[0] = "N3Ursidae";
-        //pathNames[0] = "N4Ursidae";
-        //pathNames[0] = "N10Ursidae";
-
-        
-        //cerr << pathNames[0] << endl;
-        int mismatch = 0;
-        int mismatchP = 0;
-        int unsup = 0;
-        int unsupP = 0;
-
-        cerr << "Calculating log likelihood for child " << pathNames[0] << " at branch position " << state_t_1.positions_tree[0].pos_branch << endl;
-        cerr << "Calculating log likelihood for parent" << parentpathNames[0] << " at branch position " << 1- state_t_1.positions_tree[0].pos_branch << endl;
-#endif
-
+        unsigned int read_counter=0;
         double logLike = 0.0;
-        #pragma omp parallel for num_threads(n_threads) reduction(+:logLike)
+
+        #pragma omp parallel for num_threads(dta->n_threads) reduction(+:logLike)
         for (auto read : *(params.align))
-        {   
-            
-            double readLogLike = 0.0;
+        {
+            read_counter++;
+            bool safe=true;
+
+            double readLogLike =  0.0;
             double readLogLikeP = 0.0;
-            // single source 
+
+////////////////////////////////////////////////////////////// SINGLE SOURCE //////////////////////////////////////////////////////////
+
             if (pathNames.size() == 1)
             {
-                int counter = 0;
-                if (state_t_1.positions_tree[0].pos_branch == 1.0){
-                    state_t_1.positions_tree[0].pos_branch == 0.9999999999;
-                }
-                // getting the proportion of t:
-                double t = 0.0;
-                t = state_t_1.positions_tree[0].pos->dist;
-                if (t == 0.0){ //this will only happen at the root node. This node does not have a branch length because we have an unrooted tree.
-                    t = 0.00001;
-                }
-                double t1 = state_t_1.positions_tree[0].pos_branch * t;
-                double t2 = t - t1;
-                
-#ifdef DEBUGPAIN
-                cerr << "Sequence " << read->name << " " << read->seq << endl;
-                cerr << "pathName " << pathNames[0] << endl;
-                cerr << "Size of vector at key '" << pathNames[0] << "': " << read->detailMap[pathNames[0]].size() << endl;
-                if (read->detailMap.find(pathNames[0]) != read->detailMap.end()){
-                    cerr << "Found it " << endl;
-                }else{
-                    cerr << "can't find it " << endl;
-                }
-#endif
-                for(int basevec = 0; basevec < read->detailMap[pathNames[0]].size(); ++basevec)
-                {
-                    //cerr << "I enter the loop 1" << endl;
-                    for (int base = 0; base < read->detailMap[pathNames[0]][basevec].size(); ++base)
-                    {
-#ifdef DEBUGPAIN
-                        cerr << "I enter the loop 2" << endl;
-                         cerr << "read "<< read->detailMap[pathNames[0]][basevec][base].readBase << " reference " << read->detailMap[pathNames[0]][basevec][base].referenceBase << endl;
-#endif
-                        if (read->detailMap[pathNames[0]][basevec][base].pathSupport)
-                        {
-                            counter++;
-                            readLogLike += computeBaseLogLike(read, params, basevec, base, pathNames[0], t2, con);
+                const double t = state_t_1.positions_tree[0].pos->dist;
+                const double t1 = state_t_1.positions_tree[0].pos_branch * t;
+                const double t2 = t - t1;
 
-                            
-                            
-#ifdef DEBUGPAIN
-                            
-                            if (read->detailMap[pathNames[0]][basevec][base].readBase != read->detailMap[pathNames[0]][basevec][base].referenceBase){
-                                mismatch++;
-                                cerr << "Mismatch ? " << read->detailMap[pathNames[0]][basevec][base].readBase << " reference " << read->detailMap[pathNames[0]][basevec][base].referenceBase << endl;
-                            }
-                            if (isnan(readLogLike) || isnan(readLogLikeP)){
-                                cerr << "broke in computation for path" << endl;
-                            }
-#endif
-                        }
-                        else
-                        {
-                            counter++;
-                            readLogLike += read->detailMap[pathNames[0]][basevec][base].logLikelihood;
-                            
-#ifdef DEBUGPAIN
-                            
-                            if (read->detailMap[pathNames[0]][basevec][base].readBase != read->detailMap[pathNames[0]][basevec][base].referenceBase){unsup++;}
-                            if (isnan(readLogLike) || isnan(readLogLikeP)){
-                                cerr << "broke in accessing pre calc path " << endl;
-                            }
-#endif
-                        }
-                        if(read->detailMap[parentpathNames[0]][basevec][base].pathSupport)
-                        {
-                            counter++;
-                            readLogLikeP += computeBaseLogLike(read, params,basevec, base, parentpathNames[0], t1, con);
+                bool loopentered=false;
+
+if (read->detailMap.find(pathNames[0]) == read->detailMap.end()) {
+    cerr << "Missing key in detailMap for path: " << pathNames[0] << endl;
+    throw runtime_error("Missing key");
+} else {
+    int lc = 0;
+    for (unsigned int basevec = 0; basevec < read->detailMap[pathNames[0]].size(); ++basevec) {
+        for (int base = 0; base < read->detailMap[pathNames[0]][basevec].size(); ++base) {
+            loopentered = true;
+            ++lc;
+            if (read->detailMap[pathNames[0]][basevec][base].pathSupport) {
+                double mutationLogLikelihood = computeBaseLogLike(dta, read, params, basevec, base, pathNames[0], t2, t, dta->cont_mode);
+                 readLogLike += read->detailMap[pathNames[0]][basevec][base].logLikelihood + mutationLogLikelihood;
+            } else {
+                 readLogLike += read->detailMap[pathNames[0]][basevec][base].logLikelihood;
+            }
+        }
+    }
+}
+
+if (read->detailMap.find(parentpathNames[0]) == read->detailMap.end()) {
+    cerr << "Missing key in detailMap for parent path: " << parentpathNames[0] << endl;
+    throw runtime_error("Missing key");
+} else {
+    int plc = 0;
+    for (unsigned int basevec = 0; basevec < read->detailMap[parentpathNames[0]].size(); ++basevec) {
+        for (int base = 0; base < read->detailMap[parentpathNames[0]][basevec].size(); ++base) {
+            ++plc;
+            if (read->detailMap[parentpathNames[0]][basevec][base].pathSupport) {
+                double mutationLogLikelihood = computeBaseLogLike(dta, read, params, basevec, base, parentpathNames[0], t1, t, dta->cont_mode);
+                readLogLikeP += read->detailMap[parentpathNames[0]][basevec][base].logLikelihood + mutationLogLikelihood;
+            } else {
+                readLogLikeP += read->detailMap[parentpathNames[0]][basevec][base].logLikelihood;
+            }
+        }
+    }
+}
+
+// Apply bounds to readLogLikeP
+const double minLogValue = log(0.0000001); // Lower bound to prevent extremely small values
+const double maxLogValue = log(0.9999999); // Upper bound
+
+if (readLogLikeP > maxLogValue) {
+    readLogLikeP = maxLogValue;
+} else if (readLogLikeP < minLogValue) {
+    readLogLikeP = minLogValue;
+}
 
 
-#ifdef DEBUGPAIN
-                            
-                            if (read->detailMap[parentpathNames[0]][basevec][base].readBase != read->detailMap[parentpathNames[0]][basevec][base].referenceBase)
-                                {mismatchP++;}
-                            if (isnan(readLogLike) || isnan(readLogLikeP)){
-                                cerr << "broke in computation for parent path" << endl;
-                            }
-#endif
-                        }
-                        else
-                        {
-                            counter++;
-                            readLogLikeP += read->detailMap[parentpathNames[0]][basevec][base].logLikelihood;
-                            
-                           
-#ifdef DEBUGPAIN
-                            if (read->detailMap[pathNames[0]][basevec][base].readBase != read->detailMap[pathNames[0]][basevec][base].referenceBase){unsupP++;}
-                            
-                            if (isnan(readLogLike) || isnan(readLogLikeP)){
-                                cerr << "broke in accessing pre calc parent path" << endl;
-                            }
-#endif
-                        }
+        // Compute intermediate values as before
+        double interc2 = log(state_t_1.positions_tree[0].pos_branch) + readLogLike;
+        double interp2 = log(1 - state_t_1.positions_tree[0].pos_branch) + readLogLikeP;
+        double max_val = std::max(interc2, interp2);
+        double inter = max_val + log(exp(interc2 - max_val) + exp(interp2 - max_val));
 
-//#ifdef DEBUGPAIN
+        logLike += inter;
 
-                        {
-                        #pragma omp critical
-                            //cerr << pathNames[0] << endl;
-                        if (readLogLike > 0 || std::isnan(readLogLike) || std::isinf(readLogLike) || readLogLikeP > 0 || std::isnan(readLogLikeP) || std::isinf(readLogLikeP)){
+if (!pruned && dta->depth != -1){logLike = -std::numeric_limits<double>::max();}
 
-
-                            cerr << std::setprecision(14)<< "readLogLike " << readLogLike << " readLogLikeP " << readLogLikeP << endl;
-                            cerr << "path " << pathNames << " parent " << parentpathNames << endl;
-                            cerr << std::setprecision(14)<< "t " << t << " t1 " << t1 << " t2 " << t2 << endl;
-                            cerr << std::setprecision(14)<< "pre calc log like " << read->detailMap[pathNames[0]][basevec][base].logLikelihood << endl;
-                            cerr << std::setprecision(14)<< "parent pre calc log like " << read->detailMap[parentpathNames[0]][basevec][base].logLikelihood << endl;
-                            double test = computeBaseLogLike(read, params,basevec, base, pathNames[0], t2, t2); 
-                            double what = computeBaseLogLike(read, params,basevec, base, parentpathNames[0], t1, t1);
-                            cerr << std::setprecision(14)<< "path calc " << test << endl;
-                            cerr << std::setprecision(14)<< "parent path calc " << what << endl;
-                            throw std::runtime_error("Error: Log-likelihood is nan.");
-                        }}
-
-//#endif
-
-                        
-                    }
-                }
-                
-
-                double interProp = calculateLogWeightedAverage(readLogLike, state_t_1.positions_tree[0].pos_branch, readLogLikeP, (1 - state_t_1.positions_tree[0].pos_branch));
-
-#ifdef DEBUGPAIN
-                
-                //cerr << std::setprecision(14)<< "prop for child " <<  readLogLikeW << " at position " << state_t_1.positions_tree[0].pos_branch <<  " prop for parent " <<  readLogLikePW << " at position " << 1 - state_t_1.positions_tree[0].pos_branch << endl;
-                cerr << std::setprecision(14)<< "weighted average log " << interProp << endl;
-                cerr << std::setprecision(14)<< "log for child " <<  readLogLike << " at position " << state_t_1.positions_tree[0].pos_branch <<  " log for parent " <<  readLogLikeP << " at position " << 1 - state_t_1.positions_tree[0].pos_branch << endl;
-                
-#endif
-
-                logLike += interProp;
-                // if (counter != (read->seq.size() * 2)){
-                //     cerr << "Counter counted " << counter << " the read size is " << read->seq.size() * 2 << endl;
-                //     throw runtime_error("The MCMC did not go throug all necessary bases");
-                // }
-                //logLike += (readLogLike + log(state_t_1.positions_tree[0].pos_branch));
-               
-                
-                    
-                    
-#ifdef DEBUGMCMC
-                cerr << "intermediate logLike " << logLike << endl;
-                cerr << "read->pathMap[parentpathNames[0]] " << read->pathMap[parentpathNames[0]] << endl;
-                cerr << "Position on Branch " << state_t_1.positions_tree[0].pos_branch << endl;
-#endif
+//cerr << "LL: " << logLike << "  p: " << exp(logLike) << endl;
 
             }
+
+/////////////////////////////////////////////////////////////// END SINGLE SOURCE //////////////////////////////////////////////////////
+
             else
             {
-                int counter = 0;
-                double inter = -std::numeric_limits<double>::infinity(); 
-                for (int y = 0; y < pathNames.size(); ++y)
-                {
-                    double readLogLike = 0.0;
-                    double readLogLikeP = 0.0;
-                    double t = 0.0;
-                    t = state_t_1.positions_tree[y].pos->dist;
-                    if (t == 0.0){ //this will only happen at the root node. This node does not have a branch length because we have an unrooted tree.
-                        t = 0.00001;
-                    }
-                    double t1 = state_t_1.positions_tree[y].pos_branch * t;
-                    double t2 = t - t1;
-                    if (state_t_1.positions_tree[y].pos_branch == 1.0){
-                        state_t_1.positions_tree[y].pos_branch == 0.99999;
-                    }
-                    //#pragma omp parallel for num_threads(15) private(read)
-                    for (int basevec = 0; basevec < read->detailMap[pathNames[y]].size(); ++basevec){
+////////////////////////////////////////////////////////////// BEGIN MULTI SOURCE ///////////////////////////////////////////////////////
 
-                        for (int base = 0; base < read->detailMap[pathNames[y]][basevec].size(); ++base)
-                        {              
-                            
-                            if (read->detailMap[pathNames[y]][basevec][base].pathSupport)
-                            {
-                                counter++;
-                                readLogLike += computeBaseLogLike(read, params,basevec, base, pathNames[y], t2, con);//;
-                                
-                                
-                            }
-                            else
-                            {
-                                counter++;
-                                readLogLike += read->detailMap[pathNames[y]][basevec][base].logLikelihood;    
-                            }
-                            if(read->detailMap[parentpathNames[y]][basevec][base].pathSupport)
-                            {
-                                counter++;
-                                readLogLikeP += computeBaseLogLike(read, params,basevec, base, parentpathNames[y], t1, con); //
-                                
-                                
-                            }
-                            else
-                            {
-                                counter++;
-                                readLogLikeP += read->detailMap[parentpathNames[y]][basevec][base].logLikelihood;
-                            }
+                double inter = -std::numeric_limits<double>::infinity();
 
-//#ifdef DEBUGPAIN
+//////////////////////////////////////////////// CONT MODE ///////////////////////////////////////
 
-                            if (readLogLike > 0.0 || std::isnan(readLogLike) || std::isinf(readLogLike) || readLogLikeP > 0.0 || std::isnan(readLogLikeP) || std::isinf(readLogLikeP)){
-                            //cerr << pathNames[y] << endl;
-                            //if (parentpathNames[y] == "NC_062361.1_Hippotragus_niger_roosevelti_voucher_ZMUC_H.R.Siegismund_1646_haplogroup_Eastern_1_mitocho" || pathNames[y] == "NC_062361.1_Hippotragus_niger_roosevelti_voucher_ZMUC_H.R.Siegismund_1646_haplogroup_Eastern_1_mitocho"){
-                                cerr << std::setprecision(14)<<"state_t_1.proportions[y]" << state_t_1.proportions[y] << endl;
-                                cerr << std::setprecision(14)<< "readLogLike " << readLogLike << " readLogLikeP " << readLogLikeP << endl;
-                                cerr << "path " << pathNames << " parent " << parentpathNames << endl;
-                                cerr << std::setprecision(14)<< "t " << t << " t1 " << t1 << " t2 " << t2 << endl;
-                                cerr << std::setprecision(14)<< "pre calc log like " << read->detailMap[pathNames[y]][basevec][base].logLikelihood << endl;
-                                cerr << std::setprecision(14)<< "parent pre calc log like " << read->detailMap[parentpathNames[y]][basevec][base].logLikelihood << endl;
-                                double test = computeBaseLogLike(read, params,basevec, base, pathNames[y], t2, con); 
-                                double what = computeBaseLogLike(read, params,basevec, base, parentpathNames[y], t1, con);
-                                cerr << std::setprecision(14)<< "path calc " << test << endl;
-                                cerr << std::setprecision(14)<< "parent path calc " << what << endl;
+if (pathNames.size() == 2) {
 
-                                throw runtime_error("Problem in the likelihood compuation! Intermediate log likelihood is -nan, -inf or positive.");}
-//#endif
+    // Handling the specific case when there are exactly two sources and cont_mode is true
+    for (unsigned int y = 0; y < pathNames.size(); ++y) {
+        double readLogLike = 0.0;
+        double readLogLikeP = 0.0;
+        double t = state_t_1.positions_tree[y].pos->dist;
+        // Handle special cases for t
+        if (t == 0.0) { t = 0.00000001; }
+        double t1 = state_t_1.positions_tree[y].pos_branch * t;
+        double t2 = t - t1;
+        if (state_t_1.positions_tree[y].pos_branch == 1.0) {
+            state_t_1.positions_tree[y].pos_branch = 0.999999;
+        }
 
-                        }
-                            
-                            
-                    }
-                    double interc2 = log(state_t_1.positions_tree[y].pos_branch) + readLogLike;
-                    //cerr << "interc2 " << interc2 << endl;
-                    double interp2 = log((1 - state_t_1.positions_tree[y].pos_branch)) + readLogLikeP;
-                    //cerr << "interp2 " << interp2 << endl;
-                    //double inter2 = calculateLogWeightedAverage(readLogLike, state_t_1.positions_tree[y].pos_branch, readLogLikeP,(1 - state_t_1.positions_tree[y].pos_branch));
-                    //cerr << "inter2 " << inter2 << endl;
-                    double inter2 = oplusnatl(interc2, interp2);
-                    inter = oplusInitnatl(inter , (inter2 + log(state_t_1.proportions[y])));
-                    //cerr << "inter " << inter << endl;
+auto itPath = read->detailMap.find(pathNames[y]);
 
-                }
-                
-                
-                logLike += inter;
-                //cerr << "Increasing logLike " << logLike << endl;
-                //cerr << "Total number of bases " << counter << endl;
-                // if (counter != (read->seq.size() * 2)){
-                //     cerr << "Counter counted " << counter << " the read size is " << read->seq.size()*2 << endl;
-                //     throw runtime_error("The MCMC did not go throug all necessary bases");
-                // }
 
+int lc = 0;
+for (unsigned int basevec = 0; basevec < read->detailMap[pathNames[y]].size(); ++basevec) {
+    // Pre-check to ensure the key exists before accessing its value
+
+    if (itPath == read->detailMap.end()) {
+        cerr << "Missing key in detailMap: " << pathNames[y] << endl;
+        break; // Exit the loop if the key is missing
+    }
+
+        for (unsigned int base = 0; base < itPath->second[basevec].size(); ++base) {
+    ++lc;
+
+    double logLikelihoodValue = (dta->is_ancient_vec[y] && dta->cont_mode) ?
+                                itPath->second[basevec][base].logLikelihood :
+                                itPath->second[basevec][base].logLikelihoodNoDamage;
+
+    if (itPath->second[basevec][base].pathSupport) {
+        // When path support is true, use the Markov logic (mutation -> damage)
+        double mutationLogLikelihood = computeBaseLogLike(dta, read, params, basevec, base, pathNames[y], t2, t, dta->cont_mode);
+
+        // Combine mutation and damage (if ancient)
+        readLogLike += mutationLogLikelihood + logLikelihoodValue;
+    } else {
+        // When path support is not true, just use the precomputed log likelihood
+        readLogLike += logLikelihoodValue;
+    }
+  }
+}
+
+// Apply bounds to readLogLikeP
+const double minLogValue = log(0.0000000001); // Lower bound to prevent extremely small values
+const double maxLogValue = log(0.9999999999); // Upper bound
+
+if (readLogLike > maxLogValue) {
+    readLogLike = maxLogValue;
+} else if (readLogLike < minLogValue) {
+    readLogLike = minLogValue;
+}
+
+auto itParentPath = read->detailMap.find(parentpathNames[y]);
+
+
+if (itParentPath == read->detailMap.end()) {
+    cerr << "Missing key in detailMap: " << parentpathNames[y] << endl;
+} else {
+    for (unsigned int basevec = 0; basevec < itParentPath->second.size(); ++basevec) {
+        for (unsigned int base = 0; base < itParentPath->second[basevec].size(); ++base) {
+
+            double parentLogLikelihoodValue = (dta->is_ancient_vec[y] && dta->cont_mode) ?
+                                              itParentPath->second[basevec][base].logLikelihood :
+                                              itParentPath->second[basevec][base].logLikelihoodNoDamage;
+
+            if (itParentPath->second[basevec][base].pathSupport) {
+                // When path support is true, use the Markov logic (mutation -> damage)
+                double mutationLogLikelihood = computeBaseLogLike(dta, read, params, basevec, base, parentpathNames[y], t1, t, dta->cont_mode);
+
+//cerr << "damageLogLikelihood with/without: " << itParentPath->second[basevec][base].logLikelihood << "\t" \
+ //                                            << itParentPath->second[basevec][base].logLikelihoodNoDamage << \
+//<< "read/ref: " << itPath->second[basevec][base].readBase << "\t" << itPath->second[basevec][base].referenceBase << endl;
+
+                // Combine mutation and damage (if ancient)
+                readLogLikeP += mutationLogLikelihood + parentLogLikelihoodValue;
+            } else {
+                // When path support is not true, just use the precomputed log likelihood
+                readLogLikeP += parentLogLikelihoodValue;
+            }
+        }
+    }
+}
+
+
+if (readLogLikeP > maxLogValue) {
+    readLogLikeP = maxLogValue;
+} else if (readLogLikeP < minLogValue) {
+    readLogLikeP = minLogValue;
+}
+
+        // Compute intermediate values as before
+        double interc2 = log(state_t_1.positions_tree[y].pos_branch) + readLogLike;
+        double interp2 = log(1 - state_t_1.positions_tree[y].pos_branch) + readLogLikeP;
+        double inter2 = oplusnatl(interc2, interp2);
+        auto intersum = inter2 + log(state_t_1.proportions[y]);
+        inter = oplusInitnatl(inter, intersum);
+
+if (!pruned && dta->depth != -1){logLike = -std::numeric_limits<double>::max();}
+
+    }
+    logLike += inter;
+
+}
+                 //////////////////////////////////////// END CONT MODE /////////////////////////////////////////////////////////
+}
+//////////////////////////////////////////////////////////  END MULTI SOURCE ///////////////////////////////////////////////////////////////////////
 
             }
+//////////////////////////////////////////////////////////  END LOOP OVER READS ///////////////////////////////////////////////////////////////////////
 
-
-            
-        }
-
-#ifdef DEBUGPAIN
-        cerr << std::setprecision(14) << "Log likelihood " << logLike << endl;
-
-        cerr << "Path name child " << pathNames[0] << " Pathname parent " << parentpathNames[0] << endl;
-        cerr << "Path name child 2 " << pathNames[1] << " Pathname parent 2" <<parentpathNames[1] << endl;
-
-
+#ifdef VERBOSE_MCMC
+         //if (logLike >= 0.0){throw runtime_error("SINGLE SOURCE SHOULDNT HAPPEN");}
+         if (iteration % 100 == 1){
+            cerr << endl;
+            cerr << setprecision(16) << "proposal SD: " << proposal_sd << "  acceptance rate: " << acceptance_rate << endl;
+            cerr << "proposed log lik: " << setprecision(16) << logLike << "      current:  " << state_t_1.logLike << endl;
+            for (auto & p : state_t_1.positions_tree){
+                cerr << "BEST SOURCE: " << dta->originalPathNames[p.pos->longname] << " proportion: " << p.theta << "  pos on branch: " << p.pos_branch << endl;
+                                                   }
+                                  }
 #endif
-        
-        bool initialized=false;
-        vector<double> initialPatristicDistances;
 
-        // This should be done once before the loop starts, at the place where initialPatristicDistances is first accessible.
-        if (!initialized) {
-            initialPatristicDistances = vector<double>(15, 1.0);
-            initialized = true;
-        }
         likelihood_t_1 = logLike;
-#ifdef DEBUGMCMC
-        cerr << "logLike " << likelihood_t_1 << endl;
-#endif
         state_t_1.logLike = likelihood_t_1;
-
-        double acceptance_prob = (state_t_1.logLike - state_t.logLike > 0) ? 1.0 : exp(state_t_1.logLike - state_t.logLike);
-        double u = dis(gen);
-        
+        double acceptance_prob = (state_t_1.logLike - state_t.logLike > 0) ? 1.0 : exp((state_t_1.logLike - state_t.logLike));
+        //acceptance_prob = max(acceptance_prob, 0.00001);
+        //acceptance_prob = min(acceptance_prob, 0.99999);
+        const double u = dis(gen);
 
         if (u <= acceptance_prob || iteration == 0) {
 
-            for (auto p : state_t_1.positions_tree){
-                mcmcdetail << std::setprecision(14) << p.pos->longname  << "\t" << state_t_1.logLike << '\t' << p.theta << '\t' <<  p.pos_branch << '\t' << "accepted" << '\t';
-
-            }
-            mcmcdetail << endl;
-            
-             
             if (iteration > params.burn){
-                accept_count++;
-                for (auto & p : state_t.positions_tree){
-                    
-                    mcmcout << setprecision(14) << p.pos->longname << '\t' << state_t.logLike << '\t' << p.theta << '\t' <<  p.pos_branch << '\t';
+                int source_counter=0;
+                for (auto & p : state_t_1.positions_tree){
+
+                    mcmcout << setprecision(14) << dta->originalPathNames[p.pos->longname] << '\t' << p.pos->name  << '\t' << state_t.logLike << '\t' << p.theta << '\t' << p.pos_branch;
+                    mcmcdetail << std::setprecision(14) << dta->originalPathNames[p.pos->longname]  << '\t' << p.pos->name  << '\t' << state_t_1.logLike << '\t' << p.theta << \
+                                                   '\t' <<  p.pos_branch << '\t' << acceptance_prob << '\t' << "accepted";
+
+                    source_counter++;
+
+                    if (source_counter < state_t.positions_tree.size()){mcmcdetail << '\t'; mcmcout << '\t';}
+
                 }
-                state_t_vec.emplace_back(state_t);
                 mcmcout << endl;
-                
-#ifdef DEBUGMCMC        
-                cerr << std::setprecision(16) << "\t" << state_t.logLike << '\t' << "proposal sd" <<  '\t' << proposal_sd << '\t' << acceptance_rate << endl;
-#endif
+                mcmcdetail << endl;
             }
-                                                   
 
             n_accept++;
             total_proposals++;
             state_t = state_t_1;
-            
+            if (iteration >= params.burn) {
+            state_t_vec.emplace_back(state_t_1);
+                                          }
         } else {
 
-            for (auto p : state_t_1.positions_tree){
-                mcmcdetail << std::setprecision(14) << p.pos->longname  << "\t" << state_t_1.logLike << '\t' << p.theta << '\t' <<  p.pos_branch << '\t'<< "rejected" << '\t';
+            if (iteration > params.burn) {
+    int total_positions = state_t.positions_tree.size();
 
-            }
-            mcmcdetail << endl;
-            if (iteration > params.burn)
-            {
-#ifdef DEBUGMCMC        
-            cerr << "Rejected Log likelihood " << state_t_1.logLike << "  Current: " << state_t.logLike << "  Proposal SD: " << proposal_sd << endl;
-#endif
-           for (auto & p : state_t.positions_tree){
-                mcmcout << setprecision(14) << p.pos->longname << '\t' << state_t.logLike << '\t' << p.theta << '\t' <<  p.pos_branch << '\t';
-#ifdef DEBUGMCMC
-                cerr << "proposal sd: " << proposal_sd << endl;
-                cerr << "Current sources: " << std::setprecision(16) << (p.pos->longname.size() < 65 ? p.pos->longname : p.pos->longname.substr(0, 65)) \
-                                         << p.pos->name << "  accept rate: " << acceptance_rate << " proportions " << state_t_1.proportions[0] << '\t' << state_t_1.proportions[1] <<endl;
-#endif
-                }
-                mcmcout << endl;
+    // Output for current state's positions
+    for (auto &p : state_t.positions_tree) {
+        mcmcout << std::setprecision(14) << dta->originalPathNames[p.pos->longname] << '\t' << p.pos->name << '\t'
+                << state_t.logLike << '\t' << p.theta << '\t' << p.pos_branch;
 
-                state_t_vec.emplace_back(state_t);
-             }
-                
+        if (&p != &state_t.positions_tree.back()) mcmcout << '\t'; // No tab after last element
+    }
+    mcmcout << std::endl;
 
-                                          
+    // Output for previous state's positions
+    for (auto &p : state_t_1.positions_tree) {
+        mcmcdetail << std::setprecision(14) << dta->originalPathNames[p.pos->longname] << '\t'
+                   << p.pos->name << '\t' << state_t_1.logLike << '\t'
+                   << p.theta << '\t' << p.pos_branch << '\t' << acceptance_prob << '\t' << "rejected";
+
+        if (&p != &state_t_1.positions_tree.back()) mcmcdetail << '\t'; // No tab after last element
+    }
+    mcmcdetail << std::endl;
+}
 
             total_proposals++;
         }
 
-        //get_proposal_sd(acceptance_rate, iteration, params.maxIter);
         acceptance_rate = static_cast<double>(n_accept) / total_proposals;
-        //cerr << "acception rate " << acceptance_rate << endl;
     }
 
-    return state_t_vec;
+//for (auto & p : state_t.positions_tree){
+//    if (p.pos->longname != ""){
+//        dta->paths_to_surject.emplace_back(p.pos->longname);
+//                              }
+//}
+
+if (state_t_vec.empty()){
+cerr << "State_t_vec is empty!" << endl;
+//throw runtime_error("State_t_vec is empty!");
+}
+
+return state_t_vec;
 
 }
 
 
-
-
-//////////////// START EUKA MCMC ///////////////////////////////////
 // function to generate the proposal vector for the MCMC runs
-const vector<long double> MCMC::generate_proposal(vector<long double> &current_vec, const double &alpha, const bool branch_pos){
-	// checking that vector sums up to 1
+const vector<double> MCMC::generate_proposal(vector<double> &current_vec, const double &alpha, const bool branch_pos){
+        // checking that vector sums up to 1
 
-	long double check = 0.0;
-	for (size_t p = 0; p<current_vec.size(); p++){
+        double check = 0.0;
+        for (size_t p = 0; p<current_vec.size(); p++){
 #ifdef DEBUGGENERATEVEC
-		cerr << current_vec.at(p) << endl;
+                cerr << current_vec.at(p) << endl;
 #endif
-		check += current_vec.at(p);
-	}
+                check += current_vec.at(p);
+        }
 #ifdef DEBUGGENERATEVEC
-	cerr << "check "<< check << endl;
+        cerr << "check "<< check << endl;
 #endif
-	long double lower = 0.99;
-	long double upper = 1.01;
+        double lower = 0.99;
+        double upper = 1.01;
 
 
 #ifdef DEBUGGENERATEVEC
-	for (const auto &element:current_vec){
+        for (const auto &element:current_vec){
         cerr << "Current vec before log: "<< element << endl;
     }
 #endif
 
         //if(!branch_pos){assert(check > lower && check < upper);}
 
-	vector <long double> current_vec_log;
-	// transform vector into log space.
-	for (size_t q = 0; q<current_vec.size(); q++){
-		current_vec_log.emplace_back(log(current_vec.at(q)));
+        vector <double> current_vec_log;
+        // transform vector into log space.
+        for (size_t q = 0; q<current_vec.size(); q++){
+                current_vec_log.emplace_back(log(current_vec.at(q)));
 
-	}
+        }
 #ifdef DEBUGGENERATEVEC
-	for (const auto &element:current_vec_log){
+        for (const auto &element:current_vec_log){
         cerr << "Current vec after log: "<< element << endl;
 
     }
 #endif
     // generate random number generator
-	std::random_device rd;
-	std::mt19937 g(rd());
-	// looping through the vector of log transformed distributions.
-	//For each element we will sample from a normal distribution to get a new draw.
-        vector<long double> projected_vec;
+        std::random_device rd;
+        std::mt19937 g(rd());
+        // looping through the vector of log transformed distributions.
+        //For each element we will sample from a normal distribution to get a new draw.
+        vector<double> projected_vec;
 
         if (!branch_pos) {
 
-        vector<long double> proposal_vec;
-	for (long double element:current_vec_log){
-		std::normal_distribution<long double> d{element,alpha};
+        vector<double> proposal_vec;
+        for (double element:current_vec_log){
+                std::normal_distribution<double> d{element,alpha};
 
 #ifdef DEBUGGENERATEVEC
-		cerr << "exp proposal_vec " << exp(d(g)) << endl;
+                cerr << "exp proposal_vec " << exp(d(g)) << endl;
 #endif
-		proposal_vec.emplace_back(d(g));
-	}
+                proposal_vec.emplace_back(d(g));
+        }
 
-	// transforming the proposal_vec with the softmax function
-	projected_vec = MCMC::softmax(proposal_vec);
+        // transforming the proposal_vec with the softmax function
+        projected_vec = MCMC::softmax(proposal_vec);
                         }
 
         else{
@@ -1157,80 +1075,81 @@ const vector<long double> MCMC::generate_proposal(vector<long double> &current_v
             }
 
 #ifdef DEBUGGENERATEVEC
-	for (auto element:projected_vec){
+        for (auto element:projected_vec){
         cerr << "exp projected_vec: " << element << endl;
     }
 #endif
-	check = accumulate(projected_vec.begin(), projected_vec.end(), 0.0);
-	lower = 0.99;
-	upper = 1.01;
-	// Check that we have successfully projected back onto the unit simplex
+        check = accumulate(projected_vec.begin(), projected_vec.end(), 0.0);
+        lower = 0.99;
+        upper = 1.01;
+        // Check that we have successfully projected back onto the unit simplex
 
-	if(!branch_pos){assert(check > lower && check < upper);}
+        if(!branch_pos){assert(check > lower && check < upper);}
 
-	return projected_vec;
+        return projected_vec;
 }
 
 
-long double MCMC::get_proposal_likelihood(const vector <long double> &proposal_vec, vector<Clade *> * clade_vec, vector<int> &clade_list_id){
+inline const double MCMC::get_proposal_likelihood(const vector <double> &proposal_vec, vector<Clade *> * clade_vec, vector<int> &clade_list_id){
 
-	long double proposal_log_likelihood = 0.0;
-	vector<double> total_f_list;
+        double proposal_log_likelihood = 0.0;
+        vector<double> total_f_list;
+
     for (int i=0; i<clade_list_id.size(); i++){
-
-    	total_f_list.emplace_back(clade_list_id.at(i));
+        total_f_list.emplace_back(clade_list_id.at(i));
         total_f_list.emplace_back(proposal_vec.at(i));
-    }
+                                              }
 
-    for (int j = 0; j<total_f_list.size(); j+=2){
+    for (size_t j = 0; j<total_f_list.size(); j+=2){
         // Make sure we have an even number of elements
-    	assert(total_f_list.size() % 2 == 0);
+        assert(total_f_list.size() % 2 == 0);
 
-    	int vec_len = total_f_list.size()/2;
-        double frac = total_f_list.at(j+1);
+        const unsigned int vec_len = total_f_list.size()/2;
+        const double frac = total_f_list.at(j+1);
         double total_frac = 0.0;
-    	for (int k = 1; k<clade_vec->at(total_f_list.at(j)*6+1)->clade_like.size(); k++){
-		total_frac += log(((frac * clade_vec->at(total_f_list.at(j)*6+1)->clade_like.at(k)) + (clade_vec->at(total_f_list.at(j)*6+1)->clade_not_like.at(k)  * (1/334))));
-    		//total_frac += log((frac * clade_vec->at(total_f_list.at(j)*6+1)->clade_like.at(k)) + (clade_vec->at(total_f_list.at(j)*6+1)->clade_not_like.at(k)/ vec_len));
+
+        for (int k = 1; k<clade_vec->at(total_f_list.at(j)*3+1)->clade_like.size(); k++){
+
+                total_frac += log((frac * clade_vec->at(total_f_list.at(j)*3+1)->clade_like.at(k)) + \
+                                  (clade_vec->at(total_f_list.at(j)*3+1)->clade_not_like.at(k)/ vec_len));
+
+
 #ifdef DEBUGGENERATEVEC
-    		cerr << "total_frac " << total_frac << endl;
+                cerr << "total_frac " << total_frac << endl;
 #endif
 
-    	}
+                                                                                        }
+        proposal_log_likelihood += total_frac;
 
-    	proposal_log_likelihood += total_frac;
+                                                   }
 
-    	}
 
 #ifdef DEBUGGENERATEVEC
-    	cerr << "proposal_log_likelihood: " << proposal_log_likelihood << endl;
+        cerr << "proposal_log_likelihood: " << proposal_log_likelihood << endl;
 
 #endif
 
     return proposal_log_likelihood;
 
-	
+
 }
 
+vector<double > MCMC::run(int iter, int burnin, double tol, const vector<double> &init_vec, vector<Clade *> * clade_vec, vector<int> &clade_list_id){
 
+        MCMC mcmc;
 
-vector<long double > MCMC::run(int iter, int burnin, double tol, const vector<long double> &init_vec, vector<Clade *> * clade_vec, vector<int> &clade_list_id){
+        vector <double> current_best = init_vec;
+        vector <double> proposal_vec;
 
-	MCMC mcmc;
-
-	vector <long double> current_best = init_vec;
-	//vector <long double> current_best = {0.0909090909,0.0909090909, 0.0909090909, 0.0909090909, 0.0909090909,0.0909090909,0.0909090909,0.0909090909,0.0909090909,0.0909090909,0.0909090909};
-	vector <long double> proposal_vec;
-
-    long double current_log_likelihood = -9999999;
+    double current_log_likelihood = -99999999999;
     double acceptance_prob = 0;
     double u=0;
     std::random_device rd;
     std::mt19937 gen(rd());
 
     struct mcmc_moves{
-    	long double log_like;
-    	vector <long double> abund_vec;
+        double log_like;
+        vector <double> abund_vec;
     };
 #ifdef DEBUGGENERATEVEC
     ofstream outputFile("proposal_log_likelihood.txt", ios::trunc);
@@ -1240,35 +1159,35 @@ vector<long double > MCMC::run(int iter, int burnin, double tol, const vector<lo
     int no = 0;
 
     cerr << "Computing MCMC:" << endl;
-	for (int iteration = 0; iteration<iter; iteration++){
+        for (int iteration = 0; iteration<iter; iteration++){
 
-		printprogressBarCerr( float(iteration + 1)/float(iter) );
+                //printprogressBarCerr( float(iteration + 1)/float(iter) );
 
-		proposal_vec = mcmc.generate_proposal(current_best, 0.1, false);
-        long double proposal_log_likelihood = mcmc.get_proposal_likelihood(proposal_vec, clade_vec, clade_list_id);
+                proposal_vec = mcmc.generate_proposal(current_best, 0.1, false);
+        const double proposal_log_likelihood = mcmc.get_proposal_likelihood(proposal_vec, clade_vec, clade_list_id);
 
        // we are not adding proposal vectors to the struct before after the burin in period
-		if (iteration > burnin){
+                if (iteration > burnin){
 
         move[iteration].log_like = proposal_log_likelihood;
         move[iteration].abund_vec = proposal_vec;
-         
-    	}
+
+        }
         else{
 
-        	continue; 
+                continue;
         }
 
-        
+
 
 #ifdef DEBUGGENERATEVEC
         outputFile << iteration << '\t' << proposal_log_likelihood << '\t' << proposal_vec[0] << '\t' << proposal_vec[1] <<'\t' << proposal_vec[2] << '\t' << proposal_vec[3] <<'\t' << '\t' << proposal_vec[4] << '\t' << proposal_vec[5] <<'\t' << '\t' << proposal_vec[6] << '\t' << proposal_vec[7] <<'\t' << '\t' << proposal_vec[8] << '\t' << proposal_vec[9] <<'\t' << '\t' << proposal_vec[10] << '\t';
 
-        cerr << "proposal_log_likelihood " << proposal_log_likelihood << endl; 
+        cerr << "proposal_log_likelihood " << proposal_log_likelihood << endl;
 #endif
-        acceptance_prob = min((long double)(1.0), expl(proposal_log_likelihood-current_log_likelihood));
+        acceptance_prob = min((double)(1.0), exp(proposal_log_likelihood-current_log_likelihood));
 #ifdef DEBUGGENERATEVEC
-        cerr << "acceptance_prob " << acceptance_prob << endl; 
+        cerr << "acceptance_prob " << acceptance_prob << endl;
 #endif
         std::uniform_real_distribution<> dis(0, 1);
         u = dis(gen);
@@ -1278,8 +1197,8 @@ vector<long double > MCMC::run(int iter, int burnin, double tol, const vector<lo
 #endif
         if (u <= acceptance_prob || iteration == 0) {
 #ifdef DEBUGGENERATEVEC
-        	outputFile << "accept" << endl;
-#endif 
+                outputFile << "accept" << endl;
+#endif
 #ifdef VERBOSE_MCMC
             cerr << "ACCEPTING proposal." << endl;
             cerr << "Proposal log likelihood: " << proposal_log_likelihood << endl;
@@ -1289,7 +1208,7 @@ vector<long double > MCMC::run(int iter, int burnin, double tol, const vector<lo
                                                     }
         else {
 #ifdef DEBUGGENERATEVEC
-        	outputFile << "reject" << endl; 
+                outputFile << "reject" << endl;
 #endif
 #ifdef VERBOSE_MCMC
             cerr << "REJECTING proposal" << endl;
@@ -1299,68 +1218,69 @@ vector<long double > MCMC::run(int iter, int burnin, double tol, const vector<lo
 #ifdef VERBOSE_MCMC
         cerr << "\n\nCurrent log likelihood: " << current_log_likelihood << endl;
 #endif
-	}
-	cerr<<endl;
+        }
+        cerr<<endl;
 
 #ifdef VERBOSE_MCMC
-	cerr << "MCMC completed. The final log likelihood is: " << current_log_likelihood << endl; 
+        cerr << "MCMC completed. The final log likelihood is: " << current_log_likelihood << endl;
 #endif
 
 
-	
-	int per85 = 0.85 * (iter - burnin); 
-	int per95 = 0.95 * (iter - burnin);
-	long double sums[proposal_vec.size()] = {0.0};
-	vector<long double> posterior_estimate;
-	vector<long double> sorted_clade; 
 
-	// The posterior mean as well as the confidence intervalls will be calculated per clade (each clade is independent from each other)
-	//We are lọoping through the abundance vector with j
-	// 
-	for (int j=0; j<proposal_vec.size(); j++){
+        int per85 = 0.85 * (iter - burnin);
+        int per95 = 0.95 * (iter - burnin);
+        double sums[proposal_vec.size()] = {0.0};
+        vector<double> posterior_estimate;
+        vector<double> sorted_clade;
 
-		for (int i = burnin+1; i<iter; i++){
-			
-			sums[j] += move[i].abund_vec[j];
+
+        // The posterior mean as well as the confidence intervalls will be calculated per clade (each clade is independent from each other)
+        //We are lọoping through the abundance vector with j
+        //
+        for (int j=0; j<proposal_vec.size(); j++){
+
+                for (int i = burnin+1; i<iter; i++){
+
+                        sums[j] += move[i].abund_vec[j];
 #ifdef DEBUGOUTPUT
-			cerr << "before " <<move[i].abund_vec[j] <<endl;  
-#endif		
-			sorted_clade.emplace_back(move[i].abund_vec[j]);
+                        cerr << "before " <<move[i].abund_vec[j] <<endl;
+#endif
+                        sorted_clade.emplace_back(move[i].abund_vec[j]);
 
-		}
-		// sorting the struct for highest posterior density intervall (HDI)
+                }
+                // sorting the struct for highest posterior density intervall (HDI)
 
-		sort(sorted_clade.begin(), sorted_clade.end());
+                sort(sorted_clade.begin(), sorted_clade.end());
 
-		const int m = sorted_clade.size()/2;
-		
-		long double p = sorted_clade[m];
+                const int m = sorted_clade.size()/2;
+
+                double p = sorted_clade[m];
 
 
-		// posterior point estimate for each clade (each fraction of the abdundance vector)
-		//long double p = sums[j]/(iter-burnin);
+                // posterior point estimate for each clade (each fraction of the abdundance vector)
+                //double p = sums[j]/(iter-burnin);
 #ifdef DEBUGOUTPUT
-		cerr << "posterior_estimate " << p << endl; 
-#endif 
-		posterior_estimate.emplace_back(p);
+                cerr << "posterior_estimate " << p << endl;
+#endif
+                posterior_estimate.emplace_back(p);
 
-		long double low_end_85 = quant(sorted_clade, 0.15);
-		long double high_end_85 = quant(sorted_clade, 0.85);
-		long double low_end_95 = quant(sorted_clade, 0.05);
-		long double high_end_95 = quant(sorted_clade, 0.95);
+                double low_end_85 = quant(sorted_clade, 0.15);
+                double high_end_85 = quant(sorted_clade, 0.85);
+                double low_end_95 = quant(sorted_clade, 0.05);
+                double high_end_95 = quant(sorted_clade, 0.95);
 
-		posterior_estimate.emplace_back(low_end_85);
-		posterior_estimate.emplace_back(high_end_85);
-		posterior_estimate.emplace_back(low_end_95); 
-		posterior_estimate.emplace_back(high_end_95);
+                posterior_estimate.emplace_back(low_end_85);
+                posterior_estimate.emplace_back(high_end_85);
+                posterior_estimate.emplace_back(low_end_95);
+                posterior_estimate.emplace_back(high_end_95);
 
-		sorted_clade.clear();
+                sorted_clade.clear();
 
 
-		
-	}
-	
-	cerr<<".. done"<<endl;
-	return posterior_estimate;
+
+        }
+
+        cerr<<".. done"<<endl;
+        return posterior_estimate;
 
 }
