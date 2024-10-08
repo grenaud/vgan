@@ -1,10 +1,11 @@
-#define BOOST_TEST_MODULE haplocart_test
+#define BOOST_TEST_MODULE vgan_test
 #define BOOST_TEST_MAIN
 #include "Dup_Remover.h"
 #include "HaploCart.h"
 #include "readGAM.h"
 #include "Euka.h"
 #include "soibean.h"
+#include "TrailMix.h"
 #include "MCMC.h"
 #include <boost/test/unit_test.hpp>
 #include <boost/test/tools/output_test_stream.hpp>
@@ -14,7 +15,7 @@
 #include "io/register_libvg_io.hpp"
 #include "vgan_utils.h"
 #include "bdsg/odgi.hpp"
-#define PRINTVEC(v) for (int i=0; i<20; ++i){cerr << v[i] << '\t';}cerr << endl << endl;
+#define PRINTVEC(v) for (int i=0; i<v.size(); ++i){cerr << setprecision(10) << v[i] << '\t';}cerr << endl << endl;
 using namespace vg;
 
 
@@ -172,53 +173,26 @@ std::vector<ProportionEstimateRecord> load_prop_diagnostics_file(const string &f
     }
     return records;
 }
-                                                                                                      
-                                                                                   
 
-std::vector<BranchPlacementRecord> load_branch_placement_diagnostics_file(const string &file_path) {
+
+std::vector<BranchPlacementRecord> load_branch_placement_diagnostics_file(const std::string &file_path) {
     std::vector<BranchPlacementRecord> records;
     std::ifstream file(file_path);
     std::string line;
 
-    // Read and discard the header line
-    getline(file, line);
-
-    while (getline(file, line)) {
-        auto tokens = split(line);
-
-        if (tokens.size() >= 8) {
-            BranchPlacementRecord record;
-            record.source = tokens[0];
-
-            // Debugging output and robust conversion for 'chain'
-            try {
-                record.chain = std::stoi(tokens[1]);
-            } catch (const std::invalid_argument& e) {
-                std::cerr << "Invalid argument for stoi on line: " << line << "\nError: " << e.what() << std::endl;
-                continue; // Skip this record
-            }
-
-            record.meanBranchPosition = std::stod(tokens[2]);
-            record.meanBranchPositionCI = std::stod(tokens[3]);
-            record.medianBranchPosition = std::stod(tokens[4]);
-            record.medianBranchPositionCI = std::stod(tokens[5]);
-
-            try {
-                record.effectiveSampleSize = std::stod(tokens[6]);
-                record.autocorrelationVariance = std::stod(tokens[7]);
-            } catch (const std::invalid_argument&) {
-                record.effectiveSampleSize = -1;
-                record.autocorrelationVariance = -1;
-            }
-            records.push_back(record);
+    while (std::getline(file, line)) {
+        if (line.empty() || line.rfind("Source", 0) == 0) continue; // Skip headers and empty lines
+        std::istringstream iss(line);
+        BranchPlacementRecord r;
+        if (iss >> r.source >> r.chain >> r.meanBranchPosition >> r.meanBranchPositionCI
+                >> r.medianBranchPosition >> r.medianBranchPositionCI 
+                >> r.effectiveSampleSize >> r.autocorrelationVariance) {
+            records.emplace_back(r);
         }
     }
     return records;
 }
 
-
-
-                                                                                                        
 
 
 ///////////////////////////////////////////// TEST SOIBEAN //////////////////////////////////////////////////////////
@@ -422,11 +396,12 @@ return tokens[0];
 
 
 void hc_run_thread_test(const string & output_path, Haplocart * hc, const int n_threads) {
+shared_ptr dta = make_unique<Trailmix_struct>();
 vector<string> arguments;
 arguments.emplace_back("vgan");
 arguments.emplace_back("haplocart");
 arguments.emplace_back("-f");
-arguments.emplace_back("../test/input_files/rCRS.fa");
+arguments.emplace_back("../test/input_files/haplocart/rCRS.fa");
 arguments.emplace_back("-o");
 arguments.emplace_back(output_path);
 arguments.emplace_back("-t");
@@ -436,17 +411,18 @@ for (int i=0;i<arguments.size();i++) {
                    argvtopass[i] = const_cast<char*>(arguments[i].c_str());
                                      }
 
-hc->run(arguments.size(), argvtopass, getCWD(".")+"bin/");
+hc->run(arguments.size(), argvtopass, dta);
                                                                                          }
 
 
 
 void hc_run_custom_posterior_output(const string & posterior_output_path, Haplocart * hc) {
+shared_ptr dta = make_unique<Trailmix_struct>();
 vector<string> arguments;
 arguments.emplace_back("vgan");
 arguments.emplace_back("haplocart");
 arguments.emplace_back("-fq1");
-arguments.emplace_back("../test/input_files/rCRS.fq");
+arguments.emplace_back("../test/input_files/haplocart/rCRS.fq");
 arguments.emplace_back("-o");
 arguments.emplace_back("/dev/null");
 arguments.emplace_back("-t");
@@ -458,11 +434,12 @@ char** argvtopass = new char*[arguments.size()];
 for (size_t i=0;i<arguments.size();i++) {
                    argvtopass[i] = const_cast<char*>(arguments[i].c_str());
                                      }
- hc->run(arguments.size(), argvtopass, getCWD(".")+"bin/");
+ hc->run(arguments.size(), argvtopass, dta);
 
                                                                                            }
 
 void hc_run_fasta(string input_path, string output_path, Haplocart * hc, bool quiet) {
+shared_ptr dta = make_unique<Trailmix_struct>();
 vector<string> arguments;
 arguments.emplace_back("vgan");
 arguments.emplace_back("haplocart");
@@ -477,10 +454,11 @@ char** argvtopass = new char*[arguments.size()];
 for (size_t i=0;i<arguments.size();i++) {
                    argvtopass[i] = const_cast<char*>(arguments[i].c_str());
                                      }
-hc->run(arguments.size(), argvtopass, getCWD(".")+"bin/");
+hc->run(arguments.size(), argvtopass, dta);
                                                                          }
 
 void hc_run_fasta_bep(string input_path, string output_path, const double background_error_prob, Haplocart * hc, bool quiet) {
+shared_ptr dta = make_unique<Trailmix_struct>();
 vector<string> arguments;
 arguments.emplace_back("vgan");
 arguments.emplace_back("haplocart");
@@ -497,10 +475,11 @@ char** argvtopass = new char*[arguments.size()];
 for (size_t i=0;i<arguments.size();i++) {
                    argvtopass[i] = const_cast<char*>(arguments[i].c_str());
                                      }
-hc->run(arguments.size(), argvtopass, getCWD(".")+"bin/");
+hc->run(arguments.size(), argvtopass, dta);
                                                                          }
 
 void hc_run_fq_single(string input_path, string output_path, Haplocart * hc, bool quiet) {
+shared_ptr dta = make_unique<Trailmix_struct>();
 vector<string> arguments;
 arguments.emplace_back("vgan");
 arguments.emplace_back("haplocart");
@@ -515,10 +494,11 @@ char** argvtopass = new char*[arguments.size()];
 for (size_t i=0;i<arguments.size();i++) {
                    argvtopass[i] = const_cast<char*>(arguments[i].c_str());
                                      }
- hc->run(arguments.size(), argvtopass, getCWD(".")+"bin/");
+ hc->run(arguments.size(), argvtopass, dta);
                                                                              }
 
 void hc_run_interleaved(string input_path, string output_path, Haplocart * hc, bool quiet) {
+shared_ptr dta = make_unique<Trailmix_struct>();
 vector<string> arguments;
 arguments.emplace_back("vgan");
 arguments.emplace_back("haplocart");
@@ -534,11 +514,12 @@ char** argvtopass = new char*[arguments.size()];
 for (size_t i=0;i<arguments.size();i++) {
                    argvtopass[i] = const_cast<char*>(arguments[i].c_str());
                                      }
- hc->run(arguments.size(), argvtopass, getCWD(".")+"bin/");
+ hc->run(arguments.size(), argvtopass, dta);
                                                                              }
 
 
 void hc_run_fq_paired(string input_path_1, string input_path_2, string output_path, Haplocart * hc, bool quiet) {
+shared_ptr dta = make_unique<Trailmix_struct>();
 vector<string> arguments;
 arguments.emplace_back("vgan");
 arguments.emplace_back("haplocart");
@@ -555,10 +536,11 @@ char** argvtopass = new char*[arguments.size()];
 for (size_t i=0;i<arguments.size();i++) {
                    argvtopass[i] = const_cast<char*>(arguments[i].c_str());
                                      }
-hc->run(arguments.size(), argvtopass, getCWD(".")+"bin/");
+hc->run(arguments.size(), argvtopass, dta);
                                                                                                     }
 
 void hc_run_gam(string input_path_1, string output_path, Haplocart * hc, bool quiet) {
+shared_ptr dta = make_unique<Trailmix_struct>();
 vector<string> arguments;
 arguments.emplace_back("vgan");
 arguments.emplace_back("haplocart");
@@ -573,7 +555,7 @@ char** argvtopass = new char*[arguments.size()];
 for (size_t i=0;i<arguments.size();i++) {
                    argvtopass[i] = const_cast<char*>(arguments[i].c_str());
                                      }
-hc->run(arguments.size(), argvtopass, getCWD(".")+"bin/");
+hc->run(arguments.size(), argvtopass, dta);
                                                                          }
 
 BOOST_AUTO_TEST_SUITE(haplocart)
@@ -582,7 +564,7 @@ BOOST_AUTO_TEST_CASE(fq_single_zipped)
 {
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
-  const string input_path = cwdProg + "test/input_files/Q1_1.fq.gz";
+  const string input_path = cwdProg + "test/input_files/haplocart/Q1_1.fq.gz";
   const string output_path = cwdProg + "test/output_files/Q1.txt";
   hc_run_fq_single(input_path, output_path, & hc, false);
   BOOST_ASSERT(get_haplocart_pred(output_path) == "Q1");
@@ -594,7 +576,7 @@ BOOST_AUTO_TEST_CASE(multifasta)
 {
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
-  const string input_path = cwdProg + "test/input_files/multifasta.fa";
+  const string input_path = cwdProg + "test/input_files/haplocart/multifasta.fa";
   const string output_path = cwdProg + "test/output_files/multifasta.txt";
   vector<string> truth{"J2a1a1", "Z", "H2a2a1g"};
   hc_run_fasta(input_path, output_path, &hc, false);
@@ -605,26 +587,28 @@ BOOST_AUTO_TEST_CASE(multifasta)
 BOOST_AUTO_TEST_CASE(load)
 {
   Haplocart hc;
-  const vector<vector<bool>> path_supports = hc.load_path_supports(getCWD(".")+"/share/vgan/hcfiles/");
-  BOOST_CHECK_EQUAL(path_supports.size(), 11825);
-  const vector<double> mappabilities = hc.load_mappabilities(getCWD(".")+"/share/vgan/hcfiles/");
-  for (double x : mappabilities) {BOOST_CHECK_EQUAL((x <= 1 && x >= 0), true);}
-  const vector<string> paths = hc.load_paths(getCWD(".")+"/share/vgan/hcfiles/");
-  BOOST_CHECK_EQUAL(paths.size(), 5179);
-  const map<string, vector<string>> parents = hc.load_parents(getCWD(".")+"/share/vgan/hcfiles/");
-  BOOST_CHECK_EQUAL(parents.size(), 5437);
-  const map<string, vector<string>> children = hc.load_children(getCWD(".")+"/share/vgan/hcfiles/");
-  BOOST_CHECK_EQUAL(children.size(), 5438);
+  shared_ptr dta = make_unique<Trailmix_struct>();
+  hc.load_path_supports(dta);
+  BOOST_CHECK_EQUAL(dta->path_supports.size(), 11825);
+  hc.load_mappabilities(dta);
+  for (double x : dta->mappabilities) {BOOST_CHECK_EQUAL((x <= 1 && x >= 0), true);}
+  hc.load_path_names(dta);
+  BOOST_CHECK_EQUAL(dta->path_names.size(), 5179);
+  hc.load_parents(dta);
+  BOOST_CHECK_EQUAL(dta->parents.size(), 5437);
+  hc.load_children(dta);
+  BOOST_CHECK_EQUAL(dta->children.size(), 5438);
 }
 
 BOOST_AUTO_TEST_CASE(check_nodevec)
 {
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD(".")+"bin/");
-  const auto [nodevec, minid, graph] = hc.readPathHandleGraph(cwdProg+"../share/vgan/hcfiles/graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
-  BOOST_ASSERT(!nodevec.empty());
-  for (int i = 0; i < nodevec.size(); ++i){
-      BOOST_ASSERT(nodevec.at(i)->seq.size() <= 8);
+  shared_ptr dta = make_unique<Trailmix_struct>();
+  hc.readPathHandleGraph(dta);
+  BOOST_ASSERT(!dta->nodevector.empty());
+  for (int i = 0; i < dta->nodevector.size(); ++i){
+      BOOST_ASSERT(dta->nodevector.at(i)->seq.size() <= 8);
                                           }
 }
 
@@ -632,7 +616,8 @@ BOOST_AUTO_TEST_CASE(check_nodevec)
 BOOST_AUTO_TEST_CASE(check_graph)
 {
  Haplocart hc;
- const vector<string> paths = hc.load_paths(getCWD(".")+"/share/vgan/hcfiles/");
+ shared_ptr dta = make_unique<Trailmix_struct>();
+ hc.load_path_names(dta);
  bdsg::ODGI graph;
  const string cwdProg = getFullPath(getCWD(".")+"bin/");
  graph.deserialize(cwdProg+"../share/vgan/hcfiles/graph.og");
@@ -643,7 +628,7 @@ BOOST_AUTO_TEST_CASE(check_graph)
  BOOST_CHECK_EQUAL(nodecount, 11821);
  BOOST_CHECK_EQUAL(minid, 1);
  BOOST_CHECK_EQUAL(maxid, 11821);
- for (const string & path : paths) {
+ for (const string & path : dta->path_names) {
      const string path_ = path.size() > 1 ? path : path + "_";
      BOOST_CHECK_EQUAL(graph.has_path(path_), true);
      BOOST_CHECK_EQUAL(graph.is_empty(graph.get_path_handle(path_)), false);
@@ -658,7 +643,7 @@ BOOST_AUTO_TEST_CASE(invalid_bep1)
 {
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
-  const string input_path = cwdProg + "test/input_files/rCRS.fa";
+  const string input_path = cwdProg + "test/input_files/haplocart/rCRS.fa";
   BOOST_CHECK_THROW(hc_run_fasta_bep(input_path, "/dev/null", 2, &hc, true), std::runtime_error);
 }
 
@@ -667,14 +652,14 @@ BOOST_AUTO_TEST_CASE(invalid_bep2)
 {
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
-  const string input_path = cwdProg + "test/input_files/rCRS.fa";
+  const string input_path = cwdProg + "test/input_files/haplocart/rCRS.fa";
   BOOST_CHECK_THROW(hc_run_fasta_bep(input_path, "/dev/null", -2, &hc, true), std::runtime_error);
 }
 
 BOOST_AUTO_TEST_CASE(valid_bep)
 {
   const string cwdProg = getFullPath(getCWD("."));
-  const string input_path = cwdProg + "test/input_files/rCRS.fa";
+  const string input_path = cwdProg + "test/input_files/haplocart/rCRS.fa";
   Haplocart hc;
   BOOST_CHECK_NO_THROW(hc_run_fasta_bep(input_path, "/dev/null", 0.42, &hc, false));
 }
@@ -683,7 +668,7 @@ BOOST_AUTO_TEST_CASE(fq_single_rcrs)
 {
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
-  const string input_path = cwdProg + "test/input_files/rCRS.fq";
+  const string input_path = cwdProg + "test/input_files/haplocart/rCRS.fq";
   const string output_path = cwdProg + "test/output_files/rCRS_fq.txt";
   hc_run_fq_single(input_path, output_path, & hc, false);
   BOOST_CHECK_EQUAL(get_haplocart_pred(output_path), "H2a2a1");
@@ -694,7 +679,7 @@ BOOST_AUTO_TEST_CASE(fq_single_rsrs)
 {
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
-  const string input_path = cwdProg + "test/input_files/RSRS.fq";
+  const string input_path = cwdProg + "test/input_files/haplocart/RSRS.fq";
   const string output_path = cwdProg + "test/output_files/RSRS.txt";
   hc_run_fq_single(input_path, output_path, & hc, false);
   const string out = get_haplocart_pred(output_path);
@@ -706,7 +691,7 @@ BOOST_AUTO_TEST_CASE(consensus_rcrs)
 {
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
-  const string input_path = cwdProg + "test/input_files/rCRS.fa";
+  const string input_path = cwdProg + "test/input_files/haplocart/rCRS.fa";
   const string output_path = cwdProg + "test/output_files/rCRS_consensus.txt";
   hc_run_fasta(input_path, output_path, & hc, false);
   BOOST_CHECK_EQUAL(get_haplocart_pred(output_path), "H2a2a1");
@@ -716,7 +701,7 @@ BOOST_AUTO_TEST_CASE(another_consensus)
 {
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
-  const string input_path = cwdProg + "test/input_files/H2a2a1g.fa";
+  const string input_path = cwdProg + "test/haplocart/input_files/H2a2a1g.fa";
   const string output_path = cwdProg + "test/output_files/H2a2a1g.txt";
   hc_run_fasta(input_path, output_path, & hc, false);
   BOOST_CHECK_EQUAL(get_haplocart_pred(output_path), "H2a2a1g");
@@ -727,7 +712,7 @@ BOOST_AUTO_TEST_CASE(zipped_consensus)
 {
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
-  const string input_path = cwdProg + "test/input_files/Z.fa.gz";
+  const string input_path = cwdProg + "test/input_files/haplocart/Z.fa.gz";
   const string output_path = cwdProg + "test/output_files/Z.txt";
   hc_run_fasta(input_path, output_path, & hc, false);
   BOOST_CHECK_EQUAL(get_haplocart_pred(output_path), "Z");
@@ -737,7 +722,7 @@ BOOST_AUTO_TEST_CASE(consensus_wrong_format)
 {
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
-  const string input_path = cwdProg + "test/input_files/rCRS.fq";
+  const string input_path = cwdProg + "test/input_files/haplocart/rCRS.fq";
   const string output_path = cwdProg + "test/output_files/rCRS_bad.txt";
   BOOST_CHECK_THROW(hc_run_fasta(input_path, output_path, & hc, true), std::runtime_error);
 }
@@ -747,8 +732,8 @@ BOOST_AUTO_TEST_CASE(zipped_paired_fastq)
 {
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
-  const string input1_path = cwdProg + "test/input_files/Q1_1.fq.gz";
-  const string input2_path = cwdProg + "test/input_files/Q1_2.fq.gz";
+  const string input1_path = cwdProg + "test/input_files/haplocart/Q1_1.fq.gz";
+  const string input2_path = cwdProg + "test/input_files/haplocart/Q1_2.fq.gz";
   const string output_path = cwdProg + "test/output_files/Q1_paired.txt";
   hc_run_fq_paired(input1_path, input2_path, output_path, & hc, false);
   BOOST_CHECK_EQUAL(get_haplocart_pred(output_path), "Q1");
@@ -758,7 +743,7 @@ BOOST_AUTO_TEST_CASE(gam)
 {
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
-  const string input_path = cwdProg + "test/input_files/alignments/J2a1a1a1.gam";
+  const string input_path = cwdProg + "test/input_files/haplocart/alignments/J2a1a1a1.gam";
   const string output_path = cwdProg + "test/output_files/J2a1a1a1.txt";
   hc_run_gam(input_path, output_path, & hc, false);
   BOOST_CHECK_EQUAL(get_haplocart_pred(output_path), "J2a1a1a1");
@@ -825,7 +810,7 @@ BOOST_AUTO_TEST_CASE(multifasta_zipped)
 {
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
-  const string input_path = cwdProg + "test/input_files/multifasta.fa.gz";
+  const string input_path = cwdProg + "test/input_files/haplocart/multifasta.fa.gz";
   const string output_path = cwdProg + "test/output_files/multifasta_zipped.txt";
   hc_run_fasta(input_path, output_path, &hc, false);
   vector<string> truth {"J2a1a1", "Z", "H2a2a1g"};
@@ -837,7 +822,7 @@ BOOST_AUTO_TEST_CASE(interleaved)
 {
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
-  const string input_path = cwdProg + "test/input_files/Q1_interleaved.fq";
+  const string input_path = cwdProg + "test/input_files/haplocart/Q1_interleaved.fq";
   const string output_path = cwdProg + "test/output_files/Q1_interleaved.txt";
   hc_run_interleaved(input_path, output_path, &hc, false);
   BOOST_CHECK_EQUAL(get_haplocart_pred(output_path), "Q1");
@@ -854,13 +839,14 @@ BOOST_AUTO_TEST_SUITE(reconstruction)
 
 BOOST_AUTO_TEST_CASE(plus_strand_perfect_match)
 {
+    shared_ptr dta = make_unique<Trailmix_struct>();
     const string cwdProg = getFullPath(getCWD(".")+"bin/");
-    auto read_info = readGAM((cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str(), false, false, "/dev/null", "");
+    dta->fifo_C = (cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str();
+    auto read_info = readGAM(dta);
     const auto path = read_info->at(0)->path;
     Haplocart hc;
-    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
-    auto [nodevector, minid, graph] = pathhandlegraphtuple;
-    auto ret_tuple = reconstruct_graph_sequence(graph, path, read_info->at(0)->seq);
+    dta->graph.deserialize(cwdProg+"../test/reconstructInputSeq/target_graph.og");
+    auto ret_tuple = reconstruct_graph_sequence(dta->graph, path, read_info->at(0)->seq);
     auto [graph_seq, read_seq, mppg_sizes] = ret_tuple;
     BOOST_CHECK_EQUAL(read_seq, "CCCCATTTATACCGTGAGTAGGGTCGACCAAGAAC");
     BOOST_CHECK_EQUAL(graph_seq, "CCCCATTTATACCGTGAGTAGGGTCGACCAAGAAC");
@@ -868,13 +854,14 @@ BOOST_AUTO_TEST_CASE(plus_strand_perfect_match)
 
 BOOST_AUTO_TEST_CASE(plus_strand_mismatch)
 {
+    shared_ptr dta = make_unique<Trailmix_struct>();
     const string cwdProg = getFullPath(getCWD(".")+"bin/");
-    auto read_info = readGAM((cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str(), false, false, "/dev/null", "");
+    dta->fifo_C = (cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str();
+    auto read_info = readGAM(dta);
     const auto path = read_info->at(1)->path;
     Haplocart hc;
-    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
-    auto [nodevector, minid, graph] = pathhandlegraphtuple;
-    auto ret_tuple = reconstruct_graph_sequence(graph, path, read_info->at(1)->seq);
+    dta->graph.deserialize(cwdProg+"../test/reconstructInputSeq/target_graph.og");
+    auto ret_tuple = reconstruct_graph_sequence(dta->graph, path, read_info->at(1)->seq);
     auto [graph_seq, read_seq, mppg_sizes] = ret_tuple;
      BOOST_CHECK_EQUAL(read_seq, "CCCCATTTATACCGTGAGTAGGGTCCACCAAGAAC");
     BOOST_CHECK_EQUAL(graph_seq, "CCCCATTTATACCGTGAGTAGGGTCGACCAAGAAC");
@@ -882,14 +869,14 @@ BOOST_AUTO_TEST_CASE(plus_strand_mismatch)
 
 BOOST_AUTO_TEST_CASE(plus_strand_insert_in_read)
 {
+    shared_ptr dta = make_unique<Trailmix_struct>();
     const string cwdProg = getFullPath(getCWD(".")+"bin/");
-    auto read_info = readGAM((cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str(), false, false, "/dev/null", "");
+    dta->fifo_C = (cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str();
+    auto read_info = readGAM(dta);
     const auto path = read_info->at(2)->path;
-    cerr << "algnvector size: " << read_info->size() << endl;
     Haplocart hc;
-    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
-    auto [nodevector, minid, graph] = pathhandlegraphtuple;
-    auto ret_tuple = reconstruct_graph_sequence(graph, path, read_info->at(2)->seq);
+    dta->graph.deserialize(cwdProg+"../test/reconstructInputSeq/target_graph.og");
+    auto ret_tuple = reconstruct_graph_sequence(dta->graph, path, read_info->at(2)->seq);
     auto [graph_seq, read_seq, mppg_sizes] = ret_tuple;
      BOOST_CHECK_EQUAL(read_seq, "CCCCATTTATACCCCCGTGAGTAGGGTCGACCAAGAAC");
     BOOST_CHECK_EQUAL(graph_seq, "CCCCATTTATA---CCGTGAGTAGGGTCGACCAAGAAC");
@@ -897,13 +884,14 @@ BOOST_AUTO_TEST_CASE(plus_strand_insert_in_read)
 
 BOOST_AUTO_TEST_CASE(plus_strand_deletion_in_read)
 {
+    shared_ptr dta = make_unique<Trailmix_struct>();
     const string cwdProg = getFullPath(getCWD(".")+"bin/");
-    auto read_info = readGAM((cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str(), false, false, "/dev/null", "");
+    dta->fifo_C = (cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str();
+    auto read_info = readGAM(dta);
     const auto path = read_info->at(3)->path;
     Haplocart hc;
-    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
-    auto [nodevector, minid, graph] = pathhandlegraphtuple;
-    auto ret_tuple = reconstruct_graph_sequence(graph, path, read_info->at(3)->seq);
+    dta->graph.deserialize(cwdProg+"../test/reconstructInputSeq/target_graph.og");
+    auto ret_tuple = reconstruct_graph_sequence(dta->graph, path, read_info->at(3)->seq);
     auto [graph_seq, read_seq, mppg_sizes] = ret_tuple;
     BOOST_CHECK_EQUAL(graph_seq, "TGGGTGGAGCGCGCCCCATTTATACCGTGAGTAGGGTCGACCAAGAACCGCAAGA");
      BOOST_CHECK_EQUAL(read_seq, "TGGGTGGAGCGCGCCCCAT--------TGAGTAGGGTCGACCAAGAACCGCAAGA");
@@ -911,13 +899,14 @@ BOOST_AUTO_TEST_CASE(plus_strand_deletion_in_read)
 
 BOOST_AUTO_TEST_CASE(plus_strand_softclip)
 {
+    shared_ptr dta = make_unique<Trailmix_struct>();
     const string cwdProg = getFullPath(getCWD(".")+"bin/");
-    auto read_info = readGAM((cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str(), false, false, "/dev/null", "");
+    dta->fifo_C = (cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str();
+    auto read_info = readGAM(dta);
     const auto path = read_info->at(4)->path;
     Haplocart hc;
-    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
-    auto [nodevector, minid, graph] = pathhandlegraphtuple;
-    auto ret_tuple = reconstruct_graph_sequence(graph, path, read_info->at(4)->seq);
+    dta->graph.deserialize(cwdProg+"../test/reconstructInputSeq/target_graph.og");
+    auto ret_tuple = reconstruct_graph_sequence(dta->graph, path, read_info->at(3)->seq);
     auto [graph_seq, read_seq, mppg_sizes] = ret_tuple;
     BOOST_CHECK_EQUAL(graph_seq, "SSSSSSSSSSSSSSSSSSSSSSSSCGGATATAAACGCCAGGTTGAATCCGCATTT");
      BOOST_CHECK_EQUAL(read_seq, "CGGCTGTCAGCTGCCGTCTGCGTACGGATATAAACGCCAGGTTGAATCCGCATTT");
@@ -925,13 +914,14 @@ BOOST_AUTO_TEST_CASE(plus_strand_softclip)
 
 BOOST_AUTO_TEST_CASE(minus_strand_perfect_match)
 {
+    shared_ptr dta = make_unique<Trailmix_struct>();
     const string cwdProg = getFullPath(getCWD(".")+"bin/");
-    auto read_info = readGAM((cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str(), false, false, "/dev/null", "");
+    dta->fifo_C = (cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str();
+    auto read_info = readGAM(dta);
     const auto path = read_info->at(5)->path;
     Haplocart hc;
-    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
-    auto [nodevector, minid, graph] = pathhandlegraphtuple;
-    auto ret_tuple = reconstruct_graph_sequence(graph, path, read_info->at(5)->seq);
+    dta->graph.deserialize(cwdProg+"../test/reconstructInputSeq/target_graph.og");
+    auto ret_tuple = reconstruct_graph_sequence(dta->graph, path, read_info->at(5)->seq);
     auto [graph_seq, read_seq, mppg_sizes] = ret_tuple;
     BOOST_CHECK_EQUAL(graph_seq, "TCTTGCGGTTCTTGGTCGACCCTACTCACGGTATAAATGGGGCGCGCTCCAT");
      BOOST_CHECK_EQUAL(read_seq, "TCTTGCGGTTCTTGGTCGACCCTACTCACGGTATAAATGGGGCGCGCTCCAT");
@@ -939,13 +929,14 @@ BOOST_AUTO_TEST_CASE(minus_strand_perfect_match)
 
 BOOST_AUTO_TEST_CASE(minus_strand_mismatch)
 {
+    shared_ptr dta = make_unique<Trailmix_struct>();
     const string cwdProg = getFullPath(getCWD(".")+"bin/");
-    auto read_info = readGAM((cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str(), false, false, "/dev/null", "");
+    dta->fifo_C = (cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str();
+    auto read_info = readGAM(dta);
     const auto path = read_info->at(6)->path;
     Haplocart hc;
-    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
-    auto [nodevector, minid, graph] = pathhandlegraphtuple;
-    auto ret_tuple = reconstruct_graph_sequence(graph, path, read_info->at(6)->seq);
+    dta->graph.deserialize(cwdProg+"../test/reconstructInputSeq/target_graph.og");
+    auto ret_tuple = reconstruct_graph_sequence(dta->graph, path, read_info->at(6)->seq);
     auto [graph_seq, read_seq, mppg_sizes] = ret_tuple;
     BOOST_CHECK_EQUAL(graph_seq, "TCTTGCGGTTCTTGGTCGACCCTACTCACGGTATAAATGGGGCGCGCTCCAT");
      BOOST_CHECK_EQUAL(read_seq, "TCTTGCGGTTCTTGGTCGACCCTACTCACGGTATAAATGGCGCGCGCTCCAT");
@@ -953,13 +944,14 @@ BOOST_AUTO_TEST_CASE(minus_strand_mismatch)
 
 BOOST_AUTO_TEST_CASE(minus_strand_insert_in_read)
 {
+    shared_ptr dta = make_unique<Trailmix_struct>();
     const string cwdProg = getFullPath(getCWD(".")+"bin/");
-    auto read_info = readGAM((cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str(), false, false, "/dev/null", "");
+    dta->fifo_C = (cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str();
+    auto read_info = readGAM(dta);
     const auto path = read_info->at(7)->path;
     Haplocart hc;
-    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
-    auto [nodevector, minid, graph] = pathhandlegraphtuple;
-    auto ret_tuple = reconstruct_graph_sequence(graph, path, read_info->at(7)->seq);
+    dta->graph.deserialize(cwdProg+"../test/reconstructInputSeq/target_graph.og");
+    auto ret_tuple = reconstruct_graph_sequence(dta->graph, path, read_info->at(7)->seq);
     auto [graph_seq, read_seq, mppg_sizes] = ret_tuple;
     BOOST_CHECK_EQUAL(graph_seq, "TCTTGCGGTTCTTGGTC------------GACCCTACTCACGGTATAAATGGGGCGCGCTCCAT");
      BOOST_CHECK_EQUAL(read_seq, "TCTTGCGGTTCTTGGTCCAGTCAGTCAGTGACCCTACTCACGGTATAAATGGGGCGCGCTCCAT");
@@ -967,13 +959,14 @@ BOOST_AUTO_TEST_CASE(minus_strand_insert_in_read)
 
 BOOST_AUTO_TEST_CASE(minus_strand_deletion_in_read)
 {
+    shared_ptr dta = make_unique<Trailmix_struct>();
     const string cwdProg = getFullPath(getCWD(".")+"bin/");
-    auto read_info = readGAM((cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str(), false, false, "/dev/null", "");
+    dta->fifo_C = (cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str();
+    auto read_info = readGAM(dta);
     const auto path = read_info->at(8)->path;
     Haplocart hc;
-    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
-    auto [nodevector, minid, graph] = pathhandlegraphtuple;
-    auto ret_tuple = reconstruct_graph_sequence(graph, path, read_info->at(8)->seq);
+    dta->graph.deserialize(cwdProg+"../test/reconstructInputSeq/target_graph.og");
+    auto ret_tuple = reconstruct_graph_sequence(dta->graph, path, read_info->at(8)->seq);
     auto [graph_seq, read_seq, mppg_sizes] = ret_tuple;
     BOOST_CHECK_EQUAL(graph_seq, "TCTTGCGGTTCTTGGTCGACCCTACTCACGGTATAAATGGGGCGCGCTCCAT");
      BOOST_CHECK_EQUAL(read_seq, "TCTTGCGGTTCTTGGTCGACCCTA---------TAAATGGGGCGCGCTCCAT");
@@ -981,13 +974,14 @@ BOOST_AUTO_TEST_CASE(minus_strand_deletion_in_read)
 
 BOOST_AUTO_TEST_CASE(minus_strand_softclip)
 {
+    shared_ptr dta = make_unique<Trailmix_struct>();
     const string cwdProg = getFullPath(getCWD(".")+"bin/");
-    auto read_info = readGAM((cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str(), false, false, "/dev/null", "");
+    dta->fifo_C = (cwdProg + "../test/reconstructInputSeq/test_reads.gam").c_str();
+    auto read_info = readGAM(dta);
     const auto path = read_info->at(9)->path;
     Haplocart hc;
-    const auto pathhandlegraphtuple = hc.readPathHandleGraph(cwdProg+"../test/reconstructInputSeq/target_graph.og", 1, cwdProg + "../share/vgan/hcfiles/");
-    auto [nodevector, minid, graph] = pathhandlegraphtuple;
-    auto ret_tuple = reconstruct_graph_sequence(graph, path, read_info->at(9)->seq);
+    dta->graph.deserialize(cwdProg+"../test/reconstructInputSeq/target_graph.og");
+    auto ret_tuple = reconstruct_graph_sequence(dta->graph, path, read_info->at(9)->seq);
     auto [graph_seq, read_seq, mppg_sizes] = ret_tuple;
     BOOST_CHECK_EQUAL(graph_seq, "SSSSSSSSSSSSSSSSSSSSSSSSSSCACCGTAATCCATGCTTGATTGAGACCGCC");
      BOOST_CHECK_EQUAL(read_seq, "CTAGCTGCAGTCGCGCTCGTCATGCACACCGTAATCCATGCTTGATTGAGACCGCC");
@@ -1011,7 +1005,7 @@ euka_argvec.emplace_back("euka");
 euka_argvec.emplace_back("-fq1");
 euka_argvec.emplace_back(getCWD(".")+"bin/" + "../test/input_files/euka/three_none_100.fq.gz");
 euka_argvec.emplace_back("-t");
-euka_argvec.emplace_back("-1");
+euka_argvec.emplace_back("4");
 euka_argvec.emplace_back("-o");
 euka_argvec.emplace_back(getCWD(".")+"bin/" + "../test/output_files/euka/three_none_100");
 
@@ -1047,7 +1041,7 @@ euka_argvec.emplace_back("euka");
 euka_argvec.emplace_back("-fq1");
 euka_argvec.emplace_back(getCWD(".") +"bin/" + "../test/input_files/euka/three_dmid_100.fq.gz");
 euka_argvec.emplace_back("-t");
-euka_argvec.emplace_back("-1");
+euka_argvec.emplace_back("4");
 euka_argvec.emplace_back("-o");
 euka_argvec.emplace_back(getCWD(".") +"bin/" + "../test/output_files/euka/three_dmid_100");
 
@@ -1077,7 +1071,7 @@ euka_argvec.emplace_back("euka");
 euka_argvec.emplace_back("-fq1");
 euka_argvec.emplace_back(getCWD(".") + "bin/" +"../test/input_files/euka/three_dhigh_100.fq.gz");
 euka_argvec.emplace_back("-t");
-euka_argvec.emplace_back("-1");
+euka_argvec.emplace_back("4");
 euka_argvec.emplace_back("-o");
 euka_argvec.emplace_back(getCWD(".")+"bin/" + "../test/output_files/euka/three_dhigh_100");
 
@@ -1106,7 +1100,7 @@ euka_argvec.emplace_back("euka");
 euka_argvec.emplace_back("-fq1");
 euka_argvec.emplace_back(getCWD(".") + "test/input_files/euka/formicidae.fq.gz");
 euka_argvec.emplace_back("-t");
-euka_argvec.emplace_back("-1");
+euka_argvec.emplace_back("4");
 euka_argvec.emplace_back("-o");
 euka_argvec.emplace_back(getCWD(".") + "test/output_files/euka/formicidae");
 euka_argvec.emplace_back("--minBins");
@@ -1133,7 +1127,7 @@ euka_argvec.emplace_back("euka");
 euka_argvec.emplace_back("-fq1");
 euka_argvec.emplace_back(getCWD(".") + "test/input_files/euka/formicidae.fq.gz");
 euka_argvec.emplace_back("-t");
-euka_argvec.emplace_back("-1");
+euka_argvec.emplace_back("4");
 euka_argvec.emplace_back("-o");
 euka_argvec.emplace_back(getCWD(".") + "test/output_files/euka/formicidae2");
 euka_argvec.emplace_back("--entropy");
@@ -1172,4 +1166,53 @@ BOOST_AUTO_TEST_CASE(load) {
 BOOST_AUTO_TEST_SUITE_END()
 //////////////////////////////////////////// END TEST EUKA ///////////////////////////////////////////////////////
 
+/////////////////////////////////////////// BEGIN TEST TRAILMIX /////////////////////////////////////////////////
+BOOST_AUTO_TEST_SUITE(TrailMix)
 
+void run_k1(Trailmix * tm){
+vector<string> trailmix_argvec;
+trailmix_argvec.emplace_back("vgan");
+trailmix_argvec.emplace_back("trailmix");
+trailmix_argvec.emplace_back("-fq1");
+trailmix_argvec.emplace_back("../test/input_files/trailmix/HV4b.fq.gz");
+trailmix_argvec.emplace_back("-t");
+trailmix_argvec.emplace_back("70");
+trailmix_argvec.emplace_back("-k");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("-o");
+trailmix_argvec.emplace_back("../test/output_files/trailmix/k1");
+trailmix_argvec.emplace_back("--iter");
+trailmix_argvec.emplace_back("50000");
+trailmix_argvec.emplace_back("--burnin");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("--chains");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("-z");
+trailmix_argvec.emplace_back("tempdir");
+trailmix_argvec.emplace_back("--tm-files");
+trailmix_argvec.emplace_back("/net/mimer/mnt/tank/projects2/hominin/vgan_dev/share/vgan/publication_tmfiles/");
+trailmix_argvec.emplace_back("--dbprefix");
+trailmix_argvec.emplace_back("pub.graph");
+
+
+char** argvtopass = new char*[trailmix_argvec.size()];
+for (int i=0;i<trailmix_argvec.size();i++) {
+                   argvtopass[i] = const_cast<char*>(trailmix_argvec[i].c_str());
+                                       }
+
+tm->run(trailmix_argvec.size(), argvtopass, getCWD(".")+"bin/");
+
+                         }
+
+BOOST_AUTO_TEST_CASE(k1_HV4b)
+{
+    Trailmix tm;
+    run_k1(&tm);
+    auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/k1BranchEstimate.txt");
+    cerr << "SOURCE: " << branchRecords[0].source << endl;
+    BOOST_ASSERT(branchRecords[0].source == "HV4b");
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+/////////////////////////////////////////// END TEST TRAILMIX /////////////////////////////////////////////////
