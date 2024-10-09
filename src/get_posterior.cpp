@@ -1,34 +1,26 @@
 #include "HaploCart.h"
+#include "TrailMix.h"
 
 
-void Haplocart::write_posterior_log(const string &samplename, const string &posteriorfilename, vector<string> &clade_vec, vector<double> &confidence_vec,
-                                    const bool webapp, const int sample) {
+void Haplocart::write_posterior_log(const string &samplename, const string &posteriorfilename, vector<string> clade_vec, vector<double> confidence_vec,
+                                    const bool &webapp) {
     ofstream posteriorFile(posteriorfilename, ios::app);
 
-    if (!webapp)         {
-        posteriorFile << "\nClade-level posterior confidence values\n" << samplename << '\t';
-        for (int i = 0; i < clade_vec.size(); ++i) {posteriorFile << clade_vec[i] << '\t' << confidence_vec[i] << '\t' << i << '\t';}
-        posteriorFile << "\n" << endl;
+    if (webapp == false) {
+        for (size_t i = 0; i < clade_vec.size(); ++i) {posteriorFile << samplename << '\t' << clade_vec[i] << '\t' << confidence_vec[i] << '\t' << i << '\n';}
                          }
 
     else {
-        posteriorFile << "<table>" << endl;
-        if (samplename != "file.0"){
-            posteriorFile << "<tr><td>Sample" << "</td><td>&emsp;" << "Clade" << "</td><td>&emsp;" << "Posterior" << "</td><td>&emsp;" << "Depth of Tree" << endl;
-                                   }
-        else {
-            posteriorFile << "<tr><td>Sample Number" << "</td><td>&emsp;" << "Clade" << "</td><td>&emsp;" << "Posterior" << "</td><td>&emsp;" << "Depth of Tree" << endl;
-             }
+        cout << "<table>" << '\n';
         for (int i = 0; i < clade_vec.size(); ++i) {
-            if (samplename != "file.0") {
-                posteriorFile << "<tr><td>" << samplename << "</td><td>&emsp;" << '\t' << clade_vec[i] << "</td><td>&emsp;" << confidence_vec[i] << "</td><td>&emsp;" << i << endl;
-                                        }
-            else {
-               posteriorFile << "<tr><td>" << sample + 1 << "</td><td>&emsp;" << '\t' << clade_vec[i] << "</td><td>&emsp;" << confidence_vec[i] << "</td><td>&emsp;" << i << endl;
-                 }
+            cout << "<tr><td>" << samplename << "</td><td>" << clade_vec[i] << "</td><td>" << confidence_vec[i] << "</td><td>" << i << '\n';
                                                    }
-        posteriorFile << "</table>" << endl;
-        posteriorFile << "<br><br>" << endl;
+        posteriorFile << "<table>" << '\n';
+        for (int i = 0; i < clade_vec.size(); ++i) {
+            posteriorFile << "<tr><td>" << samplename << "</td><td>" << clade_vec[i] << "</td><td>" << confidence_vec[i] << "</td><td>" << i << '\n';
+                                                   }
+        posteriorFile << "<table>" << '\n';
+        cout << "<table>" << '\n';
          }
                                                                                                                          }
 
@@ -48,8 +40,8 @@ for (const string & p : preds) {
 return all_child_set;
                                                                                                          }
 
-const vector<long double> Haplocart::get_posterior_of_clade(vector<long double> &all_top, vector<long double> final_vec, set<string> preds,
-                                                             map<string, vector<string>> &children, const long double total_ll,
+const vector<double> Haplocart::get_posterior_of_clade(vector<double> all_top, vector<double> final_vec, set<string> preds,
+                                                             map<string, vector<string>> children, const double total_ll,
                                                              const vector<string> path_names, bool initial) {
 
     // Get sum of the log likelihoods for each haplotype subsumed within a given clade
@@ -75,22 +67,23 @@ const vector<long double> Haplocart::get_posterior_of_clade(vector<long double> 
 
                                                                                               }
 
-const long double Haplocart::sum_log_likelihoods(const vector<long double> &log_lik_vec) {
+const double Haplocart::sum_log_likelihoods(vector<double> log_lik_vec) {
+
 // Sum log likelihoods using Gabriel magic
-long double ret = log_lik_vec[0];
-for (int i=1; i<log_lik_vec.size(); ++i)  {
+double ret = log_lik_vec[0];
+for (int i=1; i!=log_lik_vec.size(); ++i) {
     ret = oplusInitnatl(ret, log_lik_vec[i]);
                                           }
 return ret;
 }
 
-void Haplocart::get_posterior(const vector<long double> &final_vec, const vector<string> &path_names,
+void Haplocart::get_posterior(const vector<double> &final_vec, const vector<string> path_names,
                               map<string, vector<string>> parents, map<string, vector<string>> children,
                               const string & samplename, const string &predicted_haplotype, const string &posteriorfilename,
-                              const bool webapp, const int sample) {
+                              const bool webapp) {
 
 
-   const long double total_ll = Haplocart::sum_log_likelihoods(final_vec);
+   double total_ll = Haplocart::sum_log_likelihoods(final_vec);
    vector<string> parent_vec;
    if (parents.count(predicted_haplotype) > 0) {
        parent_vec = parents.find(predicted_haplotype)->second;
@@ -100,9 +93,9 @@ void Haplocart::get_posterior(const vector<long double> &final_vec, const vector
    vector<double> confidence_vec;
    set<string> pred{predicted_haplotype};
    int predicted_haplotype_idx = find(path_names.begin(), path_names.end(), predicted_haplotype) - path_names.begin();
-   vector<long double> all_top{final_vec[predicted_haplotype_idx]};
-   long double considered_ll = sum_log_likelihoods(all_top);
-   long double top_ratio = exp(considered_ll - total_ll);
+   vector<double> all_top{final_vec[predicted_haplotype_idx]};
+   double considered_ll = Haplocart::sum_log_likelihoods(all_top);
+   double top_ratio = exp(considered_ll - total_ll);
    confidence_vec.emplace_back(top_ratio);
    all_top.clear();
    pred.clear();
@@ -122,6 +115,6 @@ void Haplocart::get_posterior(const vector<long double> &final_vec, const vector
 
                                            }
 
-   Haplocart::write_posterior_log(samplename, posteriorfilename, clade_vec, confidence_vec, webapp, sample);
+   Haplocart::write_posterior_log(samplename, posteriorfilename, clade_vec, confidence_vec, webapp);
 
                                                             }

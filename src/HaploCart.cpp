@@ -7,13 +7,20 @@
 #include <sys/wait.h>
 #include "crash.hpp"
 #include "preflight.hpp"
-#include "Dup_Remover.h"
 #include "config/allocator_config.hpp"
 #include "io/register_libvg_io.hpp"
-#include "miscfunc.h"
+#include "Dup_Remover.h"
+#include "vgan_utils.h"
+#include <vg/io/vpkg.hpp>
 
 using namespace google::protobuf;
 using namespace vg;
+
+
+bool unixSortComparator(const std::string& a, const std::string& b) {
+    return std::use_facet<std::collate<char>>(std::locale("en_US.UTF-8")).compare(
+        a.data(), a.data() + a.size(), b.data(), b.data() + b.size()) < 0;
+}
 
 Haplocart::Haplocart(){
 
@@ -34,6 +41,7 @@ const string Haplocart::usage() const{
                   "Options:\n\n"+
                   "  Algorithm parameters\n"+
                   "  \t"+"-e [FLOAT]" + "\t\t\t"+ "Background error probability for FASTA input (default 0.0001)\n" +
+                  "  \t"+"-pt [FLOAT]\t\t\t"+ "\t\t\t"+"Posterior threshold for ancient DNA (aligned with SAFARI) \n" +
                   "  Input/Output\n"+
                   "  \t"+"--hc-files [STR]" + "\t\t" + "HaploCart graph directory location (default: \"../share/vgan/hcfiles/\")\n" +
                   "  \t"+"-f [STR]" + "\t\t\t" + "FASTA consensus input file\n" +
@@ -55,8 +63,10 @@ const string Haplocart::usage() const{
 
 }
 
-const int Haplocart::run(int argc, char *argv[], const string &cwdProg){
+void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
 
+    vector<double> log_likelihood_vec;
+    std::ios_base::sync_with_stdio(false);
     preflight_check();
     configure_memory_allocator();
     enable_crash_handling();
@@ -67,279 +77,253 @@ const int Haplocart::run(int argc, char *argv[], const string &cwdProg){
         exit(1);
                                       }
 
-    bool debug=false;
-    bool quiet = false;
-    bool interleaved = false;
-    bool dump_json = false;
-    bool webapp = false;
-    bool compute_posteriors = true;
-    bool rmdup = true;
-    bool invoked_samplename = false;
-    string posteriorfilename = "/dev/stdout";
-    bool   hcfiledirspecified = false;
-    string hcfiledir = "../share/vgan/hcfiles/";
-    double background_error_prob = 0.0001;
-    string gamfilename, fastafilename, fastq1filename, fastq2filename, samplename, jsonfilename;
-    string outputfilename = "/dev/stdout";
-    string tmpdir = "/tmp/";
-    int n_threads = 1;
+    dta->background_error_prob=0.0001;
+    dta->running_trailmix=false;
+    int i=0;
+    int n_input_files=0;
+    int idx_ = 0;
+    vector<string> fasta_seqs{""};
+    vector<string> fasta_ids{""};
+    auto start = std::chrono::system_clock::now();
 
-    for(int i=1;i<(argc);++i){
+    if(dta->reads_already_processed && dta->running_trailmix){goto infer;}
+
+    for(unsigned int i=1;i<(argc);++i){
 
     if(string(argv[i]) == "-") {
         cerr << Haplocart::usage() << endl;
         exit(0);
                                }
 
-    if(string(argv[i]) == "-d"){
-            debug=true;
-            continue;
-                               }
-
-    if(string(argv[i]) == "--hc-files"){
-            hcfiledir=argv[i+1];
-	    hcfiledirspecified=true;
-            if (hcfiledir.back() != '/'){hcfiledir += '/';} 
-            continue;
-                               }
-
-
     if(string(argv[i]) == "-e") {
-            background_error_prob = stod(argv[i+1]);
-            if (background_error_prob < 0 || background_error_prob > 1) {
+            dta->background_error_prob = stod(argv[i+1]);
+            if (dta->background_error_prob < 0 || dta->background_error_prob > 1) {
                        throw std::runtime_error("[HaploCart] Error, option -e is not a valid probability.");
                                                                         }
             continue;
                                 }
 
     if(string(argv[i]) == "-g"){
-            gamfilename = argv[i+1];
-            samplename = gamfilename;
+            dta->gamfilename = argv[i+1];
+            dta->samplename = dta->gamfilename;
             continue;
                                 }
 
     if(string(argv[i]) == "-f"){
-            fastafilename = argv[i+1];
-            samplename=fastafilename;
+            dta->fastafilename = argv[i+1];
+            dta->samplename=dta->fastafilename;
             continue;
                                 }
 
 
     if(string(argv[i]) == "-fq1"){
-            fastq1filename = argv[i+1];
-            const int idx = fastq1filename.find_last_of("/");
-            samplename=fastq1filename.substr(idx + 1);
-            samplename=fastq1filename;
+            dta->fastq1filename = argv[i+1];
+            const int idx = dta->fastq1filename.find_last_of("/");
+            dta->samplename=dta->fastq1filename.substr(idx + 1);
+            dta->samplename=dta->fastq1filename;
             continue;
                                 }
 
     if(string(argv[i]) == "-fq2"){
-            fastq2filename = argv[i+1];
+            dta->fastq2filename = argv[i+1];
             continue;
                                  }
 
+    if(string(argv[i]) == "--hc-files"){
+            dta->hc_graph_dir=argv[i+1];
+	    dta->graphdirspecified=true;
+            if (dta->hc_graph_dir.back() != '/'){dta->hc_graph_dir += '/';}
+            continue;
+                               }
+
     if(string(argv[i]) == "-i"){
-            interleaved = true;
+            dta->interleaved = true;
             continue;
-                               }
-
-    if(string(argv[i]) == "-j"){
-            dump_json = true;
-            continue;
-                               }
-
-    if(string(argv[i]) == "-jf"){
-            jsonfilename = argv[i+1];
-            continue;
-                                }
+                                 }
 
     if(string(argv[i]) == "-o"){
-            outputfilename = argv[i+1];
+            dta->outputfilename = argv[i+1];
+            continue;
+                                 }
+
+    if(string(argv[i]) == "-np"){
+            dta->compute_posteriors = false;
             continue;
                                }
 
-    if(string(argv[i]) == "-np"){
-            compute_posteriors=false;
-            continue;
-                                }
-
-
     if(string(argv[i]) == "-pf"){
-            posteriorfilename = argv[i+1];
+            dta->posteriorfilename = argv[i+1];
             continue;
                                 }
+
+
+    if(string(argv[i]) == "-pt"){
+            dta->posterior_threshold = argv[i+1];
+            continue;
+                                }
+
 
     if(string(argv[i]) == "-q"){
-            quiet = true;
+            dta->quiet = true;
             continue;
                                }
 
     if(string(argv[i]) == "-s"){
-            samplename = argv[i+1];
-            invoked_samplename = true;
+            dta->samplename = argv[i+1];
+            dta->invoked_samplename = true;
             continue;
                                  }
 
     if(string(argv[i]) == "-t"){
             if (stoi(argv[i+1]) < -1 || stoi(argv[i+1]) == 0) {throw std::runtime_error("[HaploCart] Error, invalid number of threads");}
-            if (stoi(argv[i+1]) == -1) {n_threads = std::thread::hardware_concurrency();}
+            if (stoi(argv[i+1]) == -1) {dta->n_threads = std::thread::hardware_concurrency();}
             else if (stoi(argv[i+1]) <= std::thread::hardware_concurrency()) {
-                n_threads = stoi(argv[i+1]);
+                dta->n_threads = stoi(argv[i+1]);
                                                                              }
             else {
-                cerr << "[HaploCart] Warning, specified number of threads is greater than the number available. Using " << n_threads << " threads\n";
-                n_threads = std::thread::hardware_concurrency();
+                cerr << "[HaploCart] Warning, specified number of threads is greater than the number available. Using " << dta->n_threads << " threads\n";
+                dta->n_threads = std::thread::hardware_concurrency();
                  }
             continue;
                                  }
 
     if(string(argv[i]) == "-w"){
-            webapp = true;
+            dta->webapp = true;
+            dta->n_threads=62;
             std::cerr.rdbuf(NULL);
-            n_threads = 62;
             continue;
                                }
 
     if(string(argv[i]) == "-z"){
-            tmpdir = argv[i+1];
-            if (tmpdir.back() != '/') {tmpdir += '/';}
+            dta->tmpdir = argv[i+1];
+            if (dta->tmpdir.back() != '/') {dta->tmpdir += '/';}
             continue;
                                }
 
                               }
 
-    ofstream outputFile(outputfilename, ios::app);
+    dta->deam5pfreqE  =  getFullPath(dta->cwdProg+"../share/vgan/damageProfiles/none.prof");
+    dta->deam3pfreqE  =  getFullPath(dta->cwdProg+"../share/vgan/damageProfiles/none.prof");
 
-    if (!webapp && !quiet)
+    std::cerr << "Loading GBWT index..." << std::endl << std::flush;
+    dta->gbwt = vg::io::VPKG::load_one<gbwt::GBWT>(dta->hc_graph_dir + "graph.gbwt");
+    dta->gbwtgraph = vg::io::VPKG::load_one<gbwtgraph::GBWTGraph>(dta->hc_graph_dir + "graph.gg");
+    std::cerr << "GBWT index loaded." << std::endl << std::flush;
+
+       // Load a bunch of stuff
+        if (!dta->running_trailmix) {
+        Haplocart::load_pangenome_map(dta);
+        //readPHG(dta);
+        Haplocart::precompute_incorrect_mapping_probs(dta);
+        Haplocart::load_path_names(dta);
+        dta->nbpaths = dta->path_names.size();
+        load_mappabilities(dta);
+        dta->qscore_vec = get_qscore_vec();
+        Haplocart::readPathHandleGraph(dta);
+                                    }
+
+    log_likelihood_vec.resize(dta->nbpaths, 0.0);
+
+    if (!dta->webapp && !dta->quiet && !dta->running_trailmix)
      cerr <<
      "╦ ╦┌─┐┌─┐┬  ┌─┐╔═╗┌─┐┬─┐┌┬┐\n"
      "╠═╣├─┤├─┘│  │ │║  ├─┤├┬┘ │\n"
      "╩ ╩┴ ┴┴  ┴─┘└─┘╚═╝┴ ┴┴└─ ┴\n"
-     << "\n" << endl;
+     << "\n\n\n" << endl;
 
 
-    if (!fs::is_directory(tmpdir) || !fs::exists(tmpdir)){
-        std::filesystem::create_directory(tmpdir);
+    if (!fs::is_directory(dta->tmpdir) || !fs::exists(dta->tmpdir)){
+        std::filesystem::create_directory(dta->tmpdir);
                                                          }
 
-    const int idx_ = samplename.find_last_of("/");
-    samplename=samplename.substr(idx_ + 1);
-
+    idx_ = dta->samplename.find_last_of("/");
+    dta->samplename=dta->samplename.substr(idx_ + 1);
 
     // Handle erroneous input
-    if (fastq1filename == "" && fastq2filename != "") {throw std::runtime_error("[HaploCart] Error, cannot invoke -fq2 without -fq1");}
-    if (dump_json && jsonfilename == "") {throw(std::runtime_error("[HaploCart] Error, cannot invoke -j without -jf"));}
-    if (!compute_posteriors && posteriorfilename != "/dev/stdout"){throw std::runtime_error("[HaploCart] Error, cannot invoke -pf without -p");}
-    if (fastafilename.ends_with(".fq")){throw runtime_error("[HaploCart] Warning, input file is named like a FASTQ but the FASTA flag (-f) was invoked");}
+    if (dta->fastq1filename == "" && dta->fastq2filename != "") {throw runtime_error("[HaploCart] Error, cannot invoke -fq2 without -fq1");}
 
-    if(!hcfiledirspecified){
-	hcfiledir  =  cwdProg +  hcfiledir;
-    }
-    
     // Check that input files exist
-    if (!(filesystem::exists(hcfiledir)))
-        {throw std::runtime_error("[HaploCart] Error, hc file directory (tried "+hcfiledir+" ) not found. This may be because you have downloaded the requisite files. \n Please see README.md for further instructions. ");}
-    
-    if (gamfilename != "") {if(!(filesystem::exists(gamfilename)))
-                      {throw std::runtime_error("[HaploCart] Error, GAM input file " + gamfilename + " does not exist");}}
-    if (fastafilename != "") {if(!(filesystem::exists(fastafilename)))
-                      {throw std::runtime_error("[HaploCart] Error, consensus FASTA input file " + fastafilename + " does not exist");}}
-    if (fastq1filename != "") {if(!(filesystem::exists(fastq1filename)))
-                      {throw std::runtime_error("[HaploCart] Error, FASTQ1 input file " + fastq1filename + " does not exist");}}
-    if (fastq2filename != "") {if(!(filesystem::exists(fastq2filename)))
-                      {throw std::runtime_error("[HaploCart] Error, FASTQ2 input file " + fastq2filename + " does not exist");}}
 
+    if (!(filesystem::exists(dta->hc_graph_dir))) {
+        throw std::runtime_error("[HaploCart] Error, hc file directory (tried "+dta->hc_graph_dir+" ) not found. This may be because you have downloaded the requisite files. \n Please see README.md for further instructions. ");
+                                               }
 
-    int n_input_files = 0;
-    if (gamfilename != "") {n_input_files+=1;}
-    if (fastafilename != "") {n_input_files+=1;}
-    if (fastq1filename != "") {n_input_files+=1;}
-    if (fastq2filename != "") {n_input_files+=1;}
-    if (n_input_files == 0) {cerr << "[HaploCart] Error, no input file given" << '\n'; return 1;}
-    if (n_input_files > 1 && !(fastq1filename != "" && fastq2filename != "" && gamfilename == "" && fastafilename == "")) {
-        cerr << "[HaploCart] Error, cannot accept multiple input files." << '\n'; return 1;
-                                                                                                                          }
-    if (quiet == false) {cerr << "Predicting sample: " << samplename << '\n';}
-    if (quiet == false) {cerr << "Using " << n_threads << " threads" << '\n';}
-    const string & graphfilename = getFullPath(hcfiledir + "graph.og");
+    if (dta->gamfilename != "") {if(!(filesystem::exists(dta->gamfilename)))
+                      {throw std::runtime_error("[HaploCart] Error, GAM input file " + dta->gamfilename + " does not exist");}}
+    if (dta->fastafilename != "") {if(!(filesystem::exists(dta->fastafilename)))
+                      {throw std::runtime_error("[HaploCart] Error, consensus FASTA input file " + dta->fastafilename + " does not exist");}}
+    if (dta->fastq1filename != "") {if(!(filesystem::exists(dta->fastq1filename)))
+                      {throw std::runtime_error("[HaploCart] Error, FASTQ1 input file " + dta->fastq1filename + " does not exist");}}
+    if (dta->fastq2filename != "") {if(!(filesystem::exists(dta->fastq2filename)))
+                      {throw std::runtime_error("[HaploCart] Error, FASTQ2 input file " + dta->fastq2filename + " does not exist");}}
 
-    int n_samples = 1;
-    vector<string> fasta_seqs{""};
-    vector<string> fasta_ids{""};
-    if (fastafilename != "") {
-        std::tie(fasta_seqs, fasta_ids) = Haplocart::read_fasta(fastafilename);
-        if (fasta_seqs.size() > 1 && invoked_samplename) {throw std::runtime_error("[HaploCart] Error, cannot invoke -s on multifasta input.");}
-        n_samples = fasta_seqs.size();
-        if (dump_json && n_samples > 1) {throw std::runtime_error("[HaploCart] Error, cannot invoke -j for multifasta input");}
-        if (!quiet) cerr << "Found " << n_samples << " sequences in FASTA file\n";
-                             }
+    if (dta->gamfilename != "") {n_input_files+=1;}
+    if (dta->fastafilename != "") {n_input_files+=1;}
+    if (dta->fastq1filename != "") {n_input_files+=1;}
+    if (dta->fastq2filename != "") {n_input_files+=1;}
+    if (n_input_files == 0) {throw std::runtime_error("[HaploCart] Error, no input file given");}
+    if (n_input_files > 1 && !(dta->fastq1filename != "" && dta->fastq2filename != "" && dta->gamfilename == "" && dta->fastafilename == "")) {
+        throw std::runtime_error("[HaploCart] Error, cannot accept multiple input files.");
+                                                                                                                                              }
+    if (dta->quiet == false) {cerr << "Predicting sample: " << dta->samplename << '\n';}
+    if (dta->quiet == false) {cerr << "Using " << dta->n_threads << " threads" << '\n';}
 
+    dta->graphfilename = getFullPath(dta->graph_dir + dta->graph_prefix+ ".og");
 
-    // Load a bunch of stuff
-    const map<const string, int> pangenome_map = load_pangenome_map(hcfiledir);
-    const tuple<vector<NodeInfo *>, const int, bdsg::ODGI> pathhandlegraphtuple = Haplocart::readPathHandleGraph(graphfilename, min(n_threads, 7), hcfiledir);
-    const auto [nodevector, minid, graph] = pathhandlegraphtuple;
-    const vector<double> incorrect_mapping_vec = Haplocart::precompute_incorrect_mapping_probs();
-    const vector<string> path_names = Haplocart::load_paths(hcfiledir);
-    const int nbpaths = path_names.size();
-    const vector<double> mappabilities = load_mappabilities(hcfiledir);
-    const vector<double> qscore_vec = get_qscore_vec();
+    if (dta->fastafilename != "") {
+        std::tie(fasta_seqs, fasta_ids) = Haplocart::read_fasta(dta->fastafilename);
+        if (fasta_seqs.size() > 1 && dta->invoked_samplename) {throw std::runtime_error("[HaploCart] Error, cannot invoke -s on multifasta input.");}
+        dta->n_samples = fasta_seqs.size();
+        if (!dta->quiet) cerr << "Found " << dta->n_samples << " sequences in FASTA file\n";
+                                   }
 
-    const vg::subcommand::Subcommand* sc = NULL;
-    int sample;
-    pid_t wpid, wpid2, wpid3;
-    int status = 0;
-    int status2 = 0;
-    int status3 = 0;
-    pid_t pid1 = 0;
-    pid_t pid2 = 0;
-    pid_t pid3 = 0;
-    vector<long double> log_likelihood_vec(5179, 0); // Vector of log likelihood
-    vector<long double> empty_vec(5179, 0); // Vector of log likelihood
-    vector<long double> final_vec(5179, 0); // Vector of log likelihood
-    vector<AlignmentInfo *> * algnvector;
-    #pragma omp wait_policy dynamic
-    #pragma omp parallel for num_threads(1) private(log_likelihood_vec, sample, pid1, pid2, pid3) schedule(static) shared(sc)
-    for (sample=0; sample<n_samples; ++sample) {
-    if(!quiet){cerr << "Processing sample " << sample+1 << " of " << n_samples << endl;}
-    if (fasta_ids.size() > 0 && fastafilename != "" && invoked_samplename == false) {samplename = fasta_ids[sample];}
+    for (i=0; i<dta->n_samples; ++i) {
 
-   if (webapp && (sample > 0)){outputFile << "--------------------------------------------------------------------------------------------------------------------------" << endl;}
+        //if (i>0){dta->n_threads=1;}
+        if(!dta->quiet){cerr << "Processing sample " << i+1 << " of " << dta->n_samples << endl;}
+        if (fasta_ids.size() > 0 && dta->fastafilename != "") {dta->samplename = fasta_ids[i];}
+
 
     /////////////// GIRAFFE ///////////////////////////
 
-    // If we are given somethng other than GAM we need to map it first
+    // If we are given something other than GAM we need to map it first
 
-    string first_fifo = tmpdir+random_string(7);
-    string second_fifo = tmpdir+random_string(7);
-    string third_fifo = tmpdir+random_string(7);
-    const char * fifo_A = first_fifo.c_str();
-    const char * fifo_B = second_fifo.c_str();
-    const char * fifo_C = third_fifo.c_str();
+    dta->first_fifo = dta->tmpdir+random_string(7);
+    dta->second_fifo = dta->tmpdir+random_string(7);
+    dta->third_fifo = dta->tmpdir+random_string(7);
+    dta->fifo_A = dta->first_fifo.c_str();
+    dta->fifo_B = dta->second_fifo.c_str();
+    dta->fifo_C = dta->third_fifo.c_str();
 
-    mkfifo(fifo_A, 0666);
-    mkfifo(fifo_B, 0666);
-    mkfifo(fifo_C, 0666);
+    mkfifo(dta->fifo_A, 0666);
+    mkfifo(dta->fifo_B, 0666);
+    mkfifo(dta->fifo_C, 0666);
 
-    pid1 = fork();
-    if (pid1 == -1) {
+{
+    #pragma omp single
+
+    dta->pid1 = fork();
+    if (dta->pid1 == -1) {
         throw std::runtime_error("Error in fork");
                     }
 
 
-    if(pid1 == 0) {
+    if(dta->pid1 == 0) {
         // Child
-        if (gamfilename == "") {
-            Haplocart::map_giraffe(fasta_seqs[sample], fastq1filename, fastq2filename, n_threads,
-                                    interleaved, background_error_prob, samplename, fifo_A, sc, tmpdir, hcfiledir, quiet);
-           while ((wpid = wait(&status)) > 0);
+        if (dta->gamfilename == "") {
+                cerr << "ENTERING MAP" << endl;
+                Haplocart::map_giraffe(fasta_seqs[i], dta->fastq1filename, dta->fastq2filename, dta->n_threads,
+                                    dta->interleaved, dta->background_error_prob, dta->samplename, dta->fifo_A, dta->sc, dta->tmpdir, \
+                                    dta->hc_graph_dir, dta->quiet, dta->deam3pfreqE, dta->deam5pfreqE, dta->posterior_threshold);
+                 cerr << "DONE ENTERING MAP" << endl;
+           while ((dta->wpid = wait(&dta->status)) > 0);
            exit(0);
                                }
 
         else {
                // Redirect buffer in case of GAM input
-               ifstream src(gamfilename);
-               ofstream dst(fifo_A);
+               ifstream src(dta->gamfilename);
+               ofstream dst(dta->fifo_A);
                dst << src.rdbuf();
                exit(0);
              }
@@ -350,14 +334,14 @@ const int Haplocart::run(int argc, char *argv[], const string &cwdProg){
 
          ////////////////////////// FILTER ////////////////////
 
-           pid2 = fork();
-           if (pid2 == -1) {
+           dta->pid2 = fork();
+           if (dta->pid2 == -1) {
                 throw std::runtime_error("Error in fork");
                            }
 
-           if (pid2 == 0) {
-               Haplocart::filter(n_threads, interleaved, fifo_A, fifo_B);
-               while ((wpid2 = wait(&status2)) > 0);
+           if (dta->pid2 == 0) {
+               Haplocart::filter(dta->n_threads, dta->interleaved, dta->fifo_A, dta->fifo_B);
+               while ((dta->wpid2 = wait(&dta->status2)) > 0);
                exit(0);
                           }
 
@@ -365,124 +349,136 @@ const int Haplocart::run(int argc, char *argv[], const string &cwdProg){
 
         ///////////////////////// GAMSORT ////////////////////
 
-             pid3 = fork();
-             if (pid3 == -1) {
+             dta->pid3 = fork();
+             if (dta->pid3 == -1) {
                  throw std::runtime_error("Error in fork");
                              }
 
-             if (pid3 == 0) {
-             Haplocart::gamsort(n_threads, interleaved, fifo_B, fifo_C, tmpdir);
-             while ((wpid3 = wait(&status3)) > 0);
-             exit(0);
+             if (dta->pid3 == 0) {
+             Haplocart::gamsort(dta->n_threads, dta->interleaved, dta->fifo_B, dta->fifo_C, dta->tmpdir);
+             while ((dta->wpid3 = wait(&dta->status3)) > 0);
+            exit(0);
                             }
 
-        else {
+           else {
 
         //////////////////////// NOW BACK TO YOUR REGULARLY SCHEDULED PROGRAMMING ////////////////////////
 
-        algnvector = readGAM(fifo_C, quiet, dump_json, jsonfilename, fastafilename);
+        //assert(!dta->reads_already_processed);
+        dta->algnvector = move(readGAM(dta));
+        assert(!dta->algnvector->empty());
+        if(dta->running_trailmix){
+            dta->reads_already_processed=true;return;
+                                 }
 
+        if (dta->algnvector->size() == 0) {throw std::runtime_error("[HaploCart] Error, no reads mapped");}
 
-        int n_reads = algnvector->size();
-        if (n_reads == 0)  {throw std::runtime_error("[HaploCart] Error, no reads mapped");}
+        if (dta->quiet == false && dta->fastafilename=="") {cerr << "Removing PCR duplicates ..." << '\n';}
 
-        if (!quiet && fastafilename=="") {cerr << "Removing PCR duplicates ..." << '\n';}
-        const auto dup_pair = Dup_Remover().remove_duplicates_internal(algnvector, n_threads, quiet);
-        algnvector = dup_pair.first;
-        n_reads = algnvector->size();
+//shared_ptr<vector<bool>> thing = Dup_Remover().remove_duplicates_internal(dta->algnvector, dta->n_threads, dta->quiet);
 
-        bool use_background_error_prob = false;
-        bool is_consensus_fasta = false;
-        if (fastafilename != ""){
-            if (quiet == false) {cerr << "Using background error probability of " << background_error_prob << '\n';}
-                use_background_error_prob = true;
-                is_consensus_fasta = true;
-                                }
+        if (dta->fastafilename != ""){
+            if (dta->quiet == false) {cerr << "Using background error probability of " << dta->background_error_prob << '\n';}
+                dta->use_background_error_prob = true;
+                dta->is_consensus_fasta = true;
+                                     }
+        //if (dta->quiet == false) {cerr << "Computing haplogroup likelihoods from " << dta->algnvector->size() << " reads." << '\n';}
 
-        const map<string, vector<string>> parents = load_parents(hcfiledir);
-        const map<string, vector<string>> children = load_children(hcfiledir);
+}
 
-        if (!quiet && fastafilename=="") {cerr << "Computing haplogroup likelihoods from " << n_reads << " reads." << '\n';}
+infer:
 
-        int i;
-        #pragma omp parallel for num_threads(n_threads) private(log_likelihood_vec, i)
-        for(long unsigned int i=0;i!=n_reads;++i){
+    dta->reads_already_processed=true;
+
+        unsigned int i;
+        vector<double> empty_vec(log_likelihood_vec.size(), 0.0);
+        vector<double> final_vec(log_likelihood_vec.size(), 0.0);
+
+{
+        #pragma omp parallel for num_threads(dta->n_threads) private(i, log_likelihood_vec) schedule(dynamic)
+        for(size_t i=0;i!=dta->algnvector->size();++i){
             // Discard unmapped reads
-            if (algnvector->at(i) -> identity < 1e-10) {continue;}
+            if (dta->algnvector->at(i) -> identity < 1e-10) {continue;}
 
             // Loop through mapped reads and update log likelihood vector accordingly
-            log_likelihood_vec = update(i, pangenome_map, nodevector, algnvector->at(i), empty_vec, qscore_vec, mappabilities,
-                                        nbpaths, quiet, use_background_error_prob, background_error_prob, incorrect_mapping_vec,
-                                        n_reads, minid, is_consensus_fasta, n_threads, graph
-                                       );
+            log_likelihood_vec = update(dta, i, empty_vec);
 
-        #pragma omp critical
-        for (int j=0;j<nbpaths;++j) {final_vec[j] += (log_likelihood_vec[j]);}
-                                                 }
+            //#pragma omp critical
+            for (size_t j=0;j<log_likelihood_vec.size();++j) {final_vec[j] += log_likelihood_vec[j];}
+                log_likelihood_vec.clear();
+                                                     }
+}
 
-        const int maxh_index = std::max_element(final_vec.begin(),final_vec.end()) - final_vec.begin();
-        const string predicted_haplotype = path_names[maxh_index];
+
+        assert(contains_no_inf(final_vec));
+
+
+
+  if (false) {
+        std::cerr << "Writing log likelihoods to disk" << std::endl;
+        std::vector<int> indices(final_vec.size());
+        std::iota(indices.begin(), indices.end(), 0);
+
+        // Sort by log likelihoods
+        std::sort(indices.begin(), indices.end(), [&](int A, int B) -> bool {
+            return final_vec[A] > final_vec[B];
+        });
+
+        std::cerr << std::setprecision(10) << std::endl;
+        std::ofstream debug_out("debug.txt");
+
+        // Ensure fixed-point notation and high precision
+        debug_out << std::fixed << std::setprecision(10);
+
+        for (int k = 0; k != final_vec.size(); ++k) {
+            int idx = indices[k];
+            debug_out << dta->path_names[idx] << '\t' << final_vec[idx] << '\n';
+        }
+    }
+
+        const unsigned int maxh_index = max_element(final_vec.begin(), final_vec.end()) - final_vec.begin();
+        const string proposed_haplotype = dta->path_names[maxh_index];
 
         // Write output to file
-        if (fastafilename != ""){n_reads = 1;}
 
-        ofstream outputFile(outputfilename, ios::app);
-        replace(samplename.begin(), samplename.end(), ' ', '_');
+        auto end = std::chrono::system_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        ofstream outputFile(dta->outputfilename, ios::app);
 
-        if (webapp == false)            {
-            if ((outputfilename == "/dev/stdout" && !quiet))             {
-                 outputFile <<"\n\n";
-                                                                         }
+        replace(dta->samplename.begin(), dta->samplename.end(), ' ', '_');
 
-                if (sample==0 || quiet) {outputFile << "#sample\tpredicted haplogroup\treads" << endl;}
-                outputFile << samplename << '\t' << predicted_haplotype << '\t' << n_reads << endl;
-                                        }
+
+        const size_t n_reads = dta->algnvector->size();
+        if (!dta->running_trailmix) {
+        if (dta->webapp == false) {
+            if (dta->outputfilename == "") {
+                cout << "\n\nSample\tPredicted haplotype\t# threads\ttime(ms)\t# reads" << endl;
+                cout << dta->samplename << '\t' << proposed_haplotype << '\t' << dta->n_threads << '\t' << elapsed.count() << '\t' << n_reads << "\n\n" << endl;
+                                      }
+            else {
+                outputFile << "\n\nSample\tPredicted haplotype\t# threads\ttime(ms)\t# reads" << endl;
+                outputFile << dta->samplename << '\t' << proposed_haplotype << '\t' << dta->n_threads << '\t' << elapsed.count() << '\t' << n_reads << "\n\n" << endl;
+                 }
+                             }
 
         else {
-            outputFile <<"\n\n" << endl;
-            outputFile <<"<table>" << endl;
-            if (fastafilename != ""){
-                outputFile << "<tr><td>" << "#sample" << "</td><td>&emsp;" << "Haplogroup" << endl;
-                                    }
-            else {
-                outputFile << "<tr><td>" << "Sample Number" << "</td><td>&emsp;" << "Haplogroup" << endl;
-                 }
-            if (fastafilename != "") {
-                outputFile <<"<tr><td>" << samplename << "</td><td>&emsp;" << "<strong>"+predicted_haplotype+"</strong>" << endl;
-                                     }
-            else {
-                outputFile <<"<tr><td>" << sample+1 << "</td><td>&emsp;" << "<strong>"+predicted_haplotype+"</strong>" << endl;
-                 }
-            outputFile <<"</table><br><br>" << endl;
+            cout << "\n\n";
+            cout << "<table>" << '\n';
+            cout << "<tr><td>" << dta->samplename << "</td><td>" << proposed_haplotype << "</td><td>"  << "</td></tr>" << '\n';
+            cout << "</table>" << '\n';
+            for (unsigned int i=0;i<8;++i){cout << '\n';}
              }
 
-        if (compute_posteriors) {
-            Haplocart::get_posterior(final_vec, path_names, parents, children, samplename, predicted_haplotype, \
-                                                 posteriorfilename, webapp, sample);
-                                }
+        if (dta->compute_posteriors) {
+            Haplocart::get_posterior(final_vec, dta->path_names, dta->parents, dta->children, dta->samplename, proposed_haplotype, dta->posteriorfilename, dta->webapp);
+                                     }
 
-        if (debug){
-            cerr << "Writing log likelihoods to disk" << endl;
-            std::vector<int> indices(final_vec.size());
-            std::iota(indices.begin(), indices.end(), 0);
-            std::sort(indices.begin(), indices.end(),
-            [&](int A, int B) -> bool {
-                return final_vec[A] > final_vec[B];
-            });
-            cerr << setprecision(10) << endl;
-
-	    //@josh is this for you only?
-	    ogzstream debug_out((cwdProg + "../data/Debug_log_likelihoods.txt.gz").c_str());
-            for (int k=0; k!=final_vec.size(); ++k)       {
-                debug_out << path_names[indices[k]] << '\t' << final_vec[indices[k]] << '\n';
-                                                          }
-                  }
-           algnvector->clear();
-           fill(begin(final_vec), end(final_vec), 0.0);
-           fill(begin(empty_vec), end(empty_vec), 0.0);
-                         }
                         }
-                     }
-                  }
-            return 0;
-}
+
+                                 }
+                         }
+
+                        }
+                   }
+return;
+                                 }

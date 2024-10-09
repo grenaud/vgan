@@ -3,6 +3,7 @@
 #include "path_string.hpp"
 #include <boost/range/adaptor/reversed.hpp>
 
+
 inline const tuple<string, string, vector<int>> reconstruct_graph_sequence(const bdsg::ODGI &graph, const auto &path, const string &algnseq)
 
 {
@@ -19,8 +20,7 @@ inline const tuple<string, string, vector<int>> reconstruct_graph_sequence(const
 
       auto mppgs = path.mapping();
       int f=0;
-      for (auto mppg : mppgs) {
-
+      for (auto &mppg : mppgs) {
       string node_seq = graph.get_sequence(graph.get_handle(mppg.position().node_id(), mppg.position().is_reverse()));
 
       int aligned_length = 0; // Initialize aligned_length

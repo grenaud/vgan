@@ -25,7 +25,12 @@ const string Gam2prof::usage() const{
           );
 }
 
-const int Gam2prof::run(int argc, char *argv[], const string &cwdProg){
+const int Gam2prof::run(int argc, char *argv[], string &cwdProg, shared_ptr<Trailmix_struct> &dta = NULLPTR_TRAILMIX_STRUCT){
+
+
+    if (dta != NULLPTR_TRAILMIX_STRUCT){cwdProg=dta->cwdProg;}
+    bool running_euka=false;
+    bool running_trailmix=false;
 
     // Check options
     int lengthToProf = 5;
@@ -43,6 +48,10 @@ const int Gam2prof::run(int argc, char *argv[], const string &cwdProg){
             continue;
         }
 
+        if(string(argv[i]) == "--running-trailmix"){
+            running_trailmix=true;
+            continue;
+        }
     }
 
     // Get file names
@@ -53,21 +62,22 @@ const int Gam2prof::run(int argc, char *argv[], const string &cwdProg){
     const string binsfilename   = dbprefix+".bins";
 
     // Check if files exits
-    if (isFile(gamfilename) == false){throw(std::runtime_error(gamfilename + " does not exist."));}
-    if (isFile(ogfilename) == false){throw(std::runtime_error(ogfilename + " does not exist."));}
-                       
+    if (!running_trailmix) {
+        if (isFile(gamfilename) == false){throw(std::runtime_error(gamfilename + " does not exist."));}
+        if (isFile(ogfilename) == false){throw(std::runtime_error(ogfilename + " does not exist."));}
+                           }
 
-
-    if (isFile(cladefilename) == false){throw(std::runtime_error(cladefilename + " does not exist."));}
-    if (isFile(binsfilename) == false){throw(std::runtime_error(binsfilename + " does not exist."));}
-                      
+    if (running_euka) {
+        if (isFile(cladefilename) == false){throw(std::runtime_error(cladefilename + " does not exist."));}
+        if (isFile(binsfilename) == false){throw(std::runtime_error(binsfilename + " does not exist."));}
+                      }
 
     // Deserialize handlegraph
     bdsg::ODGI graph;
 
-
-    graph.deserialize(ogfilename);
-    
+    if (!running_trailmix) {
+        graph.deserialize(ogfilename);
+                           }
 
     Euka ek;
 
@@ -83,7 +93,7 @@ const int Gam2prof::run(int argc, char *argv[], const string &cwdProg){
 
 
     function<void(vg::Alignment&)> lambda = [&graph, &n_reads, &n_map_reads, &clade_vec,  \
-         &chunks,  &lengthToProf, &prof_out_file_path](vg::Alignment& a) {
+         &chunks,  &lengthToProf, &prof_out_file_path, &running_euka, &running_trailmix, &dta](vg::Alignment& a) {
 
         ++n_reads;
 
@@ -98,6 +108,7 @@ const int Gam2prof::run(int argc, char *argv[], const string &cwdProg){
           // reconstructing the graph and the read sequence
           auto [graph_seq, read_seq, mppg_sizes] = reconstruct_graph_sequence(graph, a.path(), a.sequence());
 
+          if (running_euka) {
             // the node ID for the first node of the mapping is saved as n_index
             // the n_index is used to find the clade ID by looping through the saved bin indexes. Every clade has their own bins defind by the node IDs.
             // As soon as the fist node ID of the mapping is found within the bins the number of the vector is returned, which corresponds to the clade ID.
@@ -141,16 +152,40 @@ const int Gam2prof::run(int argc, char *argv[], const string &cwdProg){
                                                                                                               }
                                                              }
                }
-             // END EUKA-SPECIFIC CODE
+             } // END EUKA-SPECIFIC CODE
 
         } //END if identify not zero
     };
 
 
 
+    if (!running_trailmix) {
         vg::get_input_file(gamfilename,[&](istream& in) {vg::io::for_each(in, lambda);});
-                           
-                              
+                           }
+
+   else if (running_trailmix) {
+
+
+        Baseshift baseshift_data_array(lengthToProf, dta);
+
+        //for (size_t i=0; i<dta->algnvector->size(); ++i){dta->baseshift_data_array[i] = new unsigned int[16];}
+        for (size_t i=0; i<dta->algnvector->size(); ++i) {
+            // reconstructing the graph and the read sequence
+
+            auto [graph_seq, read_seq, mppg_sizes] = reconstruct_graph_sequence(dta->graph, dta->algnvector->at(i)->path, dta->algnvector->at(i)->seq);
+
+            // Calculate baseshifts
+            baseshift_data_array.baseshift_calc(graph_seq, read_seq, dta);
+                                                         }
+
+            if (dta->output_profs){
+                baseshift_data_array.display_prof(dta->tmpdir+"3p.prof", "3p", dta);
+                baseshift_data_array.display_prof(dta->tmpdir+"5p.prof", "5p", dta);
+                const string damageProfs3p = dta->tmpdir+"3p.prof";
+                const string damageProfs5p = dta->tmpdir+"5p.prof";
+                dta->dmg.initDeamProbabilities(damageProfs3p, damageProfs5p);
+                                  }
+                              }
 
     // check if the program should write output files or to stdout
     string prof_out_file = "/dev/stdout";
@@ -169,7 +204,7 @@ const int Gam2prof::run(int argc, char *argv[], const string &cwdProg){
 
 /////////////////////////////////////////////////// FOR EUKA ////////////////////////////////////////////////////////////
 
-
+  if (running_euka) {
     // check if clade could be detected or not
     vector<int> clade_list_id;
     for (size_t i=0; i<chunks.size(); i++) {
@@ -208,7 +243,7 @@ const int Gam2prof::run(int argc, char *argv[], const string &cwdProg){
         baseshift_data_array.display_counts(all_out_file);
 
                                                 }
-
+                   }
 
 //////////////////////////////////////////////// END FOR EUKA ////////////////////////////////////////
 

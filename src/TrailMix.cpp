@@ -1,7 +1,5 @@
 #include "TrailMix.h"
 #include "Trailmix_struct.h"
-//#include "trailmix_functions.h"
-//#include "TrailMix.h"
 #include "HaploCart.h"
 #include <algorithm>
 #include <thread>
@@ -14,90 +12,374 @@
 #include "preflight.hpp"
 #include "config/allocator_config.hpp"
 #include "io/register_libvg_io.hpp"
-#include "utils.hpp"
+#include "vgan_utils.h"
 #include "tree.h"
-#include "getLCAfromGAM.h"
+#include "precompute.h"
 #include <vg/io/vpkg.hpp>
-//#include <gbwtgraph/gbwtgraph.h>
-//#include <gbwtgraph/path_cover.h>
 
 using namespace vg;
+#define PRINTVEC(v) for (int i=0; i<v.size(); ++i){cerr << v[i] << '\t';}cerr << endl;
 
-void run_vg_surject(shared_ptr<Trailmix_struct> &dta)
-{
-    if (dta->paths_to_surject.empty()){
-        cerr << "No paths to surject" << endl;
-        return;
-                                      }
+#define PRINT_MAP_TO_TSV(map, filename) \
+do { \
+    std::ofstream outFile(filename); \
+    if (!outFile) { \
+        std::cerr << "Error: Cannot open file " << filename << " for writing." << std::endl; \
+        break; \
+    } \
+    for (const auto& pair : map) { \
+        outFile << pair.first << '\t' << pair.second << '\n'; \
+    } \
+    outFile.close(); \
+} while (0)
 
-    string output_file_path = "../src/consensus.bam";
 
-    cerr << "SURJECTING..." << endl;
-    vector<string> sjarguments;
-
-    sjarguments.emplace_back("vg");
-    sjarguments.emplace_back("surject");
-    sjarguments.emplace_back("-x");
-    sjarguments.emplace_back(dta->graph_prefix + ".xg");
-    sjarguments.emplace_back("-t");
-    sjarguments.emplace_back(to_string(dta->n_threads));
-    sjarguments.emplace_back("-b");
-    //sjarguments.emplace_back(dta->tmpdir + "/to_surject.gam");
-    sjarguments.emplace_back("../share/toy_hcfiles/sim.gam");
-    sjarguments.emplace_back("-p");
-    for (const auto & p : dta->paths_to_surject){
-        sjarguments.emplace_back(p);
-                                                }
-
-    // Convert the vector of strings to a vector of C strings.
-    std::vector<char*> argv;
-    for (const auto& arg : sjarguments) {
-        argv.push_back(const_cast<char*>(arg.c_str()));
-    }
-
-    // execvp expects a null pointer as the last element.
-    argv.push_back(nullptr);
-
-    pid_t pid = fork();
-    if (pid == -1) {
-        throw std::runtime_error("Error in fork");
-    }
-
-    if (pid == 0) {
-        // This is the child process.
-
-        // Open the output file. O_WRONLY means "open for writing" and O_CREAT means "create file if it does not exist".
-        int output_fd = open(output_file_path.c_str(), O_WRONLY | O_CREAT, 0644); // 0644 means "user can read/write, others can read"
-        if (output_fd == -1) {
-            perror("open");
-            exit(EXIT_FAILURE);
-        }
-
-        // Redirect stdout to the file.
-        if (dup2(output_fd, STDOUT_FILENO) == -1) {
-            perror("dup2");
-            exit(EXIT_FAILURE);
-        }
-
-        // Run vg surject.
-        execvp(argv[0], argv.data());
-
-        // If execvp returns, there was an error.
-        perror("execvp");
-        exit(EXIT_FAILURE);
-    } else {
-        // This is the parent process. Wait for the child to finish.
-        int status;
-        waitpid(pid, &status, 0);
-
-        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-            //std::cerr << "vg surject ran successfully" << std::endl;
+std::vector<bool> parseBoolVector(const std::string &str, char delimiter) {
+    std::vector<bool> result;
+    std::stringstream ss(str);
+    std::string token;
+    while (std::getline(ss, token, delimiter)) {
+        if (token == "1") {
+            result.push_back(true);
+        } else if (token == "0") {
+            result.push_back(false);
         } else {
-            std::cerr << "vg surject failed" << std::endl;
+            throw std::runtime_error("Invalid value in source assignment vector. Must be '0' or '1'.");
         }
     }
- exit(0);
+    return result;
 }
+
+void printBoolVector(const std::vector<bool> &vec, const std::string &name) {
+    std::cerr << name << ": [";
+    for (size_t i = 0; i < vec.size(); ++i) {
+        std::cerr << (vec[i] ? "true" : "false");
+        if (i != vec.size() - 1) {
+            std::cerr << ", ";
+        }
+    }
+    std::cerr << "]" << std::endl;
+}
+
+
+// Assuming main_surject is the entry point for vg surject similar to main_gamsort
+int main_surject(int argc, char** argv);
+
+void printMatrix(const Matrix& matrix) {
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            std::cerr << matrix[i][j];
+            if (j < 3) std::cerr << "\t"; // Tab-delimited
+        }
+        std::cerr << std::endl; // New line at the end of each row
+    }
+}
+
+void normalizeMatrix(Matrix& matrix) {
+    for (int i = 0; i < 4; ++i) {
+        double rowTotal = 0.0;
+        // Calculate the sum of each row
+        for (int j = 0; j < 4; ++j) {
+            rowTotal += matrix[i][j];
+        }
+
+        // Normalize each element in the row if the total is greater than 0
+        if (rowTotal > 0.0) {
+            for (int j = 0; j < 4; ++j) {
+                matrix[i][j] /= rowTotal;
+            }
+        }
+    }
+}
+
+void writeMatrixToFile(const std::string& filename, const Matrix& matrix) {
+    std::ofstream outfile(filename);
+    if (outfile.is_open()) {
+        // Header for the columns
+        outfile << "\tA\tC\tG\tT\n"; // Tab-delimited header
+
+        const char nucleotides[] = {'A', 'C', 'G', 'T'};
+        for (int i = 0; i < 4; ++i) {
+            outfile << nucleotides[i]; // Row label
+            for (int j = 0; j < 4; ++j) {
+                outfile << "\t" << matrix[i][j]; // Tab-delimited values
+            }
+            outfile << std::endl; // New line at the end of each row
+        }
+        outfile.close();
+    } else {
+        std::cerr << "Unable to open file: " << filename << std::endl;
+    }
+}
+
+
+
+// function gets the average for per clade damage profils (specific for either c->t or g->a as well as 5' or 3' end). 
+vector <double> get_avg(vector<double> dam, int l, int no_clades){
+
+    vector <double> sum(l, 0.0);
+    vector<double> av; 
+    
+    for (int i = 0; i<dam.size(); i++){
+
+        sum[i%l] += dam.at(i); 
+    }
+
+    for (int j = 0; j<sum.size(); j++){
+        av.emplace_back(sum[j]/no_clades);
+    }
+    
+    return av;
+}
+
+void output_combined_damagefile(
+    const std::vector<double>& end5ct,
+    const std::vector<double>& end3ct,
+    const std::vector<double>& end5ga,
+    const std::vector<double>& end3ga,
+    int lengthToProf,
+    const std::vector<std::string>& clade_id_list,
+    const std::string&  TM_outputfilename
+) {
+    // Calculate averages
+    std::vector<double> end5ct_av = get_avg(end5ct, lengthToProf, clade_id_list.size());
+    std::vector<double> end3ct_av = get_avg(end3ct, lengthToProf, clade_id_list.size());
+    std::vector<double> end5ga_av = get_avg(end5ga, lengthToProf, clade_id_list.size());
+    std::vector<double> end3ga_av = get_avg(end3ga, lengthToProf, clade_id_list.size());
+
+    // Output for 5' profile
+    std::ofstream outdamall(TM_outputfilename + "_5p.prof", std::ios::trunc);
+    outdamall << "A>C\tA>G\tA>T\tC>A\tC>G\tC>T\tG>A\tG>C\tG>T\tT>A\tT>C\tT>G\n";
+    for (std::size_t pas = 0; pas < end5ct_av.size(); pas++) {
+        for (int col = 0; col < 12; col++) {
+            if (col == 5) {
+                outdamall << end5ct_av[pas] << '\t';
+            } else if (col == 11) {
+                outdamall << "0\n";
+            } else {
+                outdamall << "0\t";
+            }
+        }
+    }
+
+    // Output for 3' profile
+    std::ofstream outdamall2(TM_outputfilename + "_3p.prof", std::ios::trunc);
+    outdamall2 << "A>C\tA>G\tA>T\tC>A\tC>G\tC>T\tG>A\tG>C\tG>T\tT>A\tT>C\tT>G\n";
+
+    std::reverse(end3ga_av.begin(), end3ga_av.end());
+
+    for (std::size_t pas = 0; pas < end3ga_av.size(); pas++) {
+        for (int col = 0; col < 12; col++) {
+            if (col == 6) {
+                outdamall2 << end3ga_av[pas] << '\t';
+            } else if (col == 11) {
+                outdamall2 << "0\n";
+            } else {
+                outdamall2 << "0\t";
+            }
+        }
+    }
+}
+
+void Trailmix::load_pangenome_map(shared_ptr<Trailmix_struct> &dta){
+const string pangenome_map_path = getFullPath(dta->graph_dir+"parsed_pangenome_mapping");
+igzstream myfile;
+myfile.open(pangenome_map_path.c_str(), ios::in);
+string line;
+while (getline(myfile, line))
+    {
+     const vector<string> tokens= allTokensWhiteSpaces(line);
+     const string key = tokens[0];
+     const int val = stoi(tokens[1])+1;
+     dta->pangenome_map.insert(make_pair(key, val));
+    }
+assert(!dta->pangenome_map.empty());
+return;
+}
+
+void Trailmix::precompute_incorrect_mapping_probs(shared_ptr<Trailmix_struct> &dta){
+for (int Q=0; Q!=100; ++Q) {
+    dta->incorrect_mapping_vec.emplace_back(get_p_incorrectly_mapped(Q));
+                           }
+return;
+}
+
+void Trailmix::load_mappabilities(std::shared_ptr<Trailmix_struct> &dta) {
+    std::string mappability_path = getFullPath(dta->graph_dir + "mappability.tsv");
+    igzstream myfile;
+    myfile.open(mappability_path.c_str(), ios::in);
+    std::string line;
+    while (std::getline(myfile, line)) {
+        std::vector<std::string> tokens = allTokensWhiteSpaces(line);
+        if (tokens.size() != 4) {
+            throw std::runtime_error("Invalid line in mappability file: " + line);
+        }
+        int start_pos = std::stoi(tokens[1]);
+        int end_pos = std::stoi(tokens[2]);
+        const double mappability = std::stod(tokens[3]);
+        if (start_pos >= end_pos) {
+            throw std::runtime_error("Invalid start/end positions in mappability file: " + line);
+        }
+        dta->mappabilities.resize(end_pos, mappability);
+        std::fill(dta->mappabilities.begin() + start_pos, dta->mappabilities.begin() + end_pos, mappability);
+        assert(!dta->mappabilities.empty());
+    }
+    return;
+}
+
+void Trailmix::modifyPathNameInPlace(shared_ptr<Trailmix_struct> &dta, string &path_name, bool first){
+     string original_path_name = path_name;
+
+    // Special case: a single letter followed by underscore
+    std::regex pattern2("^([A-Za-z])_$");
+    path_name = std::regex_replace(path_name, pattern2, "$1");
+
+    // Handle the special path format
+    std::regex pattern3("\\+([0-9]+)\\+\\(([0-9]+)\\)");
+    path_name = std::regex_replace(path_name, pattern3, "_$1__$2_");
+
+    // Now replace special characters
+    std::replace(path_name.begin(), path_name.end(), '+', '_');
+    std::replace(path_name.begin(), path_name.end(), '\'', '_');
+    std::replace(path_name.begin(), path_name.end(), '*', '_');
+    std::replace(path_name.begin(), path_name.end(), '@', '_');
+    std::replace(path_name.begin(), path_name.end(), '(', '_');
+    std::replace(path_name.begin(), path_name.end(), ')', '_');
+
+    if (!path_name.empty() && path_name.back() == '*') {
+        path_name.back() = '_';
+    }
+
+   if (path_name.size() == 1){path_name = path_name + "_";}
+
+    // Remove .1 or .2 at the end
+    std::regex patternEnd("\\.(1|2)$");
+    path_name = std::regex_replace(path_name, patternEnd, "");
+
+    if(first){
+    dta->originalPathNames[path_name] = original_path_name;
+             }
+
+}
+
+void Trailmix::readPHG(shared_ptr<Trailmix_struct> &dta) {
+
+    cerr << "[TrailMix] Deserializing graph: " << dta->graph_dir + dta->graph_prefix + ".og" << endl;
+    dta->graph.deserialize(dta->graph_dir + dta->graph_prefix + ".og");
+    cerr << "[TrailMix] Done deserializing" << endl;
+    dta->minid = dta->graph.min_node_id();
+    dta->maxid = dta->graph.max_node_id();
+
+    // create path support file
+    size_t N_nodes = dta->graph.get_node_count();
+
+    unsigned int p_index = 0;
+    dta->graph.for_each_path_handle([&](const handlegraph::path_handle_t &path_handle) {
+    string path_name = dta->graph.get_path_name(path_handle);
+    modifyPathNameInPlace(dta, path_name, true);
+
+size_t pos = 0;
+        dta->path_names.emplace_back(path_name);
+        p_index++;
+    });
+
+    const size_t N_paths = dta->path_names.size();
+
+    vector<vector<bool>> node_path_matrix(N_nodes, vector<bool>(N_paths, false));
+
+    for (size_t path_id = 0; path_id < N_paths; ++path_id) {
+        // Get the nodes in the path
+        gbwt::vector_type path_nodes = dta->gbwt->extract(path_id);
+        for (const auto& node_id : path_nodes) {
+            //cout << node_id << " ";
+            // Convert the GBWT node ID to the node handle in the graph
+            bdsg::handle_t handle = dta->graph.get_handle(node_id);
+            // Determine the index in the node_path_matrix
+            int64_t index = dta->graph.get_id(handle) - 1;
+            //cout << index << endl;
+            if (index >= 0 && index < N_nodes) {
+                node_path_matrix[index][path_id] = true;
+                                //cout << "I get positive too " << endl;
+            }
+
+        }
+        //cout << endl;
+
+    }
+
+    int nbpaths = dta->path_names.size();
+
+    for(int64 i=dta->minid;i<=dta->maxid;++i){
+        //cerr << i << endl;
+        NodeInfo * nodetoadd = new NodeInfo(i,nbpaths,0);
+        const auto nodehandle = dta->graph.get_handle(i);
+        string seqtoadd = dta->graph.get_sequence(nodehandle);
+        nodetoadd->seq = seqtoadd;
+        long unsigned int j;
+        for (j = 0; j < nbpaths; ++j) {
+            //nodetoadd->pathsgo[j] = node_path_matrix[i - 1][j];
+        }
+        dta->nodevector.emplace_back(move(nodetoadd));
+
+        //std::this_thread::sleep_for (std::chrono::milliseconds(10));
+    }
+
+    assert(dta->nodevector.size() != 0);
+    assert(dta->minid != 0);
+    // Check if at least one true value exists
+    bool hasTrueValue = false;
+    for (const auto& row : node_path_matrix) {
+        for (bool value : row) {
+            if (value) {
+                hasTrueValue = true;
+                                break;
+            }
+        }
+        if (hasTrueValue) {
+            break;
+        }
+    }
+
+    assert(dta->path_names.size() != 0);
+
+   return;
+}
+
+void run_vg_surject(shared_ptr<Trailmix_struct> &dta, const string &path_to_surject) {
+    cout << "[TrailMix] Starting run_vg_surject function with system call" << endl;
+
+    // Extract filename from path_to_surject
+    size_t last_slash_idx = path_to_surject.find_last_of("\\/");
+    string surject_filename = (last_slash_idx == string::npos) ? path_to_surject : path_to_surject.substr(last_slash_idx + 1);
+
+    // Prepare file paths
+    string output_file_path = "./" + surject_filename + ".bam";  // Output in current directory with surject name
+    string vg_binary_path = "../dep/vg/bin/vg";
+
+    // Prepare the system command
+    stringstream command_stream;
+    command_stream << vg_binary_path << " surject"
+                   << " -x " << dta->graph_dir << dta->graph_prefix << ".xg"
+                   << " -t " << dta->n_threads
+                   << " -b"  // BAM output
+                   << " -p " << path_to_surject
+                   << " -l -P -A " << "./" + surject_filename + "_"+to_string(dta->k)+".gam"
+                   << " > " << output_file_path;
+
+    string command = command_stream.str();
+    //cout << "Executing command: " << command << endl;
+
+    // Execute the system call
+    int result = system(command.c_str());
+
+    // Check result
+    if (result == 0) {
+        cout << "vg surject ran successfully" << endl;
+    } else {
+        cout << "vg surject failed with error code " << result << endl;
+    }
+}
+
 
 Trailmix::Trailmix(){
 
@@ -114,20 +396,31 @@ std::string Trailmix::usage() const {
           << "Deconvolution and phylogenetic placement of hominin sedaDNA mixtures.\n\n"
           << "Options:\n"
           << "Algorithm parameters:\n"
-          << "\t-e [FLOAT]\t\tBackground error probability for FASTA input (default: 0.0001)\n"
-          << "\t-f [STR]\t\tFASTA consensus input file\n"
-          << "\t-fq1 [STR]\t\tFASTQ input file\n"
-          << "\t-fq2 [STR]\t\tFASTQ second input file (for paired-end reads)\n"
-          << "\t-g [STR]\t\tGAM input file\n"
-          << "\t-i\t\t\tInput FASTQ (-fq1) is interleaved\n"
-          << "\t-k\t\t\tNumber of distinct contributing haplogroups\n"
-          << "\t-o [STR]\t\tOutput file (default: stdout)\n"
-          << "\t--auto\t\t\tAutomatically infer the optimal number of distinct sources in the sample\n"
+          << "\t-fq1 [STR]\t\t\t     FASTQ input file\n"
+          << "\t-fq2 [STR]\t\t\t     FASTQ second input file (for paired-end reads)\n"
+          << "\t-g [STR]\t\t\t     GAM input file\n"
+          << "\t-i\t\t\t\t     Input FASTQ (-fq1) is interleaved\n"
+          << "\t-k\t\t\t\t     Number of distinct contributing haplogroups\n"
+          << "\t-o [STR]\t\t\t     Output file (default: stdout)\n"
+          << "\t-pt [FLOAT]\t\t\t	Posterior threshold for ancient DNA (aligned with SAFARI) \n"
+          << "\t--depth [INT]\t\t\t     Tree depth to whitelist the MCMC search space (-1 for no restriction)\n"
           << "Non-algorithm parameters:\n"
-          << "\t-s [STR]\t\tSample name\n"
-          << "\t-t\t\t\tNumber of threads\n"
-          << "\t-v\t\t\tVerbose mode\n"
-          << "\t-z\t\t\tTemporary directory (default: /tmp/)\n";
+          << "\t-s [STR]\t\t\t     Sample name\n"
+          << "\t--dbprefix <prefix>\t\t     Specify the prefix for the database files\n"
+          << "\t--tm-files [STR]\t\t      Specify the TrailMix file directory (default: \"../share/vgan/tmfiles/\") \n"
+          << "\t-t\t\t\t\t     Number of threads\n"
+          << "\t-v\t\t\t\t     Verbose mode\n"
+          << "\t-z\t\t\t\t     Temporary directory (default: /tmp/)\n"
+          << "Markov chain Monte Carlo options:\n"
+          << "  \t--chains [INT]\t\t             Define the number of chains for the MCMC (default: 4)\n"
+          << "  \t--iter [INT]\t\t             Define the number of iterations for the MCMC (default: 1.000.000)\n"
+          << "  \t--randStart [bool]          Set to get random starting nodes in the tree instead of the signature nodes (default: false)\n"
+          << "  \t--burnin [INT]\t\t             Define the burn-in period for the MCMC (default: 100.000)\n"
+          << "Initialization options:\n"
+          << "  \t--library-type [STR] \t\t     Strand-specific library type (fr: read1 forward, rf: read1 reverse) (default: unstranded)\n"
+          << "Contamination Mode Options:\n"
+          << "  \t--contamination-mode, --cont-mode    Enable contamination mode, requires exactly two sources\n"
+          << "  \t--is-ancient [BOOL_VECTOR]   Assignments of sources, represented as a boolean vector, comma-delimited, where 1 means ancient (e.g. 0,1).\n";
 
     return usage.str();
 }
@@ -150,52 +443,43 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
         cerr << "error[vg]: Could not register libvg types with libvgio" << endl;
         exit(1);
                                       }
+
     bool verbose = true;
-    bool graph_dir_specified = false;
-    bool webapp = false;
-    bool compute_posteriors = true;
-    bool output_profs=false;
-    bool auto_mode=false;
     bool debug=false;
-    bool strand_specific = false;
-    string gamfilename, samplename, fastafilename, fastq1filename, fastq2filename, outputfilename, posteriorfilename;
-    string mu="125";
-    string sigma="0.00001";
-    string strand_specific_library_type = "read1_forward";
+    string gamfilename, samplename, fastafilename, fastq1filename, fastq2filename, posteriorfilename;
+    string TM_outputfilename = "TM_out";
     string tmpdir = "/tmp/";
-    string rng_seed="NONE";
-    string graph_dir = "../share/toy_hcfiles/";
-    string graph_prefix = "graph";
-    string graphfilename = graph_prefix + ".og";
+    string graph_dir = getFullPath(cwdProg+"../share/vgan/tmfiles/");
+    string graph_prefix="graph";
     unsigned int n_threads = 1;
-    double background_error_prob;
-    int k=1;
-    int auto_max=5;
-    int chains=4;
-    int burnin = 1;
-    int iter=3;
+    bool graphdirspecified = false;
+    std::vector<bool> isAncient = {true, false};
+    string deam5pfreqE  = getFullPath(cwdProg+"../share/vgan/damageProfiles/none.prof");
+    string deam3pfreqE  =  getFullPath(cwdProg+"../share/vgan/damageProfiles/none.prof");
+    string none_prof = getFullPath(cwdProg+"../share/vgan/damageProfiles/none.prof");
+    string posterior_threshold = "0.5";
+    bool specifiedDeam=false;
+    bool run_mcmc=true;
+    bool cont_mode=false;
+    unsigned int iter=10000;
+    unsigned int burnin=100;
+    unsigned int chains=1;
+    unsigned int k=1;
+    string prof_out_file_path = getFullPath(cwdProg+"../");
+    int lengthToProf = 5;
+    int depth = 10;
+    bool randStart=false;
+    bool strand_specific = false;
+    string rng_seed="NONE";
+    string strand_specific_library_type = "";
+    bool k_unset=true;
 
-    for(int i=1;i<(argc);++i){
+     for(int i=1;i<(argc);++i){
 
-    if(string(argv[i]) == "-e"){
-            background_error_prob = stod(argv[i+1]);
-            if (background_error_prob < 0 || background_error_prob > 1) {
-                       throw std::runtime_error("Error, option -e is not a valid probability.");
-                                                                        }
-            continue;
-                                }
-
-    if(string(argv[i]) == "-g"){
+     if(string(argv[i]) == "-g"){
             gamfilename = argv[i+1];
             continue;
                                 }
-
-    if(string(argv[i]) == "-f"){
-            fastafilename = argv[i+1];
-            samplename=fastafilename;
-            continue;
-                                }
-
 
     if(string(argv[i]) == "-fq1"){
             fastq1filename = argv[i+1];
@@ -209,36 +493,37 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
             continue;
                                  }
 
-    if(string(argv[i]) == "-sigma"){
-            sigma = argv[i+1];
+     if(string(argv[i]) == "-l"){
+            lengthToProf = stoi(argv[i+1]);
             continue;
-                                   }
+        }
 
-    if(string(argv[i]) == "-mu"){
-            mu = argv[i+1];
+     if(string(argv[i]) == "--out_dir"){
+            prof_out_file_path = string(argv[i+1]);
             continue;
-                                }
+        }
 
-    if(string(argv[i]) == "-k"){
-            k = stoi(argv[i+1]);
-            if (k < 1) {throw std::runtime_error("[TrailMix] Error, k must be a positive integer");}
+       if(std::string(argv[i]) == "-k"){
+            k_unset=false;
+            k = std::stoi(argv[i+1]);
+            if (k < 1) {
+                throw std::runtime_error("[TrailMix] Error, k must be a positive integer");
+            }
             continue;
-                                 }
+      }
 
-    if(string(argv[i]) == "-o"){
-            outputfilename = argv[i+1];
-            continue;
-                                 }
 
-     if(string(argv[i]) == "-r"){
-            rng_seed = argv[i+1];
+       if(string(argv[i]) == "-o"){
+            TM_outputfilename = argv[i+1];
             continue;
-                                 }
+                               }
 
-    if(string(argv[i]) == "-s"){
-            samplename = argv[i+1];
+       if(string(argv[i]) == "--library-type"){
+            strand_specific = true;
+            strand_specific_library_type = argv[i+1];
             continue;
-                                 }
+                               }
+
 
     if(string(argv[i]) == "-t"){
             if (stoi(argv[i+1]) < -1 || stoi(argv[i+1]) == 0) {throw std::runtime_error("[TrailMix] Error, invalid number of threads");}
@@ -253,212 +538,234 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
             continue;
                                  }
 
-
-    if(string(argv[i]) == "-v"){
-            verbose = true;
+        if(string(argv[i]) == "-z"){
+            tmpdir = getFullPath(argv[i+1]);
             continue;
                                }
 
-    if(string(argv[i]) == "-z"){
-            tmpdir = argv[i+1];
-            if (tmpdir.back() != '/') {tmpdir += '/';}
-            continue;
-                               }
-
-    if(string(argv[i]) == "-w"){
-            webapp = true;
-            outputfilename = tmpdir+"haplogroups.html";
-            posteriorfilename = tmpdir+"posteriors.html";
-            continue;
-                               }
-
-    if(string(argv[i]) == "--output-profs"){
-            output_profs=true;
-            continue;
-                                           }
-
-   if(string(argv[i]) == "--debug"){
+    if(string(argv[i]) == "--debug"){
             debug=true;
             continue;
                                    }
 
-   if(string(argv[i]) == "--auto"){
-            auto_mode=true;
+        
+     if(string(argv[i]) == "--depth"){
+            depth=stod(argv[i+1]);
             continue;
-                                          }
+                                   }
 
-    if(string(argv[i]) == "--strand-specific"){
-            strand_specific=true;
+
+
+        if(string(argv[i]) == "--deam5p"  ){
+            deam5pfreqE=string(argv[i+1]);
+        specifiedDeam=true;
             continue;
-                                            }
+        }
 
-    if(string(argv[i]) == "--read1-reverse"){
-            strand_specific_library_type = "read1_reverse";
+        if(string(argv[i]) == "--deam3p"  ){
+            deam3pfreqE=string(argv[i+1]);
+        specifiedDeam=true;
             continue;
-                                            }
+        }
 
-     if(string(argv[i]) == "--auto-max"){
-            auto_max = stoi(argv[i+1]);
+        if(string(argv[i]) == "--randStart"  || string(argv[i]) == "--randstart"){
+            randStart=true;
             continue;
-                                        }
+        }
 
-     if(string(argv[i]) == "--iter" || string(argv[i]) == "--iterations"){
-         iter=stoi(argv[i+1]);
-         assert(iter >= 0);
-         continue;
-     }
-     if(string(argv[i]) == "--burnin"){
-         burnin=stoi(argv[i+1]);
-         assert(burnin >= 0);
-         continue;
-     }
-     if(string(argv[i]) == "--chains"){
-         chains=stoi(argv[i+1]);
-         assert(burnin >= 0);
-         continue;
-     }
+        if(string(argv[i]) == "--iter" || string(argv[i]) == "--iterations"){
+            iter=stoi(argv[i+1]);
+            assert(iter >= 0);
+            continue;
+        }
+        if(string(argv[i]) == "--burnin"){
+            burnin=stoi(argv[i+1]);
+            assert(burnin >= 0);
+            continue;
+        }
+        if(string(argv[i]) == "--chains"){
+            chains=stoi(argv[i+1]);
+            assert(burnin >= 0);
+            continue;
+        }
 
-               }
+        if(string(argv[i]) == "-pt"){
+            posterior_threshold = argv[i+1];
+            continue;
+                                }
 
-    if(!graph_dir_specified){
-	graph_dir  =  cwdProg +  graph_dir;
+         if(string(argv[i]) == "--dbprefix"){
+            graph_prefix=argv[i+1];
+            continue;
+        }
+
+
+    if(string(argv[i]) == "--tm-files"){
+            graph_dir=getFullPath(argv[i+1]);
+            //if (graph_dir.back() != '/'){graph_dir += '/';}
+            continue;
+                                      }
+
+       if(string(argv[i]) == "--contamination-mode" || string(argv[i]) == "--cont-mode"){
+            if (k != 2){
+              throw runtime_error("[TrailMix] Must have two sources to run in contamination mode");
+            }
+            cont_mode=true;
+            continue;
+        }
+
+       if (std::string(argv[i]) == "--is-ancient") {
+        if(i + 1 < argc) {
+            isAncient = parseBoolVector(argv[++i], ','); // Assume parseBoolVector is correct
+        } else {
+            throw std::runtime_error(std::string("Option ") + argv[i] + " requires an argument.");
+        }
+        continue;
     }
 
-    // Load a bunch of stuff
-    Haplocart hc;
+    }
+
+    if (fastafilename != "" && k != 1){throw runtime_error("[TrailMix] For consensus FASTA input, k must equal 1 (single-source)");}
+
     shared_ptr dta = make_unique<Trailmix_struct>();
-    dta->to_increment.reserve(1000000);
-    dta->running_trailmix=true; // Need this up here for loading path supports correctly
-    hc.load_pangenome_map(dta);
-    hc.precompute_incorrect_mapping_probs(dta);
-    hc.load_path_names(dta);
-    //hc.load_path_supports(dta);
-    const int nbpaths = dta->path_names.size();
-    hc.load_mappabilities(dta);
-    const vector<double> qscore_vec = get_qscore_vec();
-    vector<long double> log_likelihood_vec(nbpaths, 0);
-    bool use_background_error_prob = false;
-    bool is_consensus_fasta = false;
+    dta->graph_dir = graph_dir;
 
-    // Make sure we did not load an empty file
-    assert(qscore_vec.size() > 0);
+    std::cerr << "Loading GBWT index..." << std::endl << std::flush;
+    std::string gbwt_index_file = getFullPath(dta->graph_dir + graph_prefix + ".gbwt");
+    std::string gbwtgraph_index_file = getFullPath(dta->graph_dir + graph_prefix + ".gg");
+    dta->gbwt = vg::io::VPKG::load_one<gbwt::GBWT>(gbwt_index_file);
+    dta->gbwtgraph = vg::io::VPKG::load_one<gbwtgraph::GBWTGraph>(gbwtgraph_index_file);
+    std::cerr << "GBWT index loaded." << std::endl << std::flush;
 
+    // Load a bunch of stuff
+    //Haplocart hc;
 
-    //////////////////////////////////////////////// POPULATE OUR STRUCT ///////////////////////////////////////////////////////////
-
-
-   std::cerr << "Loading GBWT index..." << std::endl << std::flush;
-   std::string gbwt_index_file = dta->graph_dir + dta->graph_prefix + ".gbwt";
-   //std::string gbwtgraph_index_file = dta->graph_prefix + "graph.gg";
-   dta->gbwt = vg::io::VPKG::load_one<gbwt::GBWT>(gbwt_index_file);
-   //dta->gbwtgraph = vg::io::VPKG::load_one<gbwtgraph::GBWTGraph>(gbwtgraph_index_file);
-   std::cerr << "GBWT index loaded." << std::endl << std::flush;
-
-/*
-   ofstream out("gbwt_threads");
-const gbwt::Metadata& metadata = dta->gbwt->metadata;
-const std::vector<gbwt::PathName>& path_names = metadata.path_names;
-for (std::size_t i = 0; i < metadata.paths(); ++i) {
-  if (metadata.hasPathNames()) {
-    gbwt::size_type path_length = dta->gbwt->extract(i).size();
-    std::string thread_name = "_gbwt_" + metadata.sample(path_names[i].sample) + "_" +
-                              metadata.contig(path_names[i].contig) + "_" +
-                              std::to_string(path_names[i].phase) + "_" +
-                              std::to_string(path_names[i].count);
-    out << thread_name << "," << path_length << std::endl;
-  }
-}
-exit(0);
-*/
-
-    dta->k = k;
-    dta->qscore_vec = qscore_vec;
-    dta->background_error_prob = 0.0001;
-    dta->cwdProg = cwdProg;
-    dta->mu = mu;
-    dta->sigma = sigma;
+    dta->running_trailmix=true;
+    dta->is_ancient_vec = isAncient;
     dta->strand_specific = strand_specific;
     dta->strand_specific_library_type = strand_specific_library_type;
-    dta->webapp=webapp;
-    dta->debug=debug;
-    dta->auto_mode=auto_mode;
-    dta->verbose=verbose;
-    dta->output_profs=output_profs;
-    dta->compute_posteriors=compute_posteriors;
-    dta->n_threads=n_threads;
     dta->fastafilename=fastafilename;
     dta->samplename=samplename;
     dta->fastq1filename=fastq1filename;
     dta->fastq2filename=fastq2filename;
-    dta->graphfilename=graphfilename;
+    dta->randStart = randStart;
+    dta->none_prof=none_prof;
     dta->tmpdir = tmpdir + "vgan_" + random_string(7) + "/";
+    dta->rpvg_gamfilename = dta->tmpdir + random_string(7);
+    if (!fs::is_directory(dta->tmpdir) || !fs::exists(dta->tmpdir)) {
+      std::filesystem::create_directory(dta->tmpdir);
+    }
     dta->gamfilename=gamfilename;
-    dta->outputfilename=outputfilename;
-    dta->posteriorfilename=posteriorfilename;
-    dta->background_error_prob=background_error_prob;
-    dta->nbpaths=nbpaths;
-    dta->graph_prefix = graph_prefix;
-    dta->graph_dir_specified = graph_dir_specified;
-    dta->iter=iter;
-    dta->burnin = burnin;
-    dta->chains=chains;
-    //dta->treePath = dta->graph_prefix + "/iqtree/haps.treefile";
-    dta->treePath = dta->graph_dir + "/hominin_mts_prank.best.dnd";
-    dta->output_profs=true;
-    dta->rng_seed=rng_seed;
+    dta->TM_outputfilename=TM_outputfilename;
+    dta->n_threads=n_threads;
+    dta->k = k;
+    dta->graphdirspecified = graphdirspecified;
+    dta->treePath = dta->graph_dir + "haps.treefile";
     auto tree = make_tree_from_dnd(dta);
-    dta->tree = make_unique<spidir::Tree>(tree);
-    Trailmix::create_path_node_map(dta);
-    hc.readPathHandleGraph(dta);
-    assert(dta->nodevector.size() > 0);
-    std::vector<Eigen::Matrix4d> sub_vec;
-    Eigen::Matrix4d sub_matrix = Eigen::Matrix4d::Zero();
-    dta->sub_vec = std::vector<Eigen::Matrix4d>(dta->path_names.size(), sub_matrix);
-    dta->graph.for_each_path_handle([&](const handlegraph::path_handle_t &path_handle) {
-    std::string path_name = dta->graph.get_path_name(path_handle);
-    dta->gbwt_paths.emplace_back(path_name);
-    dta->auto_max = auto_max;
-    });
+
+    if (tree.nodes.size() == 0){
+        throw runtime_error("The tree is empty");
+    }
+
+        for (size_t i = 0; i < tree.nodes.size(); i++) {
+        auto & tn = tree.nodes[i];
+
+        if (tn == NULL){cerr << "TREE NODE IS NULL!" << endl; continue;}
+
+    }
+
+    dta->cont_mode=cont_mode;
+    dta->tree = &tree;
+    dta->qscore_vec = get_qscore_vec();
+    dta->running_trailmix=true;
+    dta->iter=iter;
+    dta->burnin=burnin;
+    dta->chains=chains;
+    dta->posterior_threshold=posterior_threshold;
+    dta->depth=depth;
+    dta->graph_prefix=graph_prefix;
+    dta->graph_dir = graph_dir;
+    readPHG(dta);
+    dta->deam5pfreqE = deam5pfreqE;
+    dta->deam3pfreqE = deam3pfreqE;
+    dta->dmg.initDeamProbabilities(deam5pfreqE,deam3pfreqE);
+    dta->dmg_none.initDeamProbabilities(none_prof, none_prof);
+    load_mappabilities(dta);
+    load_pangenome_map(dta);
+
+for (int Q=0; Q!=100; ++Q) {
+    dta->incorrect_mapping_vec.emplace_back(get_p_incorrectly_mapped(Q));
+                           }
+
+    Trailmix::run_mcmc(dta);
 
 /*
+    // Check the validity of the paths in dta->path_node_map
+    for (const auto& path : dta->paths_to_surject) {
+        if (dta->path_node_map.find(path) == dta->path_node_map.end()) {
+            std::cerr << "Error: Path " << path << " not found in path_node_map." << std::endl;
+            throw std::runtime_error("Path not found in path_node_map.");
+        } else {
+            std::cerr << "Path " << path << " found in path_node_map!" << std::endl;
+        }
+    }
 
-    if (dta->auto_mode) {
-    dta->node_combos.clear();
-    dta->branch_combos.clear();
-    dta->branch_combo_lls.clear();
-    for (unsigned int run = 0; run < dta->auto_max; ++run) {
-        if (dta->debug && run != 1){continue;}
-        cerr << "ON RUN NUMBER: " << run + 1 << endl;
-        dta->first_of_new_k = true;
-        dta->sources = vector<bool>(run + 1, false);
-        dta->k = run + 1;
-        generate_combinations(dta, run + 1, 0);
-        dta->first_of_new_k = false;
-        dta->tmpdir = tmpdir + "vgan_" + random_string(7) + "/";
-        if (!fs::is_directory(dta->tmpdir) || !fs::exists(dta->tmpdir)) {
-            std::filesystem::create_directory(dta->tmpdir);
+// Step 1: Map Reads to All Paths
+std::map<int, std::set<std::string>> readToPathMap; // Maps read indices to the set of paths they support
+for (const auto& path : dta->paths_to_surject) {
+    for (size_t index = 0; index < dta->read_probs.second.size(); ++index) {
+        const auto& node_vector = dta->read_probs.second[index];
+        int node_to_check = dta->path_node_map[path];
+        if (std::find(node_vector.begin(), node_vector.end(), node_to_check) != node_vector.end()) {
+            readToPathMap[index].insert(path);
         }
     }
 }
-    else {
-        dta->current_source=false;
-        Trailmix::run_trailmix(dta);
-        //std::filesystem::remove_all(dta->tmpdir);
-         }
 
-    //Trailmix::write_output(dta);
-    //run_vg_surject(dta);
+// Step 2: Surject Reads Uniquely for Each Path
+for (const auto& path : dta->paths_to_surject) {
+    std::vector<int> reads_to_surject;
+    Matrix aggregated_matrix = {}; // Initialize your matrix
+
+    for (const auto& readMapEntry : readToPathMap) {
+        int readIndex = readMapEntry.first;
+        const auto& pathsSupported = readMapEntry.second;
+
+        // Check if the read supports only the current path
+        if (pathsSupported.count(path) > 0) {
+            reads_to_surject.push_back(readIndex);
+
+            // Aggregate substitution matrices for the reads
+            for (int i = 0; i < 4; ++i) {
+                for (int j = 0; j < 4; ++j) {
+                    aggregated_matrix[i][j] += dta->substitution_matrices[readIndex][i][j];
+                }
+            }
+        }
+    }
+
+std::cerr << "Aggregated Matrix (Before Normalization):" << std::endl;
+printMatrix(aggregated_matrix); // Implement this function to print the matrix
+
+    // Normalize the aggregated matrix here
+    normalizeMatrix(aggregated_matrix);
+
+std::cerr << "Normalized Matrix:" << std::endl;
+printMatrix(aggregated_matrix); // Print matrix after normalization
+
+    // Write the normalized matrix to a file
+    std::string matrix_filename = dta->originalPathNames[path] + "_substitution_matrix.txt";
+    writeMatrixToFile(matrix_filename, aggregated_matrix);
+
+    cerr << "READ PROBS SIZE: " << dta->read_probs.second.size() << endl;
+    cerr << "NUMBER OF READS SURJECTED: " << reads_to_surject.size() << endl;
+
+    writeDeconvolvedReads(dta, dta->rpvg_gamfilename, dta->originalPathNames[path]+"_"+to_string(dta->k)+".gam", reads_to_surject);
+    run_vg_surject(dta, dta->originalPathNames[path]);
+}
 */
 
-    run_haplocart(dta);
-    //dta->gam = analyse_GAM_trailmix(dta);
-    //remove(dta->fifo_A);
-    Trailmix::run_trailmix(dta);
-
+    //exit(0);
 
     return 0;
-                                          }
-
-
-
-
+}

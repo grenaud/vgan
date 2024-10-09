@@ -1,5 +1,7 @@
 #pragma once
+#include "Trailmix_struct.h"
 #include "AlignmentInfo.h"
+
 using namespace std;
 
 class Dup_Remover{
@@ -19,8 +21,10 @@ string_view usage();
  *
  */
 
-void remove_duplicates(const char* gam_file);
-const pair<vector<AlignmentInfo*>*, const vector<bool>*> remove_duplicates_internal(vector<AlignmentInfo*> * sorted_algnvector, const int n_threads, const bool quiet);
+void remove_duplicates(shared_ptr<Trailmix_struct>& dta, const char *gam_file);
+
+shared_ptr<vector<bool>> remove_duplicates_internal(shared_ptr<vector<AlignmentInfo*>>& sorted_algnvector,\
+                                     const int n_threads, const bool quiet);
 
 /**
  * @brief Helper function to update vector of booleans when encountering a paired read.
@@ -29,7 +33,7 @@ const pair<vector<AlignmentInfo*>*, const vector<bool>*> remove_duplicates_inter
  *
  */
 
-vector<bool>* update_for_paired(vector<bool>* is_dup, const bool is_reverse, vector<AlignmentInfo*> * sorted_algnvector,
+void update_for_paired(shared_ptr<vector<bool>> &is_dup, const bool is_reverse, shared_ptr<vector<AlignmentInfo*>>& sorted_algnvector,
 const long unsigned int i, const int n_threads);
 
 /**
@@ -39,8 +43,8 @@ const long unsigned int i, const int n_threads);
  *
  */
 
-vector<bool>* update_for_single(vector<bool>* is_dup, const bool is_reverse, \
-                                vector<AlignmentInfo*> * sorted_algnvector, long unsigned int i, const int n_threads);
+void update_for_single(shared_ptr<vector<bool>> &is_dup, const bool is_reverse, \
+                       shared_ptr<vector<AlignmentInfo*>>& sorted_algnvector, long unsigned int i, const int n_threads);
 
 Dup_Remover();
 Dup_Remover(const Dup_Remover & other);

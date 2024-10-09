@@ -180,16 +180,45 @@ std::vector<BranchPlacementRecord> load_branch_placement_diagnostics_file(const 
     std::ifstream file(file_path);
     std::string line;
 
+    if (!file.is_open()) {
+        std::cerr << "Error: Unable to open file: " << file_path << std::endl;
+        return records; // Return empty if file can't be opened
+    }
+
+    int line_number = 0;
     while (std::getline(file, line)) {
-        if (line.empty() || line.rfind("Source", 0) == 0) continue; // Skip headers and empty lines
+        line_number++;
+
+        // Skip headers and empty lines
+        if (line.empty() || line.rfind("Source", 0) == 0) {
+            std::cerr << "Skipping header or empty line." << std::endl;
+            continue;
+        }
+
         std::istringstream iss(line);
         BranchPlacementRecord r;
+
         if (iss >> r.source >> r.chain >> r.meanBranchPosition >> r.meanBranchPositionCI
-                >> r.medianBranchPosition >> r.medianBranchPositionCI 
+                >> r.medianBranchPosition >> r.medianBranchPositionCI
                 >> r.effectiveSampleSize >> r.autocorrelationVariance) {
+            //std::cerr << "Parsed record: " << std::endl;
+            //std::cerr << "\tSource: " << r.source << std::endl;
+            //std::cerr << "\tChain: " << r.chain << std::endl;
+            //std::cerr << "\tMean Branch Position: " << r.meanBranchPosition << std::endl;
+            //std::cerr << "\tMean Branch Position CI: " << r.meanBranchPositionCI << std::endl;
+            //std::cerr << "\tMedian Branch Position: " << r.medianBranchPosition << std::endl;
+            //std::cerr << "\tMedian Branch Position CI: " << r.medianBranchPositionCI << std::endl;
+            //std::cerr << "\tEffective Sample Size: " << r.effectiveSampleSize << std::endl;
+            //std::cerr << "\tAutocorrelation Variance: " << r.autocorrelationVariance << std::endl;
+
             records.emplace_back(r);
+            //std::cerr << "Record added to records vector." << std::endl;
+        } else {
+            //std::cerr << "Warning: Failed to parse line " << line_number << ": " << line << std::endl;
         }
     }
+
+    //std::cerr << "Finished reading file. Total records loaded: " << records.size() << std::endl;
     return records;
 }
 
@@ -209,7 +238,7 @@ soibean_argvec.emplace_back("soibean");
 soibean_argvec.emplace_back("-fq1");
 soibean_argvec.emplace_back(getCWD(".")+"bin/" + "../test/input_files/soibean/k1.fq.gz");
 soibean_argvec.emplace_back("-t");
-soibean_argvec.emplace_back("20");
+soibean_argvec.emplace_back("50");
 soibean_argvec.emplace_back("-o");
 soibean_argvec.emplace_back(getCWD(".")+"bin/" + "../test/output_files/soibean/k1");
 soibean_argvec.emplace_back("--dbprefix");
@@ -241,7 +270,7 @@ soibean_argvec.emplace_back("soibean");
 soibean_argvec.emplace_back("-fq1");
 soibean_argvec.emplace_back(getCWD(".")+"bin/" + "../test/input_files/soibean/k2.fq.gz");
 soibean_argvec.emplace_back("-t");
-soibean_argvec.emplace_back("20");
+soibean_argvec.emplace_back("50");
 soibean_argvec.emplace_back("-o");
 soibean_argvec.emplace_back(getCWD(".")+"bin/" + "../test/output_files/soibean/k2");
 soibean_argvec.emplace_back("--dbprefix");
@@ -340,20 +369,44 @@ pair<vector<string>, vector<vector<double>>> load_detected_taxa_file(const strin
 
                                                          }
 
-// HaploCart
-const string get_haplocart_pred(const string &output_path) {
-igzstream myfile;
-myfile.open(output_path.c_str(), ios::in);
-string line;
-vector<string> tokens;
-while (getline(myfile, line))
-{
-    if (line.size() == 0){continue;}
-    getline(myfile, line);
-    tokens= allTokensWhiteSpaces(line);
+// Utility to tokenize a string based on any whitespace (spaces or tabs)
+vector<string> tokenize(const string &str) {
+    vector<string> tokens;
+    istringstream iss(str);
+    string token;
+    while (iss >> token) {
+        tokens.push_back(token);
+    }
+    return tokens;
 }
-return tokens[1];
-                                                           }
+
+const string get_haplocart_pred(const string &output_path) {
+    ifstream myfile(output_path.c_str());
+    string line;
+    vector<string> tokens;
+    // Check if file is open
+    if (!myfile.is_open()) {
+        cerr << "Unable to open file!" << endl;
+        return "";
+    }
+    // Skip the header line
+    getline(myfile, line);
+    // Process the rest of the lines
+    while (getline(myfile, line)) {
+        // Ignore empty lines
+        if (line.empty()) {
+            continue;
+        }
+        // Tokenize the line (splitting by any whitespace)
+        tokens = tokenize(line);
+        // Assuming the predicted haplotype is the second token (index 1)
+        if (tokens.size() > 1) {
+            return tokens[1];  // Return the predicted haplotype
+        }
+    }
+    // Return an empty string if no valid token found
+    return "";
+}
 
 
 vector<string> get_haplocart_preds(const string& output_path) {
@@ -426,10 +479,11 @@ arguments.emplace_back("../test/input_files/haplocart/rCRS.fq");
 arguments.emplace_back("-o");
 arguments.emplace_back("/dev/null");
 arguments.emplace_back("-t");
-arguments.emplace_back("20");
-//arguments.emplace_back("-p");
+arguments.emplace_back("50");
 arguments.emplace_back("-pf");
 arguments.emplace_back(posterior_output_path);
+arguments.emplace_back("-z");
+arguments.emplace_back("tempdir");
 char** argvtopass = new char*[arguments.size()];
 for (size_t i=0;i<arguments.size();i++) {
                    argvtopass[i] = const_cast<char*>(arguments[i].c_str());
@@ -448,8 +502,10 @@ arguments.emplace_back(input_path);
 arguments.emplace_back("-o");
 arguments.emplace_back(output_path);
 arguments.emplace_back("-t");
-arguments.emplace_back("20");
+arguments.emplace_back("50");
 if(quiet){arguments.emplace_back("-q");}
+arguments.emplace_back("-z");
+arguments.emplace_back("tempdir");
 char** argvtopass = new char*[arguments.size()];
 for (size_t i=0;i<arguments.size();i++) {
                    argvtopass[i] = const_cast<char*>(arguments[i].c_str());
@@ -467,10 +523,12 @@ arguments.emplace_back(input_path);
 arguments.emplace_back("-o");
 arguments.emplace_back(output_path);
 arguments.emplace_back("-t");
-arguments.emplace_back("20");
+arguments.emplace_back("50");
 arguments.emplace_back("-e");
 arguments.emplace_back(to_string(background_error_prob));
 if(quiet){arguments.emplace_back("-q");}
+arguments.emplace_back("-z");
+arguments.emplace_back("tempdir");
 char** argvtopass = new char*[arguments.size()];
 for (size_t i=0;i<arguments.size();i++) {
                    argvtopass[i] = const_cast<char*>(arguments[i].c_str());
@@ -488,8 +546,10 @@ arguments.emplace_back(input_path);
 arguments.emplace_back("-o");
 arguments.emplace_back(output_path);
 arguments.emplace_back("-t");
-arguments.emplace_back("20");
+arguments.emplace_back("50");
 if(quiet){arguments.emplace_back("-q");}
+arguments.emplace_back("-z");
+arguments.emplace_back("tempdir");
 char** argvtopass = new char*[arguments.size()];
 for (size_t i=0;i<arguments.size();i++) {
                    argvtopass[i] = const_cast<char*>(arguments[i].c_str());
@@ -508,8 +568,10 @@ arguments.emplace_back("-i");
 arguments.emplace_back("-o");
 arguments.emplace_back(output_path);
 arguments.emplace_back("-t");
-arguments.emplace_back("20");
+arguments.emplace_back("50");
 if(quiet){arguments.emplace_back("-q");}
+arguments.emplace_back("-z");
+arguments.emplace_back("tempdir");
 char** argvtopass = new char*[arguments.size()];
 for (size_t i=0;i<arguments.size();i++) {
                    argvtopass[i] = const_cast<char*>(arguments[i].c_str());
@@ -530,8 +592,10 @@ arguments.emplace_back(input_path_2);
 arguments.emplace_back("-o");
 arguments.emplace_back(output_path);
 arguments.emplace_back("-t");
-arguments.emplace_back("20");
+arguments.emplace_back("50");
 if(quiet){arguments.emplace_back("-q");}
+arguments.emplace_back("-z");
+arguments.emplace_back("tempdir");
 char** argvtopass = new char*[arguments.size()];
 for (size_t i=0;i<arguments.size();i++) {
                    argvtopass[i] = const_cast<char*>(arguments[i].c_str());
@@ -549,8 +613,10 @@ arguments.emplace_back(input_path_1);
 arguments.emplace_back("-o");
 arguments.emplace_back(output_path);
 arguments.emplace_back("-t");
-arguments.emplace_back("20");
+arguments.emplace_back("50");
 if(quiet){arguments.emplace_back("-q");}
+arguments.emplace_back("-z");
+arguments.emplace_back("tempdir");
 char** argvtopass = new char*[arguments.size()];
 for (size_t i=0;i<arguments.size();i++) {
                    argvtopass[i] = const_cast<char*>(arguments[i].c_str());
@@ -565,7 +631,7 @@ BOOST_AUTO_TEST_CASE(fq_single_zipped)
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
   const string input_path = cwdProg + "test/input_files/haplocart/Q1_1.fq.gz";
-  const string output_path = cwdProg + "test/output_files/Q1.txt";
+  const string output_path = cwdProg + "test/output_files/haplocart/Q1.txt";
   hc_run_fq_single(input_path, output_path, & hc, false);
   BOOST_ASSERT(get_haplocart_pred(output_path) == "Q1");
   BOOST_CHECK_EQUAL(get_sample_name(output_path), "Q1_1.fq.gz");
@@ -577,7 +643,7 @@ BOOST_AUTO_TEST_CASE(multifasta)
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
   const string input_path = cwdProg + "test/input_files/haplocart/multifasta.fa";
-  const string output_path = cwdProg + "test/output_files/multifasta.txt";
+  const string output_path = cwdProg + "test/output_files/haplocart/multifasta.txt";
   vector<string> truth{"J2a1a1", "Z", "H2a2a1g"};
   hc_run_fasta(input_path, output_path, &hc, false);
   vector<string> preds = get_haplocart_preds(output_path);
@@ -589,7 +655,7 @@ BOOST_AUTO_TEST_CASE(load)
   Haplocart hc;
   shared_ptr dta = make_unique<Trailmix_struct>();
   hc.load_path_supports(dta);
-  BOOST_CHECK_EQUAL(dta->path_supports.size(), 11825);
+  BOOST_CHECK_EQUAL(dta->path_supports.size(), 15725);
   hc.load_mappabilities(dta);
   for (double x : dta->mappabilities) {BOOST_CHECK_EQUAL((x <= 1 && x >= 0), true);}
   hc.load_path_names(dta);
@@ -617,6 +683,7 @@ BOOST_AUTO_TEST_CASE(check_graph)
 {
  Haplocart hc;
  shared_ptr dta = make_unique<Trailmix_struct>();
+ dta->running_trailmix = false;
  hc.load_path_names(dta);
  bdsg::ODGI graph;
  const string cwdProg = getFullPath(getCWD(".")+"bin/");
@@ -630,6 +697,7 @@ BOOST_AUTO_TEST_CASE(check_graph)
  BOOST_CHECK_EQUAL(maxid, 11821);
  for (const string & path : dta->path_names) {
      const string path_ = path.size() > 1 ? path : path + "_";
+     cerr << "PATH: " << path << endl;
      BOOST_CHECK_EQUAL(graph.has_path(path_), true);
      BOOST_CHECK_EQUAL(graph.is_empty(graph.get_path_handle(path_)), false);
                                    }
@@ -669,7 +737,7 @@ BOOST_AUTO_TEST_CASE(fq_single_rcrs)
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
   const string input_path = cwdProg + "test/input_files/haplocart/rCRS.fq";
-  const string output_path = cwdProg + "test/output_files/rCRS_fq.txt";
+  const string output_path = cwdProg + "test/output_files/haplocart/rCRS_fq.txt";
   hc_run_fq_single(input_path, output_path, & hc, false);
   BOOST_CHECK_EQUAL(get_haplocart_pred(output_path), "H2a2a1");
   BOOST_CHECK_EQUAL(get_sample_name(output_path), "rCRS.fq");
@@ -680,7 +748,7 @@ BOOST_AUTO_TEST_CASE(fq_single_rsrs)
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
   const string input_path = cwdProg + "test/input_files/haplocart/RSRS.fq";
-  const string output_path = cwdProg + "test/output_files/RSRS.txt";
+  const string output_path = cwdProg + "test/output_files/haplocart/RSRS.txt";
   hc_run_fq_single(input_path, output_path, & hc, false);
   const string out = get_haplocart_pred(output_path);
   BOOST_ASSERT(out == "L1'2'3'4'5'6" || out == "mt-MRCA");
@@ -723,7 +791,7 @@ BOOST_AUTO_TEST_CASE(consensus_wrong_format)
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
   const string input_path = cwdProg + "test/input_files/haplocart/rCRS.fq";
-  const string output_path = cwdProg + "test/output_files/rCRS_bad.txt";
+  const string output_path = cwdProg + "test/output_files/haplocart/rCRS_bad.txt";
   BOOST_CHECK_THROW(hc_run_fasta(input_path, output_path, & hc, true), std::runtime_error);
 }
 
@@ -734,7 +802,7 @@ BOOST_AUTO_TEST_CASE(zipped_paired_fastq)
   const string cwdProg = getFullPath(getCWD("."));
   const string input1_path = cwdProg + "test/input_files/haplocart/Q1_1.fq.gz";
   const string input2_path = cwdProg + "test/input_files/haplocart/Q1_2.fq.gz";
-  const string output_path = cwdProg + "test/output_files/Q1_paired.txt";
+  const string output_path = cwdProg + "test/output_files/haplocart/Q1_paired.txt";
   hc_run_fq_paired(input1_path, input2_path, output_path, & hc, false);
   BOOST_CHECK_EQUAL(get_haplocart_pred(output_path), "Q1");
 }
@@ -744,7 +812,7 @@ BOOST_AUTO_TEST_CASE(gam)
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
   const string input_path = cwdProg + "test/input_files/haplocart/alignments/J2a1a1a1.gam";
-  const string output_path = cwdProg + "test/output_files/J2a1a1a1.txt";
+  const string output_path = cwdProg + "test/output_files/haplocart/J2a1a1a1.txt";
   hc_run_gam(input_path, output_path, & hc, false);
   BOOST_CHECK_EQUAL(get_haplocart_pred(output_path), "J2a1a1a1");
 }
@@ -752,15 +820,15 @@ BOOST_AUTO_TEST_CASE(gam)
 BOOST_AUTO_TEST_CASE(check_thread_minus_one)
 {
   Haplocart hc;
-  hc_run_thread_test("../test/output_files/thread_minus_one.txt", &hc, -1);
-  BOOST_CHECK_EQUAL(get_haplocart_pred("../test/output_files/thread_minus_one.txt"), "H2a2a1");
+  hc_run_thread_test("../test/output_files/haplocart/thread_minus_one.txt", &hc, -1);
+  BOOST_CHECK_EQUAL(get_haplocart_pred("../test/output_files/haplocart/thread_minus_one.txt"), "H2a2a1");
 }
 
 BOOST_AUTO_TEST_CASE(check_thread_zero)
 {
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
-  const string output_path = cwdProg + "test/output_files/thread_zero.txt";
+  const string output_path = cwdProg + "test/output_files/haplocart/thread_zero.txt";
   BOOST_CHECK_THROW(hc_run_thread_test(output_path, &hc, 0), std::runtime_error);
 }
 
@@ -769,7 +837,7 @@ BOOST_AUTO_TEST_CASE(check_thread_too_many)
 {
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
-  const string output_path = cwdProg + "test/output_files/thread_too_many.txt";
+  const string output_path = cwdProg + "test/output_files/haplocart/thread_too_many.txt";
   hc_run_thread_test(output_path, &hc, 424242);
   BOOST_CHECK_EQUAL(get_haplocart_pred(output_path), "H2a2a1");
 }
@@ -777,8 +845,8 @@ BOOST_AUTO_TEST_CASE(check_thread_too_many)
 BOOST_AUTO_TEST_CASE(custom_posterior_output)
 {
   Haplocart hc;
-  hc_run_custom_posterior_output("../test/output_files/rCRS_posterior.txt", & hc);
-  BOOST_CHECK_EQUAL(std::filesystem::exists("../test/output_files/rCRS_posterior.txt"), true);
+  hc_run_custom_posterior_output("../test/output_files/haplocart/rCRS_posterior.txt", & hc);
+  BOOST_CHECK_EQUAL(std::filesystem::exists("../test/output_files/haplocart/rCRS_posterior.txt"), true);
 }
 
 BOOST_AUTO_TEST_CASE(missing_input_consensus)
@@ -806,12 +874,13 @@ BOOST_AUTO_TEST_CASE(missing_input_gam)
   BOOST_CHECK_THROW(hc_run_gam("not_a_real_file.gam", "/dev/null", &hc, true), std::runtime_error);
 }
 
+
 BOOST_AUTO_TEST_CASE(multifasta_zipped)
 {
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
   const string input_path = cwdProg + "test/input_files/haplocart/multifasta.fa.gz";
-  const string output_path = cwdProg + "test/output_files/multifasta_zipped.txt";
+  const string output_path = cwdProg + "test/output_files/haplocart/multifasta_zipped.txt";
   hc_run_fasta(input_path, output_path, &hc, false);
   vector<string> truth {"J2a1a1", "Z", "H2a2a1g"};
   vector<string> preds = get_haplocart_preds(output_path);
@@ -823,7 +892,7 @@ BOOST_AUTO_TEST_CASE(interleaved)
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
   const string input_path = cwdProg + "test/input_files/haplocart/Q1_interleaved.fq";
-  const string output_path = cwdProg + "test/output_files/Q1_interleaved.txt";
+  const string output_path = cwdProg + "test/output_files/haplocart/Q1_interleaved.txt";
   hc_run_interleaved(input_path, output_path, &hc, false);
   BOOST_CHECK_EQUAL(get_haplocart_pred(output_path), "Q1");
 }
@@ -1169,7 +1238,7 @@ BOOST_AUTO_TEST_SUITE_END()
 /////////////////////////////////////////// BEGIN TEST TRAILMIX /////////////////////////////////////////////////
 BOOST_AUTO_TEST_SUITE(TrailMix)
 
-void run_k1(Trailmix * tm){
+void run_k1_HV4b(Trailmix * tm){
 vector<string> trailmix_argvec;
 trailmix_argvec.emplace_back("vgan");
 trailmix_argvec.emplace_back("trailmix");
@@ -1182,7 +1251,7 @@ trailmix_argvec.emplace_back("1");
 trailmix_argvec.emplace_back("-o");
 trailmix_argvec.emplace_back("../test/output_files/trailmix/k1");
 trailmix_argvec.emplace_back("--iter");
-trailmix_argvec.emplace_back("50000");
+trailmix_argvec.emplace_back("5000");
 trailmix_argvec.emplace_back("--burnin");
 trailmix_argvec.emplace_back("1");
 trailmix_argvec.emplace_back("--chains");
@@ -1204,14 +1273,102 @@ tm->run(trailmix_argvec.size(), argvtopass, getCWD(".")+"bin/");
 
                          }
 
+
+void run_k2_HV4b_S3(Trailmix * tm){
+vector<string> trailmix_argvec;
+trailmix_argvec.emplace_back("vgan");
+trailmix_argvec.emplace_back("trailmix");
+trailmix_argvec.emplace_back("-fq1");
+trailmix_argvec.emplace_back("../test/input_files/trailmix/HV4b_S3.fq.gz");
+trailmix_argvec.emplace_back("-t");
+trailmix_argvec.emplace_back("70");
+trailmix_argvec.emplace_back("-k");
+trailmix_argvec.emplace_back("2");
+trailmix_argvec.emplace_back("-o");
+trailmix_argvec.emplace_back("../test/output_files/trailmix/k2");
+trailmix_argvec.emplace_back("--iter");
+trailmix_argvec.emplace_back("5000");
+trailmix_argvec.emplace_back("--burnin");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("--chains");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("-z");
+trailmix_argvec.emplace_back("tempdir");
+trailmix_argvec.emplace_back("--tm-files");
+trailmix_argvec.emplace_back("/net/mimer/mnt/tank/projects2/hominin/vgan_dev/share/vgan/publication_tmfiles/");
+trailmix_argvec.emplace_back("--dbprefix");
+trailmix_argvec.emplace_back("pub.graph");
+
+char** argvtopass = new char*[trailmix_argvec.size()];
+for (int i=0;i<trailmix_argvec.size();i++) {
+                   argvtopass[i] = const_cast<char*>(trailmix_argvec[i].c_str());
+                                       }
+
+tm->run(trailmix_argvec.size(), argvtopass, getCWD(".")+"bin/");
+                         }
+
+void run_k2_wrong_matrix(Trailmix * tm){
+vector<string> trailmix_argvec;
+trailmix_argvec.emplace_back("vgan");
+trailmix_argvec.emplace_back("trailmix");
+trailmix_argvec.emplace_back("-fq1");
+trailmix_argvec.emplace_back("../test/input_files/trailmix/HV4b_S3.fq.gz");
+trailmix_argvec.emplace_back("-t");
+trailmix_argvec.emplace_back("70");
+trailmix_argvec.emplace_back("-k");
+trailmix_argvec.emplace_back("2");
+trailmix_argvec.emplace_back("-o");
+trailmix_argvec.emplace_back("../test/output_files/trailmix/k2");
+trailmix_argvec.emplace_back("--iter");
+trailmix_argvec.emplace_back("5000");
+trailmix_argvec.emplace_back("--burnin");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("--chains");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("-z");
+trailmix_argvec.emplace_back("tempdir");
+trailmix_argvec.emplace_back("--tm-files");
+trailmix_argvec.emplace_back("/net/mimer/mnt/tank/projects2/hominin/vgan_dev/share/vgan/publication_tmfiles/");
+trailmix_argvec.emplace_back("--dbprefix");
+trailmix_argvec.emplace_back("pub.graph");
+trailmix_argvec.emplace_back("--deam3p");
+trailmix_argvec.emplace_back("../share/vgan/damageProfiles/dhigh3p.prof");
+trailmix_argvec.emplace_back("--deam5p");
+trailmix_argvec.emplace_back("../share/vgan/damageProfiles/dhigh5p.prof");
+
+char** argvtopass = new char*[trailmix_argvec.size()];
+for (int i=0;i<trailmix_argvec.size();i++) {
+                   argvtopass[i] = const_cast<char*>(trailmix_argvec[i].c_str());
+                                       }
+
+tm->run(trailmix_argvec.size(), argvtopass, getCWD(".")+"bin/");
+                         }
+
+
 BOOST_AUTO_TEST_CASE(k1_HV4b)
 {
     Trailmix tm;
-    run_k1(&tm);
+    run_k1_HV4b(&tm);
     auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/k1BranchEstimate.txt");
-    cerr << "SOURCE: " << branchRecords[0].source << endl;
     BOOST_ASSERT(branchRecords[0].source == "HV4b");
 }
+
+BOOST_AUTO_TEST_CASE(k2_HV4b_S3)
+{
+    Trailmix tm;
+    run_k2_HV4b_S3(&tm);
+    auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/k2BranchEstimate.txt");
+    BOOST_ASSERT((branchRecords[0].source == "HV4b" && branchRecords[1].source == "S3") || (branchRecords[0].source == "S3" && branchRecords[1].source == "HV4b"));
+}
+
+BOOST_AUTO_TEST_CASE(wrong_matrix)
+{
+    Trailmix tm;
+    run_k2_wrong_matrix(&tm);
+    auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/k2BranchEstimate.txt");
+    BOOST_ASSERT((branchRecords[0].source == "HV4b" && branchRecords[1].source == "S3") || (branchRecords[0].source == "S3" && branchRecords[1].source == "HV4b"));
+}
+
 
 BOOST_AUTO_TEST_SUITE_END()
 

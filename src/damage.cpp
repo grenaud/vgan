@@ -10,13 +10,15 @@ Damage::~Damage(){
 
 }
 
+//#define DEBUGDEAM
+
 //! A method to combined 5' deam rates and 3' deam rates
 /*!
   This method is called by the initDeamProbabilities.
   It uses the "worse" deamination
 */
-void Damage::combineDeamRates(long double f1[4],long double f2[4],long double f[4],int b){
-    long double minFreq = MIN2(f1[b] , f2[b]);
+void Damage::combineDeamRates(double f1[4],double f2[4],double f[4],int b){
+    double minFreq = MIN2(f1[b] , f2[b]);
     //cout<<b<<"\t"<<f1[b]<<"\t"<<f2[b]<<"\t"<<f[b]<<"\t"<<minFreq<<endl;
 
     if(f1[b] == minFreq){//use f1
@@ -34,6 +36,46 @@ void Damage::combineDeamRates(long double f1[4],long double f2[4],long double f[
             }
         }
                                                                                        }
+
+void Damage::validateProbabilities() {
+    // Helper function to check if a probability is valid
+    auto isValidProb = [](double p) { return p >= 0.0 && p <= 1.0; };
+
+    // Check each probability in your structures
+    for(const auto& sub : {sub5p, sub3p}) {
+        for(const auto& probSub : sub) {
+            for(const double prob : probSub.s) {
+                if (!isValidProb(prob)) {
+                    cerr << "Invalid probability detected: " << prob << endl;
+                    exit(1);
+                }
+            }
+        }
+    }
+
+    for(const auto& subDiNuc : {sub5pDiNuc, sub3pDiNuc}) {
+        for(const auto& diNuc : subDiNuc) {
+            for(int nuc1 = 0; nuc1 < 4; nuc1++) {
+                double sum = 0.0;
+                for(int nuc2 = 0; nuc2 < 4; nuc2++) {
+                    double prob = diNuc.p[nuc1][nuc2];
+                    if (!isValidProb(prob)) {
+                        cerr << "Invalid probability detected: " << prob << endl;
+                        exit(1);
+                    }
+                    sum += prob;
+                }
+                // Allow a small margin for floating-point errors
+                if (fabs(sum - 1.0) > 0.00001) {
+                    cerr << "Probability sum error for di-nucleotide: " << sum << endl;
+                    exit(1);
+                }
+            }
+        }
+    }
+}
+
+
 //! A method to initialize the deamination probabilities
 /*!
   This method is called by the run/main function
@@ -45,6 +87,7 @@ void Damage::initDeamProbabilities(const string & deam5pfreqE,const string & dea
 
     readNucSubstitionRatesFreq(deam5pfreqE,sub5pT);
     readNucSubstitionRatesFreq(deam3pfreqE,sub3pT);
+
 
     //5'
     for(unsigned int i=0;i<sub5pT.size();i++){
@@ -212,7 +255,7 @@ void Damage::initDeamProbabilities(const string & deam5pfreqE,const string & dea
 
     cerr<<"Computing substitutions due to ancient damage:"<<endl;
     for(unsigned int L=MINLENGTHFRAGMENT;L<=MAXLENGTHFRAGMENT;L++){     //for each fragment length
-	printprogressBarCerr( float(L-MINLENGTHFRAGMENT)/float(MAXLENGTHFRAGMENT-MINLENGTHFRAGMENT) );
+	//printprogressBarCerr( float(L-MINLENGTHFRAGMENT)/float(MAXLENGTHFRAGMENT-MINLENGTHFRAGMENT) );
 	// if( (L%8)==0){
 	//     cerr<<".";
 	// }
@@ -302,6 +345,6 @@ void Damage::initDeamProbabilities(const string & deam5pfreqE,const string & dea
 	    }
 	}
     }
-
+    validateProbabilities();
     cerr<<".. done"<<endl;
 }//end initDeamProbabilities

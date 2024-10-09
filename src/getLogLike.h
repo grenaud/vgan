@@ -22,7 +22,7 @@ using namespace std;
 using namespace google::protobuf;
 namespace fs = std::filesystem;
 
-long double calcPathLogLike(
+double calcPathLogLike(
     const bdsg::ODGI& graph,
     const vector<AlignmentInfo*>* align,
     vector<vector<string>>& nodepaths,
@@ -31,8 +31,20 @@ long double calcPathLogLike(
     double givenMu,
     bool entire_graph,
     bool trailmix, 
-    int minid, vector<long double> distr)
+    int minid, vector<double> distr)
 {
+
+    std::vector<double> log_qscore_vec;
+std::vector<double> log_one_minus_qscore_vec;
+
+// Assuming base_quality can range from 0 to some MAX_QUALITY_SCORE
+for (int base_quality = 0; base_quality <= 100; ++base_quality) {
+    double qscore = qscore_vec[base_quality];
+    log_qscore_vec.push_back(log(qscore));
+    log_one_minus_qscore_vec.push_back(log(1 - qscore));
+}
+
+
     int n_reads = 0;
 
     if (align->empty()) {
@@ -52,8 +64,8 @@ long double calcPathLogLike(
     }
     
     // declare the cumulativePathMap outside the loop
-    map<string, long double> cumulativePathMap;
-    long double logLike = 0.0L;
+    map<string, double> cumulativePathMap;
+    double logLike = 0.0;
     // initialize it with all the paths and zero values
     for (const auto& path : pathNames) {
         cumulativePathMap[path] = 0.0;
@@ -69,7 +81,7 @@ long double calcPathLogLike(
         int baseIX = a->path.mapping()[0].position().is_reverse() ? a->seq.size() - 1 : 0;
         int baseOnRead = baseIX;
 
-        unordered_map<string, long double> pathMap;
+        unordered_map<string, double> pathMap;
         unordered_map<string, bool> supportMap;
 
 
@@ -183,16 +195,12 @@ long double calcPathLogLike(
                         int base_quality = a->quality_scores[s];
 
                         
-                        if (abs(baseOnRead) % 4 == 4)
-                        {   
-                            pathMap[pathNames[m]] += log(1 - qscore_vec[base_quality]);
-
-                        } else 
-                        {
-
-                            pathMap[pathNames[m]] += log(qscore_vec[base_quality]);
-                        }
-
+                        // Later in the code, when you need to use these values:
+if (abs(baseOnRead) % 40 == 0) {
+    pathMap[pathNames[m]] += log_one_minus_qscore_vec[base_quality];
+} else {
+    pathMap[pathNames[m]] += log_qscore_vec[base_quality];
+}
 
 
                         if (a->path.mapping()[0].position().is_reverse()) {
@@ -232,17 +240,17 @@ long double calcPathLogLike(
         
         if (pathNames.size() == 1)
         {
-            long double inter = pathMap[pathNames[0]];
+            double inter = pathMap[pathNames[0]];
             logLike += inter;
         }
         else
         {
-            // long double inter = 0.0L;
+            // double inter = 0.0;
             // for (int y = 0; y < pathNames.size(); ++y)
             // {
             //     inter = oplusInitnatl(inter, pathMap[pathNames[y]]);
             // }
-            long double inter = oplusnatl(log((distr[0]) + pathMap[pathNames[0]]), (log(distr[1]) + pathMap[pathNames[1]]));
+            double inter = oplusnatl(log((distr[0]) + pathMap[pathNames[0]]), (log(distr[1]) + pathMap[pathNames[1]]));
             logLike += inter;
 
         }

@@ -11,29 +11,25 @@ using namespace vg;
 using namespace vg::algorithms;
 using namespace google::protobuf;
 
-const tuple<vector<NodeInfo *>, const int, const bdsg::ODGI> Haplocart::readPathHandleGraph (const string & ogfilename, const int n_threads, const string &hcfiledir) {
-    bdsg::ODGI graph;
-    graph.deserialize(ogfilename);
-    const int minid = graph.min_node_id();
-    const int maxid = graph.max_node_id();
+void Haplocart::readPathHandleGraph (shared_ptr<Trailmix_struct> &dta) {
+    dta->graph.deserialize(dta->hc_graph_dir+dta->graphfilename);
+    dta->minid = dta->graph.min_node_id();
+    dta->maxid = dta->graph.max_node_id();
     vector<NodeInfo *> nodevector;
-    const int cladeid=0;
-    const int nbpaths=graph.get_path_count();
-    const vector<vector<bool>> path_supports = Haplocart::load_path_supports(hcfiledir);
-    for(int64 i=minid;i<=maxid;++i){
-                                 NodeInfo * nodetoadd = new NodeInfo(i,nbpaths,cladeid);
-                                 const auto nodehandle = graph.get_handle(i);
-                                 nodetoadd->seq = graph.get_sequence(nodehandle);
+    const int nbpaths=dta->graph.get_path_count();
+    load_path_supports(dta);
+    for(int64 i=dta->minid;i<=dta->maxid;++i){
+                                 NodeInfo * nodetoadd = new NodeInfo(i,nbpaths,0);
+                                 const auto nodehandle = dta->graph.get_handle(i);
+                                 nodetoadd->seq = dta->graph.get_sequence(nodehandle);
                                  long unsigned int j;
-                                 #pragma omp parallel for private(j) num_threads(n_threads)
+                                 //#pragma omp parallel for private(j) num_threads(dta->n_threads)
                                  for (j=0; j<nbpaths; ++j)
                                      {
-                                        {nodetoadd->pathsgo[j] = path_supports[i][j];}
+                                        {nodetoadd->pathsgo[j] = dta->path_supports[i][j];}
                                      }
-                                 nodevector.emplace_back(nodetoadd);
+                                 dta->nodevector.emplace_back(nodetoadd);
                                    }
-
-   return make_tuple(nodevector, minid, graph);
 }
 
 

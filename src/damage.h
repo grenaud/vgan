@@ -22,8 +22,9 @@ public:
     Damage & operator= (const Damage & other);
 
     //deamination functions
+    void validateProbabilities();
     void initDeamProbabilities(const string & deam5pfreqE,const string & deam3pfreqE);
-    void combineDeamRates(long double f1[4],long double f2[4],long double f[4],int b);
+    void combineDeamRates(double f1[4],double f2[4],double f[4],int b);
 
     //Substitution rates due to deamination
     vector<probSubstition> sub5p;
@@ -39,8 +40,8 @@ public:
     probSubstition   defaultSubMatch;
     diNucleotideProb defaultSubMatchMatrix;
 
-    unsigned int MINLENGTHFRAGMENT  =    25;      // minimal length for fragment
-    unsigned int MAXLENGTHFRAGMENT  =    1000;    //  maximal length for fragment
+    unsigned int MINLENGTHFRAGMENT  =    15;      // minimal length for fragment
+    unsigned int MAXLENGTHFRAGMENT  =    300;    //  maximal length for fragment
     double base_freq [int ('T') +1];
     double t_T_ratio [int ('T') +1][int ('T') +1];
     bool rare_bases [int ('Y') ];

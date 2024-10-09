@@ -4,235 +4,408 @@
 #include "time.h"
 #include <algorithm>
 #include <functional>
-#include "trailmix_functions.h"
 #include "rpvg_main.hpp"
 #include "damage.h"
 #include "sys/wait.h"
 #include "MCMC.h"
+#include "trailmix_functions.h"
+#include "precompute.h"
+#include "writeDeconvolvedReads.h"
+#include "Dup_Remover.h"
 
-char** convert_to_char_array(const vector<string>& arguments) {
-    char** argvtopass = new char*[arguments.size()];
-    for (size_t i = 0; i < arguments.size(); i++) {
-        argvtopass[i] = const_cast<char*>(arguments[i].c_str());
-    }
-    return argvtopass;
-}
+#define PRINT_KEYS(map) \
+    do { \
+        for (const auto& pair : map) { \
+            std::cerr << pair.first << "\n"; \
+        } \
+    } while (0)
 
-void Trailmix::run_trailmix(shared_ptr<Trailmix_struct>& dta) {
+#define PRINTVEC(v) \
+    for (int i = 0; i < v.size(); ++i) { \
+        cerr << setprecision(10) << v[i] << '\t'; \
+    } \
+    cerr << endl << endl;
+
+#define RPVG
+
+#define PRINT_SET(SET) \
+    do { \
+        std::cerr << "Set contents:\n"; \
+        for (const auto& elem : SET) { \
+            std::cerr << " - " << elem << '\n'; \
+        } \
+    } while (0)
+
+void Trailmix::run_mcmc(shared_ptr<Trailmix_struct>& dta) {
+    string prefix = dta->TM_outputfilename;
+
+    vector<string> rpvgarguments;
+    RunTreeProportionParams params(dta->tree);
+    params.chains = dta->chains;
+    std::vector<std::vector<MCMCiteration>> MCMCiterationsVec(params.chains);
     MCMC mcmc;
 
-    // Haplocart run
-    //run_haplocart(dta);
-
-    if (!dta->first_of_new_k) {
-        goto place_sources;
+    for (int i = dta->minid; i < dta->minid + dta->nodevector.size(); ++i) {
+        vector<string> paths;
+        uint64_t node = i;
+        bdsg::handle_t node_handle = dta->graph.get_handle(node);
+        paths = Trailmix::paths_through_node(dta->graph, node_handle);
+        dta->nodepaths.emplace_back(paths);
     }
 
-    // Run gam2prof
-    //run_gam2prof(dta);
+    initializeParams(params, dta);
 
-    // Run RPVG haplotypes
-    mcmc.run_rpvg_haplotypes(dta);
+    string first_fifo = dta->tmpdir + random_string(9);
+    dta->fifo_A = first_fifo.c_str();
 
-    // Run RPVG haplotype-transcripts
-    //mcmc.run_rpvg_haplotype_transcripts(dta);
+    dta->pid1 = fork();
 
-    // Run Haplocart again
-    //run_haplocart(dta);
+    if (dta->pid1 == -1) {
+        throw runtime_error("Error in fork");
+    }
 
-    while ((dta->rpvg_pid = wait(&dta->rpvg_status)) > 0);
-    while ((dta->rpvg_ht_pid = wait(&dta->rpvg_ht_status)) > 0);
+    if (dta->pid1 == 0) {
+        if (dta->gamfilename == "") {
+            Trailmix::map_giraffe("", dta);
+        }
+        exit(0);
+    }
 
-    //exit(0);
+    int status;
+    waitpid(dta->pid1, &status, 0);
+
+    dta->algnvector = readGAM(dta);
+
+    /*
+    if (dta->quiet == false && dta->fastafilename == "") {
+        cerr << "Removing PCR duplicates ..." << '\n';
+    }
+    shared_ptr<vector<bool>> thing = Dup_Remover().remove_duplicates_internal(dta->algnvector, 1, dta->quiet);
+
+    auto& vec = *(dta->algnvector); // Access the vector object
+    auto it = vec.begin();
+    for (size_t i = 0; it != vec.end();) { // Use the vector's iterator and bounds
+        if (!(*thing)[i]) {
+            // Erase returns the iterator to the next element, so no increment in this branch
+            it = vec.erase(it);
+        } else {
+            ++it;
+            ++i; // Increment the index only when not erasing
+        }
+    }
+    */
+
+#ifdef RPVG
+    dta->rpvg_pid = fork();
+
+    if (dta->rpvg_pid == -1) {
+        throw runtime_error("Error in RPVG fork");
+    }
+#endif
+
+    if (dta->rpvg_pid == 0) {
+        rpvgarguments = buildRpvgArguments(dta);
+        char** rpvgargvtopass = new char*[rpvgarguments.size()];
+        for (size_t i = 0; i < rpvgarguments.size(); i++) {
+            rpvgargvtopass[i] = const_cast<char*>(rpvgarguments[i].c_str());
+        }
+#ifdef RPVG
+        int retcode1 = rpvg_main(rpvgarguments.size(), rpvgargvtopass);
+        rpvgarguments.clear();
+        exit(0);
+#endif
+    }
+
+    waitpid(dta->rpvg_pid, &status, 0);
+
+#ifdef RPVG
+    dta->rpvg_ht_pid = fork();
+
+    if (dta->rpvg_ht_pid == -1) {
+        throw runtime_error("Error in RPVG fork");
+    }
+#endif
+
+    if (dta->rpvg_ht_pid == 0) {
+        rpvgarguments = buildRpvgArgumentsHaplotypeTranscripts(dta);
+        char** rpvgargvtopass = new char*[rpvgarguments.size()];
+        for (size_t i = 0; i < rpvgarguments.size(); i++) {
+            rpvgargvtopass[i] = const_cast<char*>(rpvgarguments[i].c_str());
+        }
+#ifdef RPVG
+        int retcode1 = rpvg_main(rpvgarguments.size(), rpvgargvtopass);
+        rpvgarguments.clear();
+        exit(0);
+#endif
+    }
+
+    waitpid(dta->rpvg_ht_pid, &status, 0);
+
+    // cerr << "TEMPDIR: " << dta->tmpdir << endl;
+
+#ifdef RPVG
+    while ((dta->rpvg_pid = wait(&dta->rpvg_status)) > 0)
+        ;
+    while ((dta->rpvg_ht_pid = wait(&dta->rpvg_ht_status)) > 0)
+        ;
+#endif
 
     dta->rpvg_status = 0;
     dta->rpvg_ht_status = 0;
-
-    dta->hap_combos.clear();
-    dta->hap_combo_posteriors.clear();
-    dta->node_combos.clear();
 
     if (dta->debug) {
         cerr << "Loading RPVG output" << endl;
     }
 
-    //load_hap_combos(dta);
-    //load_tpms(dta);
-    //assert(!dta->tpms.empty());
+#ifdef RPVG
+    load_hap_combos(dta);
+    load_tpms(dta);
+    assert(!dta->tpms.empty());
+    load_read_probs(dta);
+    Trailmix::create_path_node_map(dta);
+
+    // Convert dta->tpms to a hash table for faster lookups
+    std::unordered_map<decltype(dta->tpms)::value_type::first_type, decltype(dta->tpms)::value_type::second_type> tpms_map;
+    for (const auto& p : dta->tpms) {
+        tpms_map[p.first] = p.second;
+    }
+
+    bool in_pruned = false;
+
+    for (int m = 0; m < dta->path_names.size(); ++m) {
+        in_pruned = false; // Reset in_pruned at the beginning of each iteration
+
+        auto it = tpms_map.find(dta->path_names[m]);
+        if (it != tpms_map.end()) {
+            if (!isnan(it->second) && it->second > 1.0) {
+                in_pruned = true;
+            }
+        }
+
+        if (in_pruned) {
+            string toadd = dta->path_names[m];
+            auto initial_node = dta->tree->nodes[dta->path_node_map[toadd]];
+            if (dta->depth != -1) {
+                mcmc.add_nodes_at_depth(initial_node, dta->depth, dta);
+                // if (initial_node->parent) {
+                //     mcmc.add_nodes_at_depth(initial_node->parent, dta->depth, dta);
+                // }
+            }
+            // std::cerr << "Inserting '" << dta->path_names[m] << "' into in_pruned_set as its TPM is valid and greater than 1." << std::endl;
+        }
+    }
+#endif
 
     if (dta->debug) {
         cerr << "Number of hap combos: " << dta->hap_combos.size() << endl;
     }
-    create_node_combos(dta);
 
-place_sources:
+    cerr << "Precomputing..." << endl;
+    auto gam = precompute_GAM_trailmix(dta);
+    cerr << "Done with precomputations" << endl;
 
-    cerr << "LOADING READ PROBS" << endl;
-    //load_read_probs(dta);
+    double max_posterior = -1.0; // Start with a very low value; assuming posterior probabilities are non-negative
+    vector<unsigned int> sigNodes;
 
-    cerr << "PLACING SOURCES..." << endl;
-    // place_sources(dta);
+    vector<spidir::Node*> max_single_combo; // This will store the combo with the highest posterior
 
-    // Run MCMC
-    //run_mcmc(dta);
-}
-
-void Trailmix::run_haplocart(shared_ptr<Trailmix_struct>& dta) {
-    vector<string> hcarguments;
-
-    if (!dta->fastafilename.empty()) {
-        hcarguments = {"vgan", "haplocart", "-f", dta->fastafilename};
-    } else if (!dta->fastq1filename.empty() && dta->fastq2filename.empty()) {
-        hcarguments = {"vgan", "haplocart", "-fq1", dta->fastq1filename};
-    } else if (!dta->gamfilename.empty()) {
-        hcarguments = {"vgan", "haplocart", "-g", dta->gamfilename};
-    }
-
-    char** hcargvtopass = convert_to_char_array(hcarguments);
-
-    cerr << "RUNNING HAPLOCART" << endl;
-    Haplocart().run(hcarguments.size(), hcargvtopass, dta);
-    hcarguments.clear();
-    cerr << "\n" << endl;
-
-    delete[] hcargvtopass;
-}
-
-void Trailmix::run_gam2prof(shared_ptr<Trailmix_struct>& dta) {
-    vector<string> g2parguments = {"vgan", "gam2prof", "--running-trailmix"};
-    char** g2pargvtopass = convert_to_char_array(g2parguments);
-
-    Gam2prof().run(g2parguments.size(), g2pargvtopass, dta->cwdProg, dta);
-
-    delete[] g2pargvtopass;
-}
-
-void MCMC::run_rpvg_haplotypes(shared_ptr<Trailmix_struct>& dta) {
-
-    cerr << "RPVG GAMFILE: " << dta->rpvg_gamfilename << endl;
-
-    assert(std::filesystem::exists(dta->rpvg_gamfilename));
-
-    vector<string> rpvgarguments = {"rpvg", "-g", dta->graph_dir + dta->graph_prefix + ".og", "-p", dta->graph_dir + dta->graph_prefix + ".gbwt",
-                                    "-a", dta->rpvg_gamfilename, "-o", dta->tmpdir + "rpvg_hap", "-i", "haplotypes",
-                                    "--use-hap-gibbs", "-u", "-s", "-t", to_string(dta->n_threads), "--filt-best-score", "1e-30",
-                                    "--min-noise-prob", "1e-30"};
-/*
-    if (dta->rng_seed != "NONE") {
-        rpvgarguments.push_back("-r");
-        rpvgarguments.push_back(dta->rng_seed);
-    }
-*/
-
-    rpvgarguments.insert(rpvgarguments.end(), {"-y", to_string(dta->k), "-m", dta->mu, "-d", dta->sigma, "--score-not-qual",
-                                               "-n", "1", "--vgan-temp-dir", dta->tmpdir, "--gibbs-thin-its", "1",
-                                               "--min-noise-prob", "1e-30", "--prob-precision", "1e-30"});
-
-/*
-    if (dta->strand_specific) {
-        rpvgarguments.insert(rpvgarguments.end(), {"-e", "fr"});
-    }
-*/
-
-    char** rpvgargvtopass = convert_to_char_array(rpvgarguments);
-
-    cerr << "RUNNING RPVG FOR K= " << dta->k << endl;
-    int retcode1 = rpvg_main(rpvgarguments.size(), rpvgargvtopass);
-    cerr << "DONE!" << endl;
-    rpvgarguments.clear();
-
-    delete[] rpvgargvtopass;
-}
-
-void MCMC::run_rpvg_haplotype_transcripts(shared_ptr<Trailmix_struct>& dta) {
-    vector<string> rpvgarguments = {"rpvg", "-g", dta->graph_dir + dta->graph_prefix + ".xg", "-p", dta->graph_dir + dta->graph_prefix + ".gbwt",
-                                    "-a", dta->rpvg_gamfilename, "-o", dta->tmpdir + "rpvg_ht", "-i", "haplotype-transcripts",
-                                    "-f", dta->graph_prefix + "/pantranscriptome.txt", "--use-hap-gibbs", "-u", "-s", "-t",
-                                    to_string(dta->n_threads)};
-
-    if (dta->rng_seed != "NONE") {
-        rpvgarguments.push_back("-r");
-        rpvgarguments.push_back(dta->rng_seed);
-    }
-
-    rpvgarguments.insert(rpvgarguments.end(), {"-y", to_string(dta->k), "-m", dta->mu, "-d", dta->sigma, "--score-not-qual",
-                                               "--vgan-temp-dir", dta->tmpdir, "-b", "--use-hap-gibbs", "--max-em-its", "1"});
-
-    if (dta->strand_specific) {
-        rpvgarguments.insert(rpvgarguments.end(), {"-e", "fr"});
-    }
-
-    char** rpvgargvtopass = convert_to_char_array(rpvgarguments);
-
-    int retcode2 = rpvg_main(rpvgarguments.size(), rpvgargvtopass);
-    rpvgarguments.clear();
-
-    delete[] rpvgargvtopass;
-}
-
-// void Trailmix::run_mcmc(shared_ptr<Trailmix_struct>& dta) {
-//     //RunTreeProportionParams params(dta);
-//     //std::vector<std::vector<MCMCiteration>> MCMCiterationsVec(params.chains);
-
-//     // Initialize the maximum posterior and corresponding node combo
-//     double max_posterior = -1.0;
-//     std::vector<int> max_node_combo_names;
-
-//     // Find the node combo with the highest posterior
-//     for (size_t i = 0; i < dta->node_combos.size(); ++i) {
-//         double current_posterior = dta->hap_combo_posteriors[i];
-//         if (current_posterior > max_posterior) {
-//             max_posterior = current_posterior;
-
-//             // Create a new vector to store the names of all nodes in the node_combo
-//             max_node_combo_names.clear();
-//             for (auto& node : dta->node_combos[i]) {
-//                 max_node_combo_names.push_back(node->name);
-//             }
-//         }
-//     }
-
-    //params.chains = dta->chains;
-    //MCMC mcmc;
-
-//     for (unsigned int chain = 0; chain < params.chains; ++chain) {
-//         cerr << "ON CHAIN: " << chain + 1 << "  OUT OF " << params.chains << endl;
-//         params.tr = dta->tree;
-//         params.soibean = false;
-//         params.root = dta->tree->root;
-//         params.chains = dta->chains;
-//         params.maxIter = dta->iter;
-//         params.burn = dta->burnin;
-//         params.sources = vector<int>{42}; // max_node_combo_names;
-//         params.align = dta->gam;
-//         //mcmc.run_tree_proportion(params, MCMCiterationsVec[chain]);
-//     }
-
-//     if (dta->auto_mode) {
-//         dta->rpvg_status = -1;
-//         dta->rpvg_ht_status = -1;
-//     }
-
-//     //mcmc.processMCMCiterations(MCMCiterationsVec);
-// }
-
-void Trailmix::create_node_combos(shared_ptr<Trailmix_struct>& dta) {
-    for (const auto& combo : dta->hap_combos) {
+    for (auto& combo : dta->hap_combos) {
         vector<spidir::Node*> single_combo;
-        single_combo.clear();
+        double current_posterior = -1.0;
+        bool invalidCombo = false;
+
+        std::unordered_set<std::string> seen_elements;
+
         for (size_t i = 0; i < combo.size(); ++i) {
+            // Check for duplicates
+            if (seen_elements.find(combo[i]) != seen_elements.end()) {
+                invalidCombo = true;
+                break; // Break out of loop if duplicate found
+            }
+
             if (i < combo.size() - 2) {
-                const int found_idx = find(dta->path_names.begin(), dta->path_names.end(), combo[i]) - dta->path_names.begin();
-                assert(find(dta->path_names.begin(), dta->path_names.end(), combo[i]) != dta->path_names.end());
-                single_combo.push_back(dta->tree->nodes[dta->path_node_map[found_idx]]);
+                modifyPathNameInPlace(dta, combo[i]);
+                auto found_itr = find(dta->path_names.begin(), dta->path_names.end(), combo[i]);
+
+                if (found_itr == dta->path_names.end()) {
+                    std::cerr << "Path not found: " << combo[i] << std::endl;
+                    invalidCombo = true;
+                    break;
+                } else {
+                    single_combo.emplace_back(dta->tree->nodes[dta->path_node_map[combo[i]]]);
+                }
             } else if (i == combo.size() - 1) {
-                dta->hap_combo_posteriors.push_back(stod(combo[i]));
+                current_posterior = stod(combo[i]);
             }
         }
-        assert(single_combo.size() == dta->k);
-        dta->node_combos.push_back(single_combo);
+
+        if (invalidCombo) {
+            // cerr << "Invalid combo, continuing" << endl;
+            continue; // Skip the current combo and move on to the next one
+        }
+
+        // cerr << "CURRENT POSTERIOR: " << current_posterior << endl;
+        // If current_posterior is the new max, store the current combo
+        if (current_posterior > max_posterior) {
+            max_posterior = current_posterior;
+            max_single_combo = single_combo;
+        }
     }
+
+    for (auto& node : max_single_combo) {
+        cerr << "SIGNATURE NODE: " << dta->originalPathNames[node->longname] << endl;
+        sigNodes.emplace_back(node->name);
+    }
+
+    if (!sigNodes.empty()) {
+        vector<string> topass;
+        for (auto& node : max_single_combo) {
+            topass.emplace_back(node->longname);
+        }
+
+        if (dta->randStart) {
+            dta->seed = std::vector<double>(dta->k, 1.0 / dta->k);
+        } else {
+            Trailmix::get_seed_source_estimates(dta, topass);
+        }
+    }
+
+    if (!sigNodes.empty()) {
+        if (dta->randStart) {
+            std::random_device rd;  // Random number generator
+            std::mt19937 gen(rd()); // Seed the generator
+            std::uniform_int_distribution distrib(0, dta->tree->nodes.size() - 1);
+
+            params.sources.resize(dta->k); // Resize vector to hold k elements
+            for (int i = 0; i < dta->k; ++i) {
+                params.sources[i] = distrib(gen); // Assign random number within the range
+            }
+        } else {
+            params.sources = sigNodes;
+        }
+    } else {
+        std::random_device rd;  // Random number generator
+        std::mt19937 gen(rd()); // Seed the generator
+        std::uniform_int_distribution distrib(0, dta->tree->nodes.size() - 1);
+
+        params.sources.resize(dta->k); // Resize vector to hold k elements
+        for (int i = 0; i < dta->k; ++i) {
+            params.sources[i] = distrib(gen); // Assign random number within the range
+        }
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    // This map will store the vectors of statistics for all chains, with branch names as keys
+    unordered_map<string, vector<vector<vector<double>>>> branchStatsMap;
+    vector<double> chainLogLikes;
+
+    // Open diagnostics file for this chain
+    std::ofstream diagnostics;
+    std::string filename = prefix + "Diagnostics.txt";
+
+    // Check if file exists
+    bool file_exists = std::filesystem::exists(filename);
+
+    // Open file in append mode
+    diagnostics.open(filename, std::ios_base::app);
+
+    // Write header only if file is newly created
+    if (!file_exists) {
+        diagnostics << "Source\tProportion Rhat\tBranch Placement Rhat" << std::endl;
+    }
+
+    for (unsigned int chain = 0; chain < params.chains; ++chain) {
+        initializeParams(params, dta);
+        cerr << "On chain: " << chain + 1 << "  out of " << params.chains << endl;
+        params.probMatrix = convertMapsToVector(gam);
+        params.align = gam;
+        std::vector<MCMCiteration> chainiter = move(mcmc.run_tree_proportion(params, MCMCiterationsVec[chain], dta->graph, dta->nodepaths,
+                                                                             dta->TM_outputfilename, dta, true, chain));
+
+        // Process the MCMC iterations to get the statistics map for this chain
+        pair<unordered_map<string, vector<vector<double>>>, double> intermStatsMapPair =
+            move(mcmc.processMCMCiterations(dta, chainiter, dta->k, prefix, chain, dta->tree, dta->n_leaves));
+
+        auto& intermStatsMap = intermStatsMapPair.first;
+        chainLogLikes.emplace_back(intermStatsMapPair.second);
+        // For each branch name, add the current chain's statistics vector to the main map
+        for (const auto& branchStat : intermStatsMap) {
+            const auto& branchName = branchStat.first;
+            const vector<vector<double>>& statsForCurrentChain = branchStat.second;
+
+            // Ensure that we have a vector to store the stats for this branch
+            if (branchStatsMap.find(branchName) == branchStatsMap.end()) {
+                branchStatsMap[branchName] = vector<vector<vector<double>>>();
+            }
+
+            // Add the stats for the current chain to the corresponding branch in the map
+            branchStatsMap[branchName].emplace_back(statsForCurrentChain);
+        }
+
+        cerr << "Finished running chain: " << chain + 1 << endl;
+    }
+
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    // Now, calculate R-hat statistics for each branch across all chains
+    int numChains = params.chains;
+    int chainLength = dta->iter - dta->burnin; // Assume all chains have the same length
+
+    for (const auto& branchStat : branchStatsMap) {
+        const auto& branchName = branchStat.first;
+        const auto& allChainStats = branchStat.second;
+
+        if (allChainStats.empty()) {
+            throw runtime_error("all Chains vector is empty");
+        }
+        std::vector<double> Propmeans(numChains);
+        std::vector<double> Propvariances(numChains);
+        std::vector<double> Posmeans(numChains);
+        std::vector<double> Posvariances(numChains);
+
+        // Collect the statistics for each chain for this branch
+        for (int chain = 0; chain < numChains; ++chain) {
+            if (allChainStats.size() <= chain) {
+                continue;
+            }
+            if (allChainStats[chain].empty()) {
+                continue;
+            }
+            if (allChainStats[chain][0].size() < 4) {
+                continue;
+            }
+            // Now it's safe to access the elements
+            Propmeans[chain] = allChainStats[chain][0][0];
+            Propvariances[chain] = allChainStats[chain][0][1];
+            Posmeans[chain] = allChainStats[chain][0][2];
+            Posvariances[chain] = allChainStats[chain][0][3];
+        }
+
+        // Calculate R-hat for proportions
+        double PropRhat = mcmc.calculateRhat(Propmeans, Propvariances, chainLength, params.chains);
+
+        if (PropRhat > 1.05) {
+            std::cerr << "Warning: R-hat for proportion of branch " << branchName
+                      << " is above 1.05, indicating that the chains have not converged for the parameter."
+                      << std::endl;
+        }
+
+        // Calculate R-hat for positions
+        double PosRhat = mcmc.calculateRhat(Posmeans, Posvariances, chainLength, params.chains);
+
+        if (PosRhat > 1.05) {
+            std::cerr << "Warning: R-hat for position of branch " << branchName
+                      << " is above 1.05, indicating that the chains have not converged for the parameter."
+                      << std::endl;
+        }
+
+        // Write the R-hat statistics for this branch to the diagnostics file
+        if (PosRhat != -1) {
+            diagnostics << branchName << '\t' << PropRhat << '\t' << PosRhat << endl;
+        }
+    }
+
+    diagnostics.close();
 }
-
-
 

@@ -4,69 +4,77 @@
 #include <limits>
 #include <unordered_set>
 
+#define PRINTVEC(v) for (int i=0; i<v.size(); ++i){cerr << setprecision(10) << v[i] << '\t';}cerr << endl << endl;
 #define MIN2(a,b) (((a)<(b))?(a):(b))
 #define MAX2(a,b) (((a)>(b))?(a):(b))
 #define probably_true(x) __builtin_expect(!!(x), 1)
 
 // Compute the mean of a sequence
-inline long double mean(const std::vector<long double>& v) {
+inline double mean(const std::vector<double>& v) {
     return std::accumulate(v.begin(), v.end(), 0.0) / v.size();
 }
 
 // Compute the variance of a sequence
-inline long double variance(const std::vector<long double>& v, long double mean) {
-    long double sum = 0.0;
+inline double variance(const std::vector<double>& v, double mean) {
+    double sum = 0.0;
     for (const auto& i : v) {
-        long double diff = i - mean;
+        double diff = i - mean;
          sum += diff * diff;
     }
     return sum / (v.size() - 1);
 }
 
-// Compute the autocorrelation of a sequence at lag k
-inline long double autocorrelation(const std::vector<long double>& v, int k) {
-    long double m = mean(v);
-    long double denom = variance(v, m);
-
+inline double autocorrelation(const std::vector<double>& v, int k, double m, double var) {
     double numer = 0.0;
-    for (size_t i = 0; i < v.size() - k; ++i) {
+    const size_t n = v.size();
+    for (size_t i = 0; i < n - k; ++i) {
         numer += ((v[i] - m) * (v[i + k] - m));
     }
-
-    return numer / ((v.size() - k) * denom);
+    return numer / ((n - k) * var);
 }
 
-// Compute the effective sample size (ESS) of a sequence
-inline double effectiveSampleSize(const std::vector<long double>& v) {
-    double m = mean(v);
-    double vari = variance(v, m);
-
-    int max_lag = v.size() / 2;
-    double rho_hat_even = 1.0;
-    double rho_hat_odd = autocorrelation(v, 1);
-    double rho_hat_tot = rho_hat_even + rho_hat_odd;
-
-    // First part of autocorrelation, where lag <= max_lag
-    int t = 1;
-    while ((t < max_lag - 2) && (rho_hat_even + rho_hat_odd > 0)) {
-        rho_hat_even = autocorrelation(v, t + 1);
-        rho_hat_odd = autocorrelation(v, t + 2);
-        rho_hat_tot += 2.0 * (rho_hat_even + rho_hat_odd);
-        t += 2;
+inline double autocorrelation(const std::vector<double>& v, int k) {
+    const size_t n = v.size();
+    const double m = mean(v);
+    const double var = variance(v, m);
+    
+    double numer = 0.0;
+    for (size_t i = 0; i < n - k; ++i) {
+        numer += ((v[i] - m) * (v[i + k] - m));
     }
-
-    // Might be negative at end, so set to zero
-    if (rho_hat_even + rho_hat_odd < 0) {
-        rho_hat_tot -= (rho_hat_even + rho_hat_odd);
-    }
-
-    double n_eff = v.size() / (1 + rho_hat_tot);
-
-    return n_eff;
+    return numer / ((n - k) * var);
 }
+
+inline double effectiveSampleSize(const std::vector<double>& v) {
+    const size_t n = v.size();
+    const int max_lag = std::min(static_cast<size_t>(100), n / 2);  // Use fixed max lag
+    const double m = mean(v);
+    const double var = variance(v, m);
+    
+    double rho_prev = 1.0;
+    double rho_current = autocorrelation(v, 1, m, var);
+    double rho_hat_tot = 2.0 * rho_current;  // Initialize with 2 * rho[1]
+    
+    for (int t = 2; t <= max_lag; ++t) {
+        double rho_next = autocorrelation(v, t, m, var);
+        
+        if (rho_next + rho_current <= 0) break;  // Early termination
+        
+        rho_hat_tot += 2.0 * rho_next;
+        
+        // Early termination if autocorrelation becomes very small
+        if (std::abs(rho_next) < 0.01) break;
+        
+        rho_prev = rho_current;
+        rho_current = rho_next;
+    }
+    
+    return n / (1 + rho_hat_tot);
+}
+
 
 typedef struct {
-    long double s[12];
+    double s[12];
  } substitutionRates;
 
 
@@ -89,12 +97,12 @@ typedef struct {
 //  15 T->T
 
 typedef struct {
-    long double s[16];
+    double s[16];
 } probSubstition;
 
 
 typedef struct {
-    long double p[4][4];
+    double p[4][4];
 } diNucleotideProb;
 
 
@@ -135,7 +143,7 @@ static void readNucSubstitionRatesFreq(const string filename,vector<substitution
 
 	    for(unsigned int k=0;k<12;k++){
 		//for(unsigned int t=0;t<=2;t++){
-		tempFreq.s[k]=destringify<long double>(fields[k]);
+		tempFreq.s[k]=destringify<double>(fields[k]);
 		//}
 	    }
 
@@ -212,21 +220,21 @@ else{return 0.25;}
  * @return vector of probabilities for phred scores 0-100
  *
  */
+
 static inline const vector<double> get_qscore_vec() {
 
     vector<double> qscore_vec;
     for (int Q=0; Q<100;++Q) {
-        if (probably_true(Q >= 2)) {
-             qscore_vec.emplace_back(get_p_seq_error(Q));
-                    }
+        if (Q >= 2) {
+           qscore_vec.emplace_back(pow(10, ((-1 * Q)*0.1)));
+                              }
         else{
-             qscore_vec.emplace_back(0.25);
+           qscore_vec.emplace_back(0.25);
             }
 
-                                                  }
-return qscore_vec;
-
-                                             }
+    }
+    return qscore_vec;
+}
 
 
 inline constexpr double get_p_incorrectly_mapped(const int Q)
@@ -266,9 +274,4 @@ template <typename T1, typename T2> typename T1::value_type quant(const T1 &x, T
 
     return (1.0 - h) * qs + h * x[hi];
 }
-
-
-
-
-
 

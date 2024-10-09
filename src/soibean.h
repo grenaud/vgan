@@ -13,7 +13,7 @@
 #include "NodeInfo.h"
 #include "AlignmentInfo.h"
 #include "Clade.h"
-#include "getLCAfromGAM.h"
+#include "precompute.h"
 #include "subcommand/subcommand.hpp"
 #include "bdsg/odgi.hpp"
 #include "../dep/spimap/src/Tree.h"
@@ -28,9 +28,6 @@ private:
 	vector<string> paths_through_node(const bdsg::ODGI& graph, const bdsg::handle_t& node);
 	std::vector<std::vector<double>> convertMapsToVector(vector<AlignmentInfo*>* & gam);
 	unordered_map<int, int> makePathToNode(spidir::Tree &tree, vector<string>& path_names);
-	std::vector<int> generateRandomNumbers(const int maxNum, const int k);
-    double calculateRhat(const std::vector<double>& means, const std::vector<double>& variances, int chainLength);
-
 
 
 public:
@@ -40,7 +37,7 @@ public:
 
 	soibean & operator= (const soibean & other);
 
-    string usage(const std::string& cwdProg) const;
+    string usage() const;
     const int run(int argc, char *argv[] , const string & cwdProg);
 
 };

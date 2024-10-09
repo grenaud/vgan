@@ -2,31 +2,22 @@
 #include "forward_declarations.h"
 #include "Clade.h"
 #include <map>
-#include <Eigen/Dense>
-//#include <nlopt.hpp>
-#include <boost/math/special_functions/digamma.hpp>
-#include <boost/math/special_functions/gamma.hpp>
-//#include "TrailMix.h"
 #include "Trailmix_struct.h"
 //#include "tree.h"
 #include <vector>
 
-
-
 //#define DEBUGHKY
 //#define DEBUGPAIN3
-//#define DEBUGDIAGNOSTIC
-using namespace std;
 
+using namespace std;
 
 struct RunTreeProportionParams {
     spidir::Node* root = NULL;
     vector<vector<double>> probMatrix;
     spidir::Tree* tr; // Changed to a regular pointer
-    vector<int> sources;
-    bool RPVG = false;
-    unsigned int maxIter = 1000000;
-    unsigned int burn = 100000;
+    vector<unsigned int> sources;
+    unsigned int maxIter = 50000;
+    unsigned int burn = 5000;
     unsigned int chains = 4;
     bool soibean = true;
     const vector<AlignmentInfo*>* align;
@@ -59,59 +50,53 @@ typedef struct MCMCiteration {
 
 
 
-
 class MCMC {
 
-double proposal_sd = 1.0; // proposal SD
+double proposal_sd = 0.01; // proposal SD
 double kappa = 1/22;
-double factor = pow(15.0, 15);
-
 
 private:
-    
 
 public:
-    void run_rpvg_haplotype_transcripts(shared_ptr<Trailmix_struct>& dta);
     void run_trailmix(shared_ptr<Trailmix_struct> &dta);
-    const vector<long double> generate_proposal(vector<long double> &current_vec, const double &alpha, const bool branch_pos);
-    const std::vector<long double> sample_normal_euka(std::vector<long double>& x, long double alpha);
+    const vector<double> generate_proposal(vector<double> &current_vec, const double &alpha, const bool branch_pos);
+    const std::vector<double> sample_normal_euka(std::vector<double>& x, double alpha);
     std::vector<double> sample_normal(std::vector<double>& x, double alpha);
     void generateNumbers(double num1);
 
     template<typename T> const vector<T> softmax(vector<T> &log_vec);
-    void run_rpvg_haplotypes(shared_ptr<Trailmix_struct>& dta);
-    vector<long double> run(int iter, int burnin, double tol, const vector<long double> &init_vec, vector<Clade *> * clade_vec, vector<int> &clade_list_id);
-    
-    long double get_proposal_likelihood(const vector <long double> &proposal_vec, vector<Clade *> * clade_vec, vector<int> &clade_list_id);
-
-    std::vector<MCMCiteration> run_tree_proportion(RunTreeProportionParams params, std::vector<MCMCiteration> state_t_vec, const bdsg::ODGI& graph, vector<vector<string>> nodepaths, string num, int n_threads, int numPaths, int chainindex, double con);
-
-    void updatePosition(PosTree &current_position, double move_distance, bool move_forward);
-    //double moveBackward(PosTree &current_position, double move_distance_abs);
-    //double moveForward(PosTree &current_position, double move_distance_abs);
-    //void checkPositionErrors(const PosTree &current_position, double move_distance);
-    //const double calculateEuclideanDistance(const std::vector<double> &vec1, const std::vector<double> &vec2);
-    //const std::vector<double> getPatristicDistances(const spidir::Tree* tr, const spidir::Node* node);
-    //double calculateDistanceToLeaf(const spidir::Tree* tr, const spidir::Node* current, const spidir::Node* leaf, double currentDistance, std::unordered_set<const spidir::Node*>& visited);
-    pair<unordered_map<string, vector<vector<double>>>, double> processMCMCiterations(const std::vector<MCMCiteration> MCMCiterationsVec, int k, string num, int chain, const spidir::Tree* tr, int numofleafs);
-    double log_diff_exp(double logA, double logB) {
-        if (logB >= logA) {
-            throw std::runtime_error("logB must be less than logA");
-        }
-        else if (logA == -INFINITY && logB == -INFINITY) {
-            return -INFINITY;
-        }
-        else {
-            return logA + log1p(-exp(logB - logA));
-        }
-    }
-
+    double calculateLogWeightedAverage(double logValueChild, double weightChild, double logValueParent, double weightParent);
+    vector<double> run(int iter, int burnin, double tol, const vector<double> &init_vec, vector<Clade *> * clade_vec, vector<int> &clade_list_id);
+    const double get_proposal_likelihood(const vector <double> &proposal_vec, vector<Clade *> * clade_vec, vector<int> &clade_list_id);
+    std::vector<MCMCiteration> run_tree_proportion(RunTreeProportionParams &params, std::vector<MCMCiteration> &state_t_vec, const bdsg::ODGI& graph, \
+                             const vector<vector<string>> &nodepaths, string num, shared_ptr<Trailmix_struct> &dta, bool running_trailmix, int chain);
+    void validateInputs(const PosTree &current_position, const double move_distance);
+    inline spidir::Node* findLCA(const spidir::Tree* tree, spidir::Node* node1, spidir::Node* node2);
+    //bool is_in_pruned(spidir::Node* p, const int depth, shared_ptr<Trailmix_struct> &dta, set<int> depths_used);
+    //bool is_in_pruned_verbose(spidir::Node* p, const int depth, shared_ptr<Trailmix_struct> &dta, set<int> depths_used);
+    bool is_in_pruned_set(spidir::Node* p, shared_ptr<Trailmix_struct> &dta);
+    void add_nodes_at_depth(spidir::Node* p, const int depth, shared_ptr<Trailmix_struct> &dta);
+    //const void updatePosition(std::shared_ptr<spidir::Tree> tr, PosTree &current_position, const double move_distance, bool move_forward);
+    inline void updatePosition(PosTree &current_position, const double move_distance, bool move_forward);
+    const double calculateDistanceToAncestor(spidir::Node* startNode, spidir::Node* ancestor);
+    const double getSumPatristicDistances(const PosTree &current_position, const shared_ptr<std::shared_ptr<spidir::Tree>> tr);
+    double calculateRhat(const std::vector<double>& means, const std::vector<double>& variances, int chainLength, int numchains);
+    inline const std::vector<double> getPatristicDistances(spidir::Tree* tr, spidir::Node* node, int numofLeafs, double posonbranch);
+    inline const double calculateEuclideanDistance(const std::vector<double> &vec1, const std::vector<double> &vec2);
+    pair<unordered_map<string, vector<vector<double>>>, double> processMCMCiterations(shared_ptr<Trailmix_struct>& dta, const std::vector<MCMCiteration> &MCMCiterations, int k, const string &num, int chain, \
+                                                                                        spidir::Tree* tr, int numofleafs);
+    double moveForward(PosTree &current_position, double move_distance_abs);
+    void checkPositionErrors(const PosTree &current_position, double move_distance);
+    inline const double calculateDistanceToLeaf(const std::shared_ptr<spidir::Tree> &tr, const spidir::Node* current, const spidir::Node* leaf, double currentDistance, \
+                               std::unordered_set<const spidir::Node*>& visited);
+    //void processMCMCiterations(const std::vector<std::vector<MCMCiteration>> &MCMCiterationsVec, int k, string num);
 
 
-    inline double computeBaseLogLike(const AlignmentInfo* read, RunTreeProportionParams &params, const int basevec, const int base, const string &pathName, const double t, const double branch_len)
+  inline const double computeBaseLogLike(shared_ptr<Trailmix_struct>& dta, const AlignmentInfo* read, RunTreeProportionParams &params, const int basevec, \
+                                   const int base, const string &pathName, const double t, double branch_len, bool cont_mode)
     {
-        // Store the repeated map lookup in a reference
-        const auto detail = read->detailMap.at(pathName).at(basevec).at(base);
+
+        const auto &detail = read->detailMap.at(pathName).at(basevec).at(base);
 
         const double purinfreq = params.freqs['R'];
         const double pyrinfreq = params.freqs['Y'];
@@ -119,6 +104,8 @@ public:
         const double obaseFreq = params.freqs[detail.readBase];
         const char refb = detail.referenceBase;
         const char readb = detail.readBase;
+
+        if (readb == 'S' || refb == 'S' || readb == 'N' || refb == 'N' || readb == '-' || refb == '-'){return 1e-9;}
 
 #ifdef DEBUGPAIN3  // Debugging block start
         cerr << "Debugging Information START" << endl;
@@ -247,7 +234,7 @@ public:
 
                     if (isnan(probBaseHKY[bpo]) || isinf(probBaseHKY[bpo]) || probBaseHKY[bpo] < 1e-8){
                         cerr << "log like the trash " << probBaseHKY[bpo] << " for base " << refb << endl;
-                        throw runtime_error("HKY loglikemarg is invalid for trash.");
+                        throw runtime_error("HKY loglikemarg is invalid.");
                     }
 
                 }
@@ -257,16 +244,18 @@ public:
         double log_lik_marg = -std::numeric_limits<double>::infinity();
         for (int bpd = 0; bpd < 4; bpd++) {
             if ("ACGT"[bpd] == readb) {
-                log_lik_marg = oplusInitnatl(log_lik_marg, (log(probBaseHKY[bpd])  + log((1 -branch_len) ))); //+ log((1- (branch_len*0.1)) )
+                log_lik_marg = oplusInitnatl(log_lik_marg, (log(probBaseHKY[bpd])));
                 
             } else {
-                log_lik_marg = oplusInitnatl(log_lik_marg, (log(probBaseHKY[bpd])  + log((branch_len/3)))); //+ log(((branch_len*0.1)/3))
+                log_lik_marg = oplusInitnatl(log_lik_marg, (log(probBaseHKY[bpd])));
                 
             }
         }
         if (log_lik_marg > 1e-8){
             log_lik_marg = log(0.999999999);
         }
+
+
         if (isnan(log_lik_marg) || isinf(log_lik_marg) || log_lik_marg > 1e-8){
             cerr << "post HKY:" << endl;
             for (int bpd = 0; bpd < 4; bpd++) {
@@ -274,8 +263,9 @@ public:
             }
             cerr << setprecision(15) << "log_lik_marg:" << log_lik_marg << " p=" << exp(log_lik_marg) << endl;
             cerr << setprecision(15) << "detail map log like " << detail.logLikelihood << endl;
-
-            throw runtime_error("HKY loglikemarg is invalid.");}
+            cerr << "UNUSUAL HKY" << endl;
+            throw runtime_error("HKY loglikemarg is invalid.");
+                                                                              }
 
 #ifdef DEBUGHKY
         cerr << "post HKY:" << endl;
@@ -286,33 +276,20 @@ public:
         cerr << setprecision(15) << "detail map log like " << detail.logLikelihood << endl;
         //if (readb != refb){throw std::runtime_error("Mismatch ");}
 #endif
-        log_lik_marg = log_lik_marg + detail.logLikelihood;
+
         if (isnan(log_lik_marg) || isinf(log_lik_marg) || log_lik_marg > 1e-8){
+            cerr << "cont mode? " << cont_mode << endl;
             cerr << setprecision(15) << "log_lik_marg:" << log_lik_marg << " p=" << exp(log_lik_marg) << endl;
             cerr << setprecision(15) << "detail map log like " << detail.logLikelihood << endl;
+            cerr << setprecision(15) << "detail map log like no damage " << detail.logLikelihoodNoDamage << endl;
 
             throw runtime_error("HKY loglikemarg is invalid.");}
+
+//cerr << setprecision(15) << "log_lik_marg:" << log_lik_marg << " p=" << exp(log_lik_marg) << endl;
+
         return log_lik_marg;
     }
 
-
-    double calculateLogWeightedAverage(double logValueChild, double weightChild, double logValueParent, double weightParent) {
-
-        // Log-sum-exp trick to compute log(a + b) from log(a) and log(b)
-        double maxLogValue = std::max(logValueChild + std::log(weightChild), logValueParent + std::log(weightParent));
-        double logSumExp = maxLogValue + std::log(std::exp(logValueChild + std::log(weightChild) - maxLogValue) + std::exp(logValueParent + std::log(weightParent) - maxLogValue));
-        
-        double logWeightSum = std::log(weightChild + weightParent);
-        
-        if (std::isinf(logWeightSum)) {
-            std::cerr << "Error: Denominator is zero. Cannot compute log weighted average." << std::endl;
-            return -std::numeric_limits<double>::infinity();
-        }
-
-        double logWeightedAverage = logSumExp - logWeightSum;
-
-        return logWeightedAverage;
-    }
 
 
    
@@ -321,31 +298,15 @@ public:
         // Invalid input, return an error value or throw an exception
         // depending on your requirements
         // For simplicity, let's return -1.0
-        return -1.0L;
+        return -1.0;
     } else if (n == 0) {
         // Base case: factorial of 0 is 1
-        return 1.0L;
+        return 1.0;
     } else {
         // Recursive case: factorial of n is n multiplied by factorial of (n-1)
-        return static_cast<long double>(n) * factorial(n - 1);
+        return static_cast<double>(n) * factorial(n - 1);
     }
                              };
-
-    int getBCIndex(const std::shared_ptr<Trailmix_struct>& dta, const std::vector<unsigned int>& combo) {
-    // convert input vector to a multiset for order-agnostic comparison
-    std::multiset<unsigned int> comboSet(combo.begin(), combo.end());
-
-    for (size_t i = 0; i < dta->branch_combos.size(); i++) {
-        // convert each combo in branch_combos to a multiset
-        std::multiset<unsigned int> existingComboSet(dta->branch_combos[i].begin(), dta->branch_combos[i].end());
-
-        // compare sets
-        if (existingComboSet == comboSet) {
-            return static_cast<int>(i);
-        }
-    }
-    return -1;
-}
 
     unsigned long long nChooseK(int n, int k) {
     if (k > n) {
@@ -369,61 +330,34 @@ public:
     return result;
 }
 
+void get_proposal_sd(double& proposal_sd, double& acceptance_rate, int current_iteration, int total_iterations, int burn_in) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
 
-void get_proposal_sd(double acceptanceRate, int currentIteration, int totalIterations) {
-    // Define ranges
-    double minSD = 1e2;
-    double maxSD = 1e2;
+    // Decide which range to choose
+    std::uniform_int_distribution<> range_choice(0,5);
+    int choice = range_choice(gen);
 
-    // Increase the base adaptation rate
-    double baseAdaptationRate = 0.1;
-
-    // Define cutoff for adaptation: stop adapting after 50% of total iterations
-    int cutoffIteration = totalIterations / 2;
-
-    // The total number of iterations, used for adjusting the target acceptance rate
-    int maxIterations = totalIterations;
-
-    // Only adapt if we haven't reached the cutoff
-    if (currentIteration < cutoffIteration) {
-
-        // Adaptation rate decreases slowly as iterations progress, but doesn't get too small
-        double adaptationRate = baseAdaptationRate / (1 + 0.001 * currentIteration);
-
-        // Adjust the target acceptance rate dynamically based on progress in iterations
-        double initialTargetAcceptanceRate = 0.50; // initial rate
-        double finalTargetAcceptanceRate = 0.23; // final rate
-        double targetAcceptanceRate = initialTargetAcceptanceRate -
-            ((initialTargetAcceptanceRate - finalTargetAcceptanceRate) * currentIteration / maxIterations);
-
-        // Adjust proposal SD
-        if (acceptanceRate > targetAcceptanceRate) {
-            proposal_sd = std::max(minSD, proposal_sd / (1.0 + adaptationRate));
-        } else if (acceptanceRate < targetAcceptanceRate) {
-            proposal_sd = std::min(maxSD, proposal_sd * (1.0 + adaptationRate));
-        }
+    // Choose uniformly within the selected range
+    if (choice == 0) {
+        std::uniform_real_distribution<> range(1e-4, 1e-3); // Very small range
+        proposal_sd = range(gen);
+    } else if (choice == 1) {
+        std::uniform_real_distribution<> range(1e-2, 1e-1); // Small range
+        proposal_sd = range(gen);
+    } else if (choice == 2) {
+        std::uniform_real_distribution<> range(1e-1, 1.0); // Medium-small range
+        proposal_sd = range(gen);
+    } else if (choice == 3) {
+        std::uniform_real_distribution<> range(1.0, 10.0); // Medium-large range
+        proposal_sd = range(gen);
+    } else if (choice == 4) {
+        std::uniform_real_distribution<> range(10.0, 100.0); // Large range
+        proposal_sd = range(gen);
     }
-}
-
-long double getQuantile2(const std::vector<long double>& sortedData, double q) {
-    if (sortedData.empty()) {
-        throw std::runtime_error("Vector is empty");
-    }
-    
-    if (q < 0.0 || q > 1.0) {
-        throw std::invalid_argument("Quantile must be between 0 and 1");
-    }
-
-    const auto n = sortedData.size();
-    const auto index = (n - 1) * q;
-    const auto lowerIndex = static_cast<size_t>(floor(index));
-    const auto upperIndex = static_cast<size_t>(ceil(index));
-
-    if (lowerIndex == upperIndex) {
-        return sortedData[lowerIndex];
-    } else {
-        const auto frac = index - lowerIndex;
-        return (1.0 - frac) * sortedData[lowerIndex] + frac * sortedData[upperIndex];
+    else if (choice == 5) {
+        std::uniform_real_distribution<> range(300.0, 800.0); // Extra Large range
+        proposal_sd = range(gen);
     }
 }
 
@@ -433,13 +367,15 @@ std::pair<std::vector<double>, std::vector<double>> generateThetaVecAndMaxBranch
     std::vector<double> max_branch_lens;
 
     for (auto& p : current_positions) {
-        thetaVec.emplace_back(max(0.001, p.theta));
+        thetaVec.emplace_back(max(0.1, p.theta));
         max_branch_lens.emplace_back(p.pos->dist);
+        //max_branch_lens.emplace_back(0.0001);
     }
 
     return make_pair(thetaVec, max_branch_lens);
 }
 
+/*
 // Generate a vector of random numbers
 std::vector<double> generateRandomNumbers(int size) {
     std::random_device rd;
@@ -460,11 +396,25 @@ std::vector<double> generateRandomNumbers(int size) {
 
     return random_numbers;
 }
+*/
+
+std::vector<double> generateRandomNumbers(int size) {
+    std::vector<double> distribution(size, 0.0);
+
+    if (size > 0) {
+        double value = 1.0 / size;
+        for (double &num : distribution) {
+            num = value;
+        }
+    }
+
+    return distribution;
+}
 
 
 
 // Initialize the MCMCiteration state
-MCMCiteration initializeState(RunTreeProportionParams& params) {
+MCMCiteration initializeState(RunTreeProportionParams& params, vector<double> &seed) {
     MCMCiteration state;
     state.n_components = params.sources.size();
 
@@ -472,7 +422,7 @@ MCMCiteration initializeState(RunTreeProportionParams& params) {
     std::vector<double> random_numbers = generateRandomNumbers(state.n_components);
 
     // Initialize current_positions
-    state.positions_tree = initializePositions(random_numbers, params);
+    state.positions_tree = initializePositions(random_numbers, params, seed);
 
     // Generate thetaVec and max_branch_lens
     auto [thetaVec, max_branch_lens] = generateThetaVecAndMaxBranchLens(state.positions_tree);
@@ -480,7 +430,7 @@ MCMCiteration initializeState(RunTreeProportionParams& params) {
     state.proportions = thetaVec;
     state.max_branch_lens = max_branch_lens;
 
-    //std::vector<long double> LLvec_init = get_LLvec_init(state, params);
+    //std::vector<double> LLvec_init = get_LLvec_init(state, params);
     double likelihood_t = params.logLike;
     state.logLike = likelihood_t;
 
@@ -488,14 +438,20 @@ MCMCiteration initializeState(RunTreeProportionParams& params) {
 }
 
 // Initialize current_positions
-std::vector<PosTree> initializePositions(const std::vector<double>& random_numbers, RunTreeProportionParams& params) {
+std::vector<PosTree> initializePositions(const std::vector<double>& random_numbers, RunTreeProportionParams& params, vector<double> &seed) {
     std::vector<PosTree> current_positions(random_numbers.size());
     int index = 0;
 
     for (auto& p : current_positions) {
         p.pos = params.tr->nodes[params.sources[index]];
-        p.pos_branch = 0.5;//1.0 / random_numbers.size();
-        p.theta = random_numbers[index];
+        p.pos_branch = 0.0001; //1.0 / random_numbers.size();
+        double seed_sum = std::accumulate(seed.begin(), seed.end(), 0.0);
+        if (seed_sum == 1.0) {
+            p.theta = seed[index];
+                             }
+        else  {
+            p.theta = random_numbers[index];
+              }
         p.branch_place_anc = 0.5;
         p.branch_place_der = 0.5;
         index++;
@@ -504,123 +460,23 @@ std::vector<PosTree> initializePositions(const std::vector<double>& random_numbe
     return current_positions;
 }
 
-double getQuantile2(const std::vector<double>& sortedData, double q) {
-    if (sortedData.empty()) {
-        throw std::runtime_error("Vector is empty");
-    }
-    
-    if (q < 0.0 || q > 1.0) {
-        throw std::invalid_argument("Quantile must be between 0 and 1");
+
+/*
+std::vector<PosTree> initializePositions(const std::vector<double>& random_numbers, RunTreeProportionParams& params, vector<double> &seed) {
+    std::vector<PosTree> current_positions(random_numbers.size());
+    double equal_theta = 1.0 / random_numbers.size();  // Equal division of theta for each source
+
+    for (int index = 0; index < random_numbers.size(); ++index) {
+        current_positions[index].pos = params.tr->nodes[params.sources[index]];
+        current_positions[index].pos_branch = 1.0 / random_numbers.size();
+        current_positions[index].theta = equal_theta;  // Assign equal theta to each source
+        current_positions[index].branch_place_anc = 0.5;
+        current_positions[index].branch_place_der = 0.5;
     }
 
-    const auto n = sortedData.size();
-    const auto index = (n - 1) * q;
-    const auto lowerIndex = static_cast<size_t>(floor(index));
-    const auto upperIndex = static_cast<size_t>(ceil(index));
-
-    if (lowerIndex == upperIndex) {
-        return sortedData[lowerIndex];
-    } else {
-        const auto frac = index - lowerIndex;
-        return (1.0 - frac) * sortedData[lowerIndex] + frac * sortedData[upperIndex];
-    }
+    return current_positions;
 }
-
-// Function to check if a node belongs to a given tree
-bool isNodeInTree(const spidir::Tree* tree, spidir::Node* node) {
-    for (int i = 0; i < tree->nodes.size(); ++i) {
-        if (tree->nodes[i] == node) {
-            return true;
-        }
-    }
-    return false;
-}
-// Function to find the lowest common ancestor (LCA) of two nodes in a given tree
-    spidir::Node* findLCA(const spidir::Tree* tree, spidir::Node* node1, spidir::Node* node2) {
-    if (tree == nullptr || node1 == nullptr || node2 == nullptr) {
-        throw std::runtime_error("Tree or node pointers are null.");
-    }
-    if (!isNodeInTree(tree, node1) || !isNodeInTree(tree, node2)) {
-        throw std::runtime_error("One or both nodes do not belong to the provided tree.");
-    }
-    std::unordered_map<spidir::Node*, bool> ancestors;
-    // Traverse ancestors of the first node and mark them
-    spidir::Node* current = node1;
-    while (current != nullptr) {
-        ancestors[current] = true;
-        current = current->parent;
-    }
-    // Traverse ancestors of the second node to find the common ancestor
-    current = node2;
-    while (current != nullptr) {
-        if (ancestors.find(current) != ancestors.end()) {
-            return current;  // Return the LCA node
-        }
-        current = current->parent;
-    }
-    throw std::runtime_error("No common ancestor found.");
-}
-
-
-// Function to calculate the distance to an ancestor node
-double calculateDistanceToAncestor(spidir::Node* startNode, spidir::Node* ancestor) {
-    double distance = 0.0;
-    spidir::Node* current = startNode;
-    while (current != nullptr && current != ancestor) {
-        distance += (current->dist);
-        current = current->parent;
-    }
-    return current == ancestor ? distance : -1.0; // Return -1 if ancestor is not found
-}
-
-const std::vector<double> getPatristicDistances(const spidir::Tree* tr, spidir::Node* node, int numofLeafs, double posonbranch) {
-    if (!tr || !node) {
-        throw std::runtime_error("Tree or node is null.");
-    }
-    std::vector<double> distances(numofLeafs, std::numeric_limits<double>::max());
-    for (size_t i = 0; i < tr->nodes.size(); ++i) {
-        const auto &leafNode = tr->nodes[i];
-        if (!leafNode || !leafNode->isLeaf()) {
-            continue;
-        }
-        spidir::Node* lca = findLCA(tr, node, leafNode);
-        double distanceToLCAFromNode = calculateDistanceToAncestor(node, lca) - posonbranch;
-        double distanceToLCAFromLeaf = calculateDistanceToAncestor(leafNode, lca);
-        if (distanceToLCAFromNode >= 0.0 && distanceToLCAFromLeaf >= 0.0) {
-            distances[i] = distanceToLCAFromNode + distanceToLCAFromLeaf;
-
-        } else {
-            //std::cerr << "Error calculating distance for leaf ID " << leafNode->name << std::endl;
-        }
-    }
-    
-    return distances;
-}
-
-
-const long double calculateEuclideanDistance(const std::vector<double> &vec1, const std::vector<double> &vec2) {
-    if (vec1.empty() || vec2.empty()) {
-        throw std::runtime_error("Input vectors are empty.");
-    }
-
-    size_t minSize = std::min(vec1.size(), vec2.size());
-    if (minSize == 0) {
-        throw std::runtime_error("One of the vectors is empty.");
-    }
-
-    long double sum = 0.0;
-    for (size_t i = 0; i < minSize; ++i) {
-        if (vec1[i] == std::numeric_limits<double>::max() || vec2[i] == std::numeric_limits<double>::max()) {
-            //std::cerr << "Warning: Skipping comparison at index " << i << " due to invalid value." << std::endl;
-            continue;
-        }
-        double diff = vec1[i] - vec2[i];
-        sum += diff * diff;
-    }
-    return sqrt(sum);
-}
-
-
+*/
 
     MCMC();
     MCMC(const MCMC & other);
@@ -631,7 +487,7 @@ const long double calculateEuclideanDistance(const std::vector<double> &vec1, co
 // computes the softmax of the proposal vector.
 // normalises so each proposal vector sums up to 1
 template <typename T> const vector<T> MCMC::softmax(vector<T> &log_vec){
-        long double K = 0.0;
+        double K = 0.0;
 
         for (size_t i = 0; i<log_vec.size(); i++){
 
@@ -652,7 +508,5 @@ template <typename T> const vector<T> MCMC::softmax(vector<T> &log_vec){
 
         return transformed_log_vec;
 }
-
-
 
 
