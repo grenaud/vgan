@@ -395,7 +395,7 @@ infer:
         vector<double> final_vec(log_likelihood_vec.size(), 0.0);
 
 {
-        #pragma omp parallel for num_threads(dta->n_threads) private(i, log_likelihood_vec) schedule(dynamic)
+        //#pragma omp parallel for num_threads(dta->n_threads) private(i, log_likelihood_vec) schedule(dynamic)
         for(size_t i=0;i!=dta->algnvector->size();++i){
             // Discard unmapped reads
             if (dta->algnvector->at(i) -> identity < 1e-10) {continue;}
@@ -403,9 +403,12 @@ infer:
             // Loop through mapped reads and update log likelihood vector accordingly
             log_likelihood_vec = update(dta, i, empty_vec);
 
-            //#pragma omp critical
+{
+cerr << i << endl;
+            #pragma omp critical
             for (size_t j=0;j<log_likelihood_vec.size();++j) {final_vec[j] += log_likelihood_vec[j];}
                 log_likelihood_vec.clear();
+}
                                                      }
 }
 
