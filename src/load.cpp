@@ -92,6 +92,23 @@ return;
 }
 
 
+void Haplocart::read_PHG(shared_ptr<Trailmix_struct> &dta) {
+    dta->graph.deserialize(dta->hc_graph_dir + dta->graph_prefix + ".og");
+
+    dta->graph.for_each_path_handle([&](const handlegraph::path_handle_t &path_handle) {
+        string path_name = dta->graph.get_path_name(path_handle);
+        if (path_name.size() == 1) path_name += '_';
+        dta->path_names.emplace_back(path_name);
+    });
+
+    assert(!dta->path_names.empty());
+    sort(dta->path_names.begin(), dta->path_names.end(),
+         [](const string &a, const string &b) {
+             return strcoll(a.c_str(), b.c_str()) < 0;
+         });
+}
+
+
 void Haplocart::load_path_names(shared_ptr<Trailmix_struct> &dta){
 string graph_dir = dta->running_trailmix ? dta->graph_dir : dta->hc_graph_dir;
 vector<string> path_names;

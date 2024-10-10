@@ -18,12 +18,6 @@ using namespace google::protobuf;
 using namespace vg;
 
 
-
-bool unixSortComparator(const std::string& a, const std::string& b) {
-    return std::use_facet<std::collate<char>>(std::locale("en_US.UTF-8")).compare(
-        a.data(), a.data() + a.size(), b.data(), b.data() + b.size()) < 0;
-}
-
 Haplocart::Haplocart(){
 
 }
@@ -215,9 +209,9 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
        // Load a bunch of stuff
         if (!dta->running_trailmix) {
         Haplocart::load_pangenome_map(dta);
-        //readPHG(dta);
+        Haplocart::read_PHG(dta);
         Haplocart::precompute_incorrect_mapping_probs(dta);
-        Haplocart::load_path_names(dta);
+        //Haplocart::load_path_names(dta);
         dta->nbpaths = dta->path_names.size();
         load_mappabilities(dta);
         dta->qscore_vec = get_qscore_vec();
@@ -297,6 +291,7 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
     mkfifo(dta->fifo_C, 0666);
 
     for (i=0; i<dta->n_samples; ++i) {
+        if(dta->n_samples>1){dta->n_threads=1;} // Mulithreading for MULTIFASTA input in the updated version has an unsolved issue, this is a workaround.
         if(!dta->quiet){cerr << "Processing sample " << i+1 << " of " << dta->n_samples << endl;}
         if (fasta_ids.size() > 0 && dta->fastafilename != "") {dta->samplename = fasta_ids[i];}
 
@@ -374,7 +369,6 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
 
                  }
         dta->algnvector = move(readGAM(dta));
-        cerr << "DONE READING FROM GAM FILE" << endl;
         assert(!dta->algnvector->empty());
         if(dta->running_trailmix){
             dta->reads_already_processed=true;return;
@@ -412,9 +406,6 @@ infer:
             log_likelihood_vec = update(dta, i, empty_vec);
 
 {
-if(i % 50 == 1){
-cerr << i << endl;
-               }
             #pragma omp critical
             for (size_t j=0;j<log_likelihood_vec.size();++j) {final_vec[j] += log_likelihood_vec[j];}
                 log_likelihood_vec.clear();

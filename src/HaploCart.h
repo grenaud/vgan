@@ -21,6 +21,8 @@ private:
 
 public:
 
+void read_PHG(shared_ptr<Trailmix_struct> &dta);
+
 const double getBaseFrequency(const char base);
 
 /** @brief Read in the graph.

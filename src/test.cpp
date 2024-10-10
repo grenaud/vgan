@@ -702,7 +702,7 @@ BOOST_AUTO_TEST_CASE(check_graph)
  Haplocart hc;
  shared_ptr dta = make_unique<Trailmix_struct>();
  dta->running_trailmix = false;
- hc.load_path_names(dta);
+ hc.read_PHG(dta);
  bdsg::ODGI graph;
  const string cwdProg = getFullPath(getCWD(".")+"bin/");
  graph.deserialize(cwdProg+"../share/vgan/hcfiles/graph.og");
@@ -716,7 +716,7 @@ BOOST_AUTO_TEST_CASE(check_graph)
  for (const string & path : dta->path_names) {
      const string path_ = path.size() > 1 ? path : path + "_";
      if (!graph.has_path(path_)){throw runtime_error("MISSING PATH: "+path_);}
-     BOOST_CHECK_EQUAL(graph.has_path(path_), true);
+     BOOST_CHECK_EQUAL(graph.has_path(path), true);
      BOOST_CHECK_EQUAL(graph.is_empty(graph.get_path_handle(path_)), false);
                                    }
 
