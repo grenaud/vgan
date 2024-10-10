@@ -12,9 +12,11 @@
 #include "Dup_Remover.h"
 #include "vgan_utils.h"
 #include <vg/io/vpkg.hpp>
+#define PRINTVEC(v) for (int i=0; i<v.size(); ++i){cerr << setprecision(10) << v[i] << '\t';}cerr << endl << endl;
 
 using namespace google::protobuf;
 using namespace vg;
+
 
 
 bool unixSortComparator(const std::string& a, const std::string& b) {
@@ -277,20 +279,15 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
         if (!dta->quiet) cerr << "Found " << dta->n_samples << " sequences in FASTA file\n";
                                    }
 
-    for (i=0; i<dta->n_samples; ++i) {
 
-        //if (i>0){dta->n_threads=1;}
-        if(!dta->quiet){cerr << "Processing sample " << i+1 << " of " << dta->n_samples << endl;}
-        if (fasta_ids.size() > 0 && dta->fastafilename != "") {dta->samplename = fasta_ids[i];}
-
-
-    /////////////// GIRAFFE ///////////////////////////
-
-    // If we are given something other than GAM we need to map it first
+    unlink(dta->fifo_A);
+    unlink(dta->fifo_B);
+    unlink(dta->fifo_C);
 
     dta->first_fifo = dta->tmpdir+random_string(7);
     dta->second_fifo = dta->tmpdir+random_string(7);
     dta->third_fifo = dta->tmpdir+random_string(7);
+
     dta->fifo_A = dta->first_fifo.c_str();
     dta->fifo_B = dta->second_fifo.c_str();
     dta->fifo_C = dta->third_fifo.c_str();
@@ -299,8 +296,14 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
     mkfifo(dta->fifo_B, 0666);
     mkfifo(dta->fifo_C, 0666);
 
-{
-    #pragma omp single
+    for (i=0; i<dta->n_samples; ++i) {
+        if(!dta->quiet){cerr << "Processing sample " << i+1 << " of " << dta->n_samples << endl;}
+        if (fasta_ids.size() > 0 && dta->fastafilename != "") {dta->samplename = fasta_ids[i];}
+
+
+    /////////////// GIRAFFE ///////////////////////////
+
+    // If we are given something other than GAM we need to map it first
 
     dta->pid1 = fork();
     if (dta->pid1 == -1) {
@@ -311,11 +314,9 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
     if(dta->pid1 == 0) {
         // Child
         if (dta->gamfilename == "") {
-                cerr << "ENTERING MAP" << endl;
                 Haplocart::map_giraffe(fasta_seqs[i], dta->fastq1filename, dta->fastq2filename, dta->n_threads,
                                     dta->interleaved, dta->background_error_prob, dta->samplename, dta->fifo_A, dta->sc, dta->tmpdir, \
                                     dta->hc_graph_dir, dta->quiet, dta->deam3pfreqE, dta->deam5pfreqE, dta->posterior_threshold);
-                 cerr << "DONE ENTERING MAP" << endl;
            while ((dta->wpid = wait(&dta->status)) > 0);
            exit(0);
                                }
@@ -327,8 +328,7 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
                dst << src.rdbuf();
                exit(0);
              }
-
-                  }
+         }
 
     else {
 
@@ -364,8 +364,11 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
 
         //////////////////////// NOW BACK TO YOUR REGULARLY SCHEDULED PROGRAMMING ////////////////////////
 
-        //assert(!dta->reads_already_processed);
+        if (i==0){
+
+                 }
         dta->algnvector = move(readGAM(dta));
+        cerr << "DONE READING FROM GAM FILE" << endl;
         assert(!dta->algnvector->empty());
         if(dta->running_trailmix){
             dta->reads_already_processed=true;return;
@@ -384,7 +387,6 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
                                      }
         //if (dta->quiet == false) {cerr << "Computing haplogroup likelihoods from " << dta->algnvector->size() << " reads." << '\n';}
 
-}
 
 infer:
 
@@ -395,7 +397,7 @@ infer:
         vector<double> final_vec(log_likelihood_vec.size(), 0.0);
 
 {
-        //#pragma omp parallel for num_threads(dta->n_threads) private(i, log_likelihood_vec) schedule(dynamic)
+        #pragma omp parallel for num_threads(dta->n_threads) private(i, log_likelihood_vec) schedule(dynamic)
         for(size_t i=0;i!=dta->algnvector->size();++i){
             // Discard unmapped reads
             if (dta->algnvector->at(i) -> identity < 1e-10) {continue;}
@@ -404,7 +406,9 @@ infer:
             log_likelihood_vec = update(dta, i, empty_vec);
 
 {
+if(i % 50 == 1){
 cerr << i << endl;
+               }
             #pragma omp critical
             for (size_t j=0;j<log_likelihood_vec.size();++j) {final_vec[j] += log_likelihood_vec[j];}
                 log_likelihood_vec.clear();
@@ -471,6 +475,7 @@ cerr << i << endl;
             cout << "</table>" << '\n';
             for (unsigned int i=0;i<8;++i){cout << '\n';}
              }
+
 
         if (dta->compute_posteriors) {
             Haplocart::get_posterior(final_vec, dta->path_names, dta->parents, dta->children, dta->samplename, proposed_haplotype, dta->posteriorfilename, dta->webapp);

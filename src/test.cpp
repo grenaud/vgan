@@ -369,45 +369,63 @@ pair<vector<string>, vector<vector<double>>> load_detected_taxa_file(const strin
 
                                                          }
 
+
 // Utility to tokenize a string based on any whitespace (spaces or tabs)
-vector<string> tokenize(const string &str) {
-    vector<string> tokens;
-    istringstream iss(str);
-    string token;
+std::vector<std::string> tokenize(const std::string &str) {
+    std::vector<std::string> tokens;
+    std::istringstream iss(str);
+    std::string token;
     while (iss >> token) {
         tokens.push_back(token);
     }
     return tokens;
 }
 
-const string get_haplocart_pred(const string &output_path) {
-    ifstream myfile(output_path.c_str());
-    string line;
-    vector<string> tokens;
-    // Check if file is open
+std::string get_haplocart_pred(const std::string &output_path) {
+    std::ifstream myfile(output_path);
     if (!myfile.is_open()) {
-        cerr << "Unable to open file!" << endl;
+        std::cerr << "Failed to open file: " << output_path << std::endl;
         return "";
     }
-    // Skip the header line
-    getline(myfile, line);
-    // Process the rest of the lines
-    while (getline(myfile, line)) {
-        // Ignore empty lines
+
+    std::string line;
+
+    // 1. Skip any initial empty lines
+    while (std::getline(myfile, line)) {
+        if (line.empty()) {
+            continue;
+        } else {
+            break; // Exit the loop after finding the first non-empty line
+        }
+    }
+
+    // 3. Process the data lines
+    while (std::getline(myfile, line)) {
+
+        // Skip empty lines within data
         if (line.empty()) {
             continue;
         }
-        // Tokenize the line (splitting by any whitespace)
-        tokens = tokenize(line);
+
+        // Remove potential carriage return (for Windows-formatted files)
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+
+        // Tokenize the line
+        std::vector<std::string> tokens = tokenize(line);
+        std::cerr << std::endl;
+
         // Assuming the predicted haplotype is the second token (index 1)
         if (tokens.size() > 1) {
             return tokens[1];  // Return the predicted haplotype
         }
     }
-    // Return an empty string if no valid token found
+
+    // If no valid data lines are found
+    std::cerr << "No valid data lines found." << std::endl;
     return "";
 }
-
 
 vector<string> get_haplocart_preds(const string& output_path) {
     vector<string> haplogroups;
@@ -697,7 +715,7 @@ BOOST_AUTO_TEST_CASE(check_graph)
  BOOST_CHECK_EQUAL(maxid, 11821);
  for (const string & path : dta->path_names) {
      const string path_ = path.size() > 1 ? path : path + "_";
-     cerr << "PATH: " << path << endl;
+     if (!graph.has_path(path_)){throw runtime_error("MISSING PATH: "+path_);}
      BOOST_CHECK_EQUAL(graph.has_path(path_), true);
      BOOST_CHECK_EQUAL(graph.is_empty(graph.get_path_handle(path_)), false);
                                    }
@@ -769,7 +787,7 @@ BOOST_AUTO_TEST_CASE(another_consensus)
 {
   Haplocart hc;
   const string cwdProg = getFullPath(getCWD("."));
-  const string input_path = cwdProg + "test/haplocart/input_files/H2a2a1g.fa";
+  const string input_path = cwdProg + "test/input_files/haplocart/H2a2a1g.fa";
   const string output_path = cwdProg + "test/output_files/H2a2a1g.txt";
   hc_run_fasta(input_path, output_path, & hc, false);
   BOOST_CHECK_EQUAL(get_haplocart_pred(output_path), "H2a2a1g");
@@ -1285,7 +1303,7 @@ trailmix_argvec.emplace_back("70");
 trailmix_argvec.emplace_back("-k");
 trailmix_argvec.emplace_back("2");
 trailmix_argvec.emplace_back("-o");
-trailmix_argvec.emplace_back("../test/output_files/trailmix/k2");
+trailmix_argvec.emplace_back("../test/output_files/trailmix/k2_HV4b_S3");
 trailmix_argvec.emplace_back("--iter");
 trailmix_argvec.emplace_back("5000");
 trailmix_argvec.emplace_back("--burnin");
@@ -1307,6 +1325,42 @@ for (int i=0;i<trailmix_argvec.size();i++) {
 tm->run(trailmix_argvec.size(), argvtopass, getCWD(".")+"bin/");
                          }
 
+
+void run_k2_HV4b_S3_randStart(Trailmix * tm){
+vector<string> trailmix_argvec;
+trailmix_argvec.emplace_back("vgan");
+trailmix_argvec.emplace_back("trailmix");
+trailmix_argvec.emplace_back("-fq1");
+trailmix_argvec.emplace_back("../test/input_files/trailmix/HV4b_S3.fq.gz");
+trailmix_argvec.emplace_back("-t");
+trailmix_argvec.emplace_back("70");
+trailmix_argvec.emplace_back("-k");
+trailmix_argvec.emplace_back("2");
+trailmix_argvec.emplace_back("-o");
+trailmix_argvec.emplace_back("../test/output_files/trailmix/k2_HV4b_S3");
+trailmix_argvec.emplace_back("--iter");
+trailmix_argvec.emplace_back("5000");
+trailmix_argvec.emplace_back("--burnin");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("--chains");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("-z");
+trailmix_argvec.emplace_back("tempdir");
+trailmix_argvec.emplace_back("--tm-files");
+trailmix_argvec.emplace_back("/net/mimer/mnt/tank/projects2/hominin/vgan_dev/share/vgan/publication_tmfiles/");
+trailmix_argvec.emplace_back("--dbprefix");
+trailmix_argvec.emplace_back("pub.graph");
+trailmix_argvec.emplace_back("--randStart");
+
+char** argvtopass = new char*[trailmix_argvec.size()];
+for (int i=0;i<trailmix_argvec.size();i++) {
+                   argvtopass[i] = const_cast<char*>(trailmix_argvec[i].c_str());
+                                       }
+
+tm->run(trailmix_argvec.size(), argvtopass, getCWD(".")+"bin/");
+                         }
+
+
 void run_k2_wrong_matrix(Trailmix * tm){
 vector<string> trailmix_argvec;
 trailmix_argvec.emplace_back("vgan");
@@ -1318,7 +1372,7 @@ trailmix_argvec.emplace_back("70");
 trailmix_argvec.emplace_back("-k");
 trailmix_argvec.emplace_back("2");
 trailmix_argvec.emplace_back("-o");
-trailmix_argvec.emplace_back("../test/output_files/trailmix/k2");
+trailmix_argvec.emplace_back("../test/output_files/trailmix/k2_wrong_matrix");
 trailmix_argvec.emplace_back("--iter");
 trailmix_argvec.emplace_back("5000");
 trailmix_argvec.emplace_back("--burnin");
@@ -1345,6 +1399,35 @@ tm->run(trailmix_argvec.size(), argvtopass, getCWD(".")+"bin/");
                          }
 
 
+void run_k2_full_graph(Trailmix * tm){
+vector<string> trailmix_argvec;
+trailmix_argvec.emplace_back("vgan");
+trailmix_argvec.emplace_back("trailmix");
+trailmix_argvec.emplace_back("-fq1");
+trailmix_argvec.emplace_back("../test/input_files/trailmix/full_graph.fq.gz");
+trailmix_argvec.emplace_back("-t");
+trailmix_argvec.emplace_back("80");
+trailmix_argvec.emplace_back("-k");
+trailmix_argvec.emplace_back("2");
+trailmix_argvec.emplace_back("-o");
+trailmix_argvec.emplace_back("../test/output_files/trailmix/k2_full_graph");
+trailmix_argvec.emplace_back("--iter");
+trailmix_argvec.emplace_back("5000");
+trailmix_argvec.emplace_back("--burnin");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("--chains");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("-z");
+trailmix_argvec.emplace_back("tempdir");
+
+char** argvtopass = new char*[trailmix_argvec.size()];
+for (int i=0;i<trailmix_argvec.size();i++) {
+                   argvtopass[i] = const_cast<char*>(trailmix_argvec[i].c_str());
+                                       }
+
+tm->run(trailmix_argvec.size(), argvtopass, getCWD(".")+"bin/");
+                         }
+
 BOOST_AUTO_TEST_CASE(k1_HV4b)
 {
     Trailmix tm;
@@ -1357,7 +1440,15 @@ BOOST_AUTO_TEST_CASE(k2_HV4b_S3)
 {
     Trailmix tm;
     run_k2_HV4b_S3(&tm);
-    auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/k2BranchEstimate.txt");
+    auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/k2_HV4b_S3BranchEstimate.txt");
+    BOOST_ASSERT((branchRecords[0].source == "HV4b" && branchRecords[1].source == "S3") || (branchRecords[0].source == "S3" && branchRecords[1].source == "HV4b"));
+}
+
+BOOST_AUTO_TEST_CASE(k2_HV4b_S3_randStart)
+{
+    Trailmix tm;
+    run_k2_HV4b_S3_randStart(&tm);
+    auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/k2_HV4b_S3BranchEstimate.txt");
     BOOST_ASSERT((branchRecords[0].source == "HV4b" && branchRecords[1].source == "S3") || (branchRecords[0].source == "S3" && branchRecords[1].source == "HV4b"));
 }
 
@@ -1365,7 +1456,15 @@ BOOST_AUTO_TEST_CASE(wrong_matrix)
 {
     Trailmix tm;
     run_k2_wrong_matrix(&tm);
-    auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/k2BranchEstimate.txt");
+    auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/k2_wrong_matrixBranchEstimate.txt");
+    BOOST_ASSERT((branchRecords[0].source == "HV4b" && branchRecords[1].source == "S3") || (branchRecords[0].source == "S3" && branchRecords[1].source == "HV4b"));
+}
+
+BOOST_AUTO_TEST_CASE(k2_full_graph)
+{
+    Trailmix tm;
+    run_k2_full_graph(&tm);
+    auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/k2_full_graphBranchEstimate.txt");
     BOOST_ASSERT((branchRecords[0].source == "HV4b" && branchRecords[1].source == "S3") || (branchRecords[0].source == "S3" && branchRecords[1].source == "HV4b"));
 }
 

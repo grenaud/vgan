@@ -22,6 +22,7 @@ static shared_ptr<vector<AlignmentInfo*>> readGAM(shared_ptr<Trailmix_struct> &d
 
 const bool dump_json = dta->dump_json;
 const string fifo_to_read = dta->running_trailmix ? dta->fifo_A : dta->fifo_C;
+
 #ifdef VERBOSE
     const string strn(fifo_to_read);
     const int idx = strn.find_last_of("/");
@@ -56,7 +57,7 @@ function<void(vg::Alignment&)> lambda = [&n_reads, &read_vec, &dump_json, &json_
     }
     ++n_reads;
     if (n_reads % 20 == 0){
-        //std::cerr << "ON READ: " << n_reads << std::endl;
+        //std::cerr << "IN READGAM, PROCESSING READ: " << n_reads << std::endl;
                           }
 
     to_emit.emplace_back(a);
@@ -73,6 +74,7 @@ function<void(vg::Alignment&)> lambda = [&n_reads, &read_vec, &dump_json, &json_
 };
 
     vg::get_input_file("-", [&](istream& in) {vg::io::for_each(in, lambda);});
+
 if (dta->running_trailmix){
     emitter.emit_mapped_single(move(to_emit));
                           }
@@ -81,6 +83,7 @@ if (dta->running_trailmix){
 
     //if (std::filesystem::is_fifo(dta->fifo_A) && !dta->dump_json) {remove(dta->fifo_A);}
     if (read_vec->empty()){throw std::runtime_error("Error, no reads found in GAM file");}
+
     return read_vec;
 }
 
