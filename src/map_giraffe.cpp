@@ -42,6 +42,7 @@ void Haplocart::map_giraffe(string &fastaseq, string &fastq1filename, string &fa
     string minimizer_to_use=  graph_dir_path + "graph.min";
     string rymer_to_use=  graph_dir_path + "graph.ry";
 
+
 if (fastq1filename != "" && fastq2filename != "")
    {
         arguments.emplace_back("-f");

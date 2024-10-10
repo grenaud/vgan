@@ -314,18 +314,24 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
     if(dta->pid1 == 0) {
         // Child
         if (dta->gamfilename == "") {
-                Haplocart::map_giraffe(fasta_seqs[i], dta->fastq1filename, dta->fastq2filename, dta->n_threads,
+                Haplocart::map_giraffe(fasta_seqs[i], dta->fastq1filename, dta->fastq2filename, dta->n_threads, \
                                     dta->interleaved, dta->background_error_prob, dta->samplename, dta->fifo_A, dta->sc, dta->tmpdir, \
                                     dta->hc_graph_dir, dta->quiet, dta->deam3pfreqE, dta->deam5pfreqE, dta->posterior_threshold);
            while ((dta->wpid = wait(&dta->status)) > 0);
            exit(0);
-                               }
+                                    }
 
         else {
                // Redirect buffer in case of GAM input
-               ifstream src(dta->gamfilename);
+               ifstream src(dta->gamfilename, std::ios::binary);
+               if (!src.is_open()) {
+                    std::cerr << "Error opening GAM file: " << dta->gamfilename << std::endl;
+                    exit(1);
+                                   }
                ofstream dst(dta->fifo_A);
                dst << src.rdbuf();
+               src.close();
+               dst.close();
                exit(0);
              }
          }
