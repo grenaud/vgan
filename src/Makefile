@@ -187,13 +187,13 @@ soibeanfilesmade: vgmade
 libgabmade:
 	rm -rf ../lib/libgab/
 	git clone --recursive https://github.com/grenaud/libgab.git ../lib/libgab/
-	cd ../lib/libgab/ && make -j $(NPROCS) && make -j $(NPROCS) -C gzstream/
+	cd ../lib/libgab/ && ${MAKE} -j $(NPROCS) && ${MAKE} -j $(NPROCS) -C gzstream/
 	touch libgabmade
 
-# Build vg if the stamp file doesn't exist
 vgmade:
-	# Build vg as per its build instructions
-	cd $(VGDIR) && ./source_me.sh && (cd deps/sparsehash && ./configure) && make -j $(NPROCS)
+	cd $(VGDIR) && ./source_me.sh
+	cd $(VGDIR)/deps/sparsehash && ./configure
+	$(MAKE) -C $(VGDIR) -j $(NPROCS) || $(MAKE) -C $(VGDIR) -j $(NPROCS)
 	touch vgmade
 
 # Build rpvg if the stamp file doesn't exist
