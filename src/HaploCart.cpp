@@ -82,8 +82,6 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
     vector<string> fasta_ids{""};
     auto start = std::chrono::system_clock::now();
 
-    if(dta->reads_already_processed && dta->running_trailmix){goto infer;}
-
     for(unsigned int i=1;i<(argc);++i){
 
     if(string(argv[i]) == "-") {
@@ -387,9 +385,6 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
                 dta->is_consensus_fasta = true;
                                      }
         //if (dta->quiet == false) {cerr << "Computing haplogroup likelihoods from " << dta->algnvector->size() << " reads." << '\n';}
-
-
-infer:
 
     dta->reads_already_processed=true;
 

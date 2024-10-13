@@ -57,10 +57,10 @@ const pair<vector<string>, vector<string>> Trailmix::read_fasta(const string & f
         ids.emplace_back(name);
     }
 
-    if (vec.empty()){throw std::runtime_error("[HaploCart] Error, no sequences found in FASTA input file");}
+    if (vec.empty()){throw std::runtime_error("[TrailMix] Error, no sequences found in FASTA input file");}
     vector<string> sorted_ids = ids; sort(sorted_ids.begin(), sorted_ids.end());
     for (size_t i=1; i<sorted_ids.size(); ++i) {
-        if (sorted_ids[i] == sorted_ids[i-1]) {cerr << "[HaploCart] Warning: Duplicate id in multifasta file: " + sorted_ids[i] << '\n';}
+        if (sorted_ids[i] == sorted_ids[i-1]) {cerr << "[TrailMix] Warning: Duplicate id in multiFASTA file: " + sorted_ids[i] << '\n';}
                                                                          }
     return make_pair(vec, ids);
 }
@@ -113,7 +113,7 @@ const pair<vector<string>, vector<string>> Haplocart::read_fasta(const string & 
     if (vec.empty()){throw std::runtime_error("[HaploCart] Error, no sequences found in FASTA input file");}
     vector<string> sorted_ids = ids; sort(sorted_ids.begin(), sorted_ids.end());
     for (size_t i=1; i<sorted_ids.size(); ++i) {
-        if (sorted_ids[i] == sorted_ids[i-1]) {cerr << "[HaploCart] Warning: Duplicate id in multifasta file: " + sorted_ids[i] << '\n';}
+        if (sorted_ids[i] == sorted_ids[i-1]) {cerr << "[HaploCart] Warning: Duplicate id in multiFASTA file: " + sorted_ids[i] << '\n';}
                                                                          }
     return make_pair(vec, ids);
 }

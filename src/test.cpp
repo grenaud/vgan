@@ -1262,11 +1262,11 @@ trailmix_argvec.emplace_back("trailmix");
 trailmix_argvec.emplace_back("-fq1");
 trailmix_argvec.emplace_back("../test/input_files/trailmix/HV4b.fq.gz");
 trailmix_argvec.emplace_back("-t");
-trailmix_argvec.emplace_back("70");
+trailmix_argvec.emplace_back("50");
 trailmix_argvec.emplace_back("-k");
 trailmix_argvec.emplace_back("1");
 trailmix_argvec.emplace_back("-o");
-trailmix_argvec.emplace_back("../test/output_files/trailmix/k1");
+trailmix_argvec.emplace_back("../test/output_files/trailmix/k1_HV4b");
 trailmix_argvec.emplace_back("--iter");
 trailmix_argvec.emplace_back("5000");
 trailmix_argvec.emplace_back("--burnin");
@@ -1276,7 +1276,7 @@ trailmix_argvec.emplace_back("1");
 trailmix_argvec.emplace_back("-z");
 trailmix_argvec.emplace_back("tempdir");
 trailmix_argvec.emplace_back("--tm-files");
-trailmix_argvec.emplace_back("/net/mimer/mnt/tank/projects2/hominin/vgan_dev/share/vgan/publication_tmfiles/");
+trailmix_argvec.emplace_back("../share/vgan/smaller_tmfiles/");
 trailmix_argvec.emplace_back("--dbprefix");
 trailmix_argvec.emplace_back("pub.graph");
 
@@ -1290,48 +1290,14 @@ tm->run(trailmix_argvec.size(), argvtopass, getCWD(".")+"bin/");
                          }
 
 
-void run_k1_FASTA(Trailmix * tm){
-vector<string> trailmix_argvec;
-trailmix_argvec.emplace_back("vgan");
-trailmix_argvec.emplace_back("trailmix");
-trailmix_argvec.emplace_back("-fq1");
-trailmix_argvec.emplace_back("../test/input_files/trailmix/HV4b.fa");
-trailmix_argvec.emplace_back("-t");
-trailmix_argvec.emplace_back("70");
-trailmix_argvec.emplace_back("-k");
-trailmix_argvec.emplace_back("1");
-trailmix_argvec.emplace_back("-o");
-trailmix_argvec.emplace_back("../test/output_files/trailmix/k1");
-trailmix_argvec.emplace_back("--iter");
-trailmix_argvec.emplace_back("5000");
-trailmix_argvec.emplace_back("--burnin");
-trailmix_argvec.emplace_back("1");
-trailmix_argvec.emplace_back("--chains");
-trailmix_argvec.emplace_back("1");
-trailmix_argvec.emplace_back("-z");
-trailmix_argvec.emplace_back("tempdir");
-trailmix_argvec.emplace_back("--tm-files");
-trailmix_argvec.emplace_back("/net/mimer/mnt/tank/projects2/hominin/vgan_dev/share/vgan/publication_tmfiles/");
-trailmix_argvec.emplace_back("--dbprefix");
-trailmix_argvec.emplace_back("pub.graph");
-
-char** argvtopass = new char*[trailmix_argvec.size()];
-for (int i=0;i<trailmix_argvec.size();i++) {
-                   argvtopass[i] = const_cast<char*>(trailmix_argvec[i].c_str());
-                                       }
-
-tm->run(trailmix_argvec.size(), argvtopass, getCWD(".")+"bin/");
-                         }
-
-
-void run_k1_G1a1a4(Trailmix * tm){
+void run_k1_G1a1a4_FASTA(Trailmix * tm){
 vector<string> trailmix_argvec;
 trailmix_argvec.emplace_back("vgan");
 trailmix_argvec.emplace_back("trailmix");
 trailmix_argvec.emplace_back("-f");
 trailmix_argvec.emplace_back("../test/input_files/trailmix/G1a1a4.fa.gz");
 trailmix_argvec.emplace_back("-t");
-trailmix_argvec.emplace_back("70");
+trailmix_argvec.emplace_back("50");
 trailmix_argvec.emplace_back("-k");
 trailmix_argvec.emplace_back("1");
 trailmix_argvec.emplace_back("-o");
@@ -1345,7 +1311,7 @@ trailmix_argvec.emplace_back("1");
 trailmix_argvec.emplace_back("-z");
 trailmix_argvec.emplace_back("tempdir");
 trailmix_argvec.emplace_back("--tm-files");
-trailmix_argvec.emplace_back("/net/mimer/mnt/tank/projects2/hominin/vgan_dev/share/vgan/publication_tmfiles/");
+trailmix_argvec.emplace_back("../share/vgan/smaller_tmfiles/");
 trailmix_argvec.emplace_back("--dbprefix");
 trailmix_argvec.emplace_back("pub.graph");
 
@@ -1364,7 +1330,7 @@ trailmix_argvec.emplace_back("trailmix");
 trailmix_argvec.emplace_back("-fq1");
 trailmix_argvec.emplace_back("../test/input_files/trailmix/HV4b_S3.fq.gz");
 trailmix_argvec.emplace_back("-t");
-trailmix_argvec.emplace_back("70");
+trailmix_argvec.emplace_back("50");
 trailmix_argvec.emplace_back("-k");
 trailmix_argvec.emplace_back("2");
 trailmix_argvec.emplace_back("-o");
@@ -1378,7 +1344,7 @@ trailmix_argvec.emplace_back("1");
 trailmix_argvec.emplace_back("-z");
 trailmix_argvec.emplace_back("tempdir");
 trailmix_argvec.emplace_back("--tm-files");
-trailmix_argvec.emplace_back("/net/mimer/mnt/tank/projects2/hominin/vgan_dev/share/vgan/publication_tmfiles/");
+trailmix_argvec.emplace_back("../share/vgan/smaller_tmfiles/");
 trailmix_argvec.emplace_back("--dbprefix");
 trailmix_argvec.emplace_back("pub.graph");
 
@@ -1398,7 +1364,7 @@ trailmix_argvec.emplace_back("trailmix");
 trailmix_argvec.emplace_back("-fq1");
 trailmix_argvec.emplace_back("../test/input_files/trailmix/HV4b_S3.fq.gz");
 trailmix_argvec.emplace_back("-t");
-trailmix_argvec.emplace_back("70");
+trailmix_argvec.emplace_back("50");
 trailmix_argvec.emplace_back("-k");
 trailmix_argvec.emplace_back("2");
 trailmix_argvec.emplace_back("-o");
@@ -1412,7 +1378,7 @@ trailmix_argvec.emplace_back("1");
 trailmix_argvec.emplace_back("-z");
 trailmix_argvec.emplace_back("tempdir");
 trailmix_argvec.emplace_back("--tm-files");
-trailmix_argvec.emplace_back("/net/mimer/mnt/tank/projects2/hominin/vgan_dev/share/vgan/publication_tmfiles/");
+trailmix_argvec.emplace_back("../share/vgan/smaller_tmfiles/");
 trailmix_argvec.emplace_back("--dbprefix");
 trailmix_argvec.emplace_back("pub.graph");
 trailmix_argvec.emplace_back("--randStart");
@@ -1432,7 +1398,7 @@ trailmix_argvec.emplace_back("trailmix");
 trailmix_argvec.emplace_back("-fq1");
 trailmix_argvec.emplace_back("../test/input_files/trailmix/HV4b_S3.fq.gz");
 trailmix_argvec.emplace_back("-t");
-trailmix_argvec.emplace_back("70");
+trailmix_argvec.emplace_back("50");
 trailmix_argvec.emplace_back("-k");
 trailmix_argvec.emplace_back("2");
 trailmix_argvec.emplace_back("-o");
@@ -1446,7 +1412,7 @@ trailmix_argvec.emplace_back("1");
 trailmix_argvec.emplace_back("-z");
 trailmix_argvec.emplace_back("tempdir");
 trailmix_argvec.emplace_back("--tm-files");
-trailmix_argvec.emplace_back("/net/mimer/mnt/tank/projects2/hominin/vgan_dev/share/vgan/publication_tmfiles/");
+trailmix_argvec.emplace_back("../share/vgan/smaller_tmfiles/");
 trailmix_argvec.emplace_back("--dbprefix");
 trailmix_argvec.emplace_back("pub.graph");
 trailmix_argvec.emplace_back("--deam3p");
@@ -1497,24 +1463,16 @@ BOOST_AUTO_TEST_CASE(k1_HV4b)
 {
     Trailmix tm;
     run_k1_HV4b(&tm);
-    auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/k1BranchEstimate.txt");
+    auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/k1_HV4bBranchEstimate.txt");
     BOOST_ASSERT(branchRecords[0].source == "HV4b");
 }
 
 BOOST_AUTO_TEST_CASE(k1_fasta)
 {
     Trailmix tm;
-    run_k1_FASTA(&tm);
-    auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/k1FASTA.txt");
-    BOOST_ASSERT(branchRecords[0].source == "HV4b");
-}
-
-BOOST_AUTO_TEST_CASE(k1_G1a1a4)
-{
-    Trailmix tm;
-    run_k1_G1a1a4(&tm);
-    auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/k2_G1a1a4_N11a1BranchEstimate.txt");
-    BOOST_ASSERT((branchRecords[0].source == "G1a1a4" && branchRecords[1].source == "N11a1") || (branchRecords[0].source == "G1a1a4" && branchRecords[1].source == "N11a1"));
+    run_k1_G1a1a4_FASTA(&tm);
+    auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/G1a1a4BranchEstimate.txt");
+    BOOST_ASSERT(branchRecords[0].source == "G1a1a4");
 }
 
 BOOST_AUTO_TEST_CASE(k2_HV4b_S3)

@@ -104,12 +104,6 @@ const char Trailmix::get_dummy_qual_score(const double &background_error_prob) {
 
 void Trailmix::map_giraffe(shared_ptr<Trailmix_struct> &dta){
 
- vector<string> fasta_seqs{""};
- vector<string> fasta_ids{""};
- std::tie(fasta_seqs, fasta_ids) = Trailmix::read_fasta(dta->fastafilename);
-
-dta->fastaseq=fasta_seqs[0];
-
     if (!dta->quiet) {cerr << "Mapping reads..." << endl;}
 
     int retcode;
@@ -195,15 +189,21 @@ else if (dta->fastq1filename != "" && dta->fastq1filename == "")
 
     }
 
-else if (dta->fastaseq != ""){
+else if (dta->fastafilename != ""){
+
+ vector<string> fasta_seqs{""};
+ vector<string> fasta_ids{""};
+ std::tie(fasta_seqs, fasta_ids) = Trailmix::read_fasta(dta->fastafilename);
+
+if (fasta_seqs.size() > 1 || fasta_ids.size() > 1){throw runtime_error("[TrailMix] Cannot provide multiFASTA input to TrailMix");}
+
+dta->fastaseq=fasta_seqs[0];
 
     string fastapath;
     const char dummyq = Trailmix::get_dummy_qual_score(dta->background_error_prob);
 
     string fasta_cmd;
     const string dummy_fastq_file = Trailmix::fa2fq(dta->fastaseq, dummyq, dta->tmpdir);
-
-cerr << "DUMMY FASTQ: " << dummy_fastq_file << endl;
 
     arguments.emplace_back("-f");
     arguments.emplace_back(dummy_fastq_file);
@@ -230,8 +230,6 @@ cerr << "DUMMY FASTQ: " << dummy_fastq_file << endl;
     if (dta->sc == NULL) {
             dta->sc = vg::subcommand::Subcommand::get(arguments.size(), argvtopass);
                          }
-
-     PRINTVEC(arguments)
 
      auto normal_cerr = cerr.rdbuf();
      std::cerr.rdbuf(NULL);
