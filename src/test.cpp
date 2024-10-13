@@ -1323,6 +1323,75 @@ for (int i=0;i<trailmix_argvec.size();i++) {
 tm->run(trailmix_argvec.size(), argvtopass, getCWD(".")+"bin/");
                                 }
 
+void tm_run_fq_single(Trailmix * tm){
+vector<string> trailmix_argvec;
+trailmix_argvec.emplace_back("vgan");
+trailmix_argvec.emplace_back("trailmix");
+trailmix_argvec.emplace_back("-fq1");
+trailmix_argvec.emplace_back("../test/input_files/trailmix/Q1_1.fq.gz");
+trailmix_argvec.emplace_back("-t");
+trailmix_argvec.emplace_back("50");
+trailmix_argvec.emplace_back("-k");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("-o");
+trailmix_argvec.emplace_back("../test/output_files/trailmix/Q1");
+trailmix_argvec.emplace_back("--iter");
+trailmix_argvec.emplace_back("5000");
+trailmix_argvec.emplace_back("--burnin");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("--chains");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("-z");
+trailmix_argvec.emplace_back("tempdir");
+trailmix_argvec.emplace_back("--tm-files");
+trailmix_argvec.emplace_back("../share/vgan/smaller_tmfiles/");
+trailmix_argvec.emplace_back("--dbprefix");
+trailmix_argvec.emplace_back("pub.graph");
+
+char** argvtopass = new char*[trailmix_argvec.size()];
+for (int i=0;i<trailmix_argvec.size();i++) {
+                   argvtopass[i] = const_cast<char*>(trailmix_argvec[i].c_str());
+                                       }
+
+tm->run(trailmix_argvec.size(), argvtopass, getCWD(".")+"bin/");
+                                }
+
+
+void k1_run_interleaved(Trailmix * tm){
+vector<string> trailmix_argvec;
+trailmix_argvec.emplace_back("vgan");
+trailmix_argvec.emplace_back("trailmix");
+trailmix_argvec.emplace_back("-fq1");
+trailmix_argvec.emplace_back("../test/input_files/trailmix/Q1_1.fq.gz");
+trailmix_argvec.emplace_back("-fq2");
+trailmix_argvec.emplace_back("../test/input_files/trailmix/Q1_2.fq.gz");
+trailmix_argvec.emplace_back("-t");
+trailmix_argvec.emplace_back("50");
+trailmix_argvec.emplace_back("-k");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("-o");
+trailmix_argvec.emplace_back("../test/output_files/trailmix/Q1_interleaved");
+trailmix_argvec.emplace_back("--iter");
+trailmix_argvec.emplace_back("5000");
+trailmix_argvec.emplace_back("--burnin");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("--chains");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("-z");
+trailmix_argvec.emplace_back("tempdir");
+trailmix_argvec.emplace_back("--tm-files");
+trailmix_argvec.emplace_back("../share/vgan/smaller_tmfiles/");
+trailmix_argvec.emplace_back("--dbprefix");
+trailmix_argvec.emplace_back("pub.graph");
+
+char** argvtopass = new char*[trailmix_argvec.size()];
+for (int i=0;i<trailmix_argvec.size();i++) {
+                   argvtopass[i] = const_cast<char*>(trailmix_argvec[i].c_str());
+                                       }
+
+tm->run(trailmix_argvec.size(), argvtopass, getCWD(".")+"bin/");
+                         }
+
 void run_k2_HV4b_S3(Trailmix * tm){
 vector<string> trailmix_argvec;
 trailmix_argvec.emplace_back("vgan");
@@ -1434,7 +1503,7 @@ vector<string> trailmix_argvec;
 trailmix_argvec.emplace_back("vgan");
 trailmix_argvec.emplace_back("trailmix");
 trailmix_argvec.emplace_back("-fq1");
-trailmix_argvec.emplace_back("../test/input_files/trailmix/full_graph.fq.gz");
+trailmix_argvec.emplace_back("../test/input_files/trailmix/HV4b_S3.fq.gz");
 trailmix_argvec.emplace_back("-t");
 trailmix_argvec.emplace_back("80");
 trailmix_argvec.emplace_back("-k");
@@ -1465,6 +1534,25 @@ BOOST_AUTO_TEST_CASE(k1_HV4b)
     run_k1_HV4b(&tm);
     auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/k1_HV4bBranchEstimate.txt");
     BOOST_ASSERT(branchRecords[0].source == "HV4b");
+}
+
+BOOST_AUTO_TEST_CASE(fq_single_zipped)
+{
+  Trailmix tm;
+  const string cwdProg = getFullPath(getCWD("."));
+  const string input_path = cwdProg + "test/input_files/trailmix/Q1_1.fq.gz";
+  const string output_path = cwdProg + "test/output_files/trailmix/Q1BranchEstimate.txt";
+  tm_run_fq_single(&tm);
+  auto branchRecords = load_branch_placement_diagnostics_file(output_path);
+  BOOST_ASSERT(branchRecords[0].source == "Q1e1b");
+}
+
+BOOST_AUTO_TEST_CASE(k1_interleaved)
+{
+    Trailmix tm;
+    k1_run_interleaved(&tm);
+    auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/Q1_interleavedBranchEstimate.txt");
+    BOOST_ASSERT(branchRecords[0].source == "Q1e1b");
 }
 
 BOOST_AUTO_TEST_CASE(k1_fasta)
