@@ -481,6 +481,12 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
             continue;
                                 }
 
+     if(string(argv[i]) == "-f"){
+            fastafilename = argv[i+1];
+            samplename    = fastafilename;
+            continue;
+                                }
+
     if(string(argv[i]) == "-fq1"){
             fastq1filename = argv[i+1];
             const int idx = fastq1filename.find_last_of("/");
@@ -624,8 +630,6 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     }
 
     }
-
-    if (fastafilename != "" && k != 1){throw runtime_error("[TrailMix] For consensus FASTA input, k must equal 1 (single-source)");}
 
     shared_ptr dta = make_unique<Trailmix_struct>();
     dta->graph_dir = graph_dir;

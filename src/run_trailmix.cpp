@@ -66,7 +66,7 @@ void Trailmix::run_mcmc(shared_ptr<Trailmix_struct>& dta) {
 
     if (dta->pid1 == 0) {
         if (dta->gamfilename == "") {
-            Trailmix::map_giraffe("", dta);
+            Trailmix::map_giraffe(dta);
         }
         exit(0);
     }

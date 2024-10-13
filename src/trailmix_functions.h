@@ -94,65 +94,21 @@ std::vector<std::vector<double>> convertMapsToVector(std::vector<AlignmentInfo*>
     return result;
 }
 
-void write_fq_read(auto & dummyFASTQFile, int offset, const int window_size, const string &fastaseq, char dummyqualscore) {
-        string seq_to_write, qual_to_write;
-        for (const char base : fastaseq.substr(min(offset, int(fastaseq.size())), window_size)) {
-            if (base != 'N') {
-                seq_to_write += base;
-                qual_to_write += dummyqualscore;
-                             }
-            else {
-                  seq_to_write += 'A';
-                  qual_to_write += '!';
-                 }
-                                                               }
 
-        dummyFASTQFile << '@' << random_string(7) << '\n';
-        dummyFASTQFile << seq_to_write;
-        dummyFASTQFile << "\n+\n";
-        dummyFASTQFile << qual_to_write;
-        dummyFASTQFile << '\n';
-        offset += window_size;
-                                                                                                                                   }
-
-
-const char get_dummy_qual_score(const double &background_error_prob) {
+const char Trailmix::get_dummy_qual_score(const double &background_error_prob) {
     // Given a background error probability, return a dummy quality score for the artificial FASTQ reads
     string illumina_encodings = "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHI";
     const int Q = -10 * log10(background_error_prob);
     return illumina_encodings[Q];
                                                                            }
 
+void Trailmix::map_giraffe(shared_ptr<Trailmix_struct> &dta){
 
-const string fa2fq(const string & fastaseq, const char & dummyqualscore, const string & tmpdir) {
+ vector<string> fasta_seqs{""};
+ vector<string> fasta_ids{""};
+ std::tie(fasta_seqs, fasta_ids) = Trailmix::read_fasta(dta->fastafilename);
 
-    // Given a consensus sequence and a dummy quality score, convert to FASTQ
-
-    // https://stackoverflow.com/questions/7560114/random-number-c-in-some-range
-
-    const string prefix = tmpdir;
-    const string tempfqfilename= prefix+random_string(7);
-    ofstream dummyFASTQFile;
-    dummyFASTQFile.open(tempfqfilename);
-    unsigned int window_size = ceil(fastaseq.size()/100);
-    unsigned int offset = 0;
-    string seq_to_write, qual_to_write;
-
-     for (int i = 0; i < 101; ++i) {
-        write_fq_read(dummyFASTQFile, offset, window_size, fastaseq, dummyqualscore);
-        offset += 100;
-                                   }
-
-     for (int i = 1; i < 101; ++i) {
-        write_fq_read(dummyFASTQFile, offset, window_size, fastaseq, dummyqualscore);
-        offset += 100;
-                                   }
-
-     dummyFASTQFile.close();
-     return tempfqfilename;
-                                                                                     }
-
-void Trailmix::map_giraffe(const string &fastaseq, shared_ptr<Trailmix_struct> &dta){
+dta->fastaseq=fasta_seqs[0];
 
     if (!dta->quiet) {cerr << "Mapping reads..." << endl;}
 
@@ -239,13 +195,15 @@ else if (dta->fastq1filename != "" && dta->fastq1filename == "")
 
     }
 
-else if (fastaseq != ""){
+else if (dta->fastaseq != ""){
+
     string fastapath;
-    const char dummyq = get_dummy_qual_score(dta->background_error_prob);
+    const char dummyq = Trailmix::get_dummy_qual_score(dta->background_error_prob);
 
     string fasta_cmd;
-    const string dummy_fastq_file = fa2fq(fastaseq, dummyq, dta->tmpdir);
+    const string dummy_fastq_file = Trailmix::fa2fq(dta->fastaseq, dummyq, dta->tmpdir);
 
+cerr << "DUMMY FASTQ: " << dummy_fastq_file << endl;
 
     arguments.emplace_back("-f");
     arguments.emplace_back(dummy_fastq_file);
@@ -272,6 +230,8 @@ else if (fastaseq != ""){
     if (dta->sc == NULL) {
             dta->sc = vg::subcommand::Subcommand::get(arguments.size(), argvtopass);
                          }
+
+     PRINTVEC(arguments)
 
      auto normal_cerr = cerr.rdbuf();
      std::cerr.rdbuf(NULL);

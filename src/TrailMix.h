@@ -18,7 +18,11 @@ int main_surject(int argc, char** argv);
 class Trailmix{
 private:
 
-void map_giraffe(const string &fastaseq, shared_ptr<Trailmix_struct> &dta);
+const char get_dummy_qual_score(const double &background_error_prob);
+void write_fq_read(auto & dummyFASTQFile, int offset, const int window_size, const string &fastaseq, char dummyqualscore);
+const string fa2fq(const string & fastaseq, const char & dummyqualscore, const string & tmpdir);
+void map_giraffe(shared_ptr<Trailmix_struct> &dta);
+const pair<vector<string>, vector<string>> read_fasta(const string & fastafilename);
 void load_mappabilities(std::shared_ptr<Trailmix_struct> &dta);
 void load_pangenome_map(shared_ptr<Trailmix_struct> &dta);
 vector<string> paths_through_node(const bdsg::ODGI& graph, const bdsg::handle_t& node);

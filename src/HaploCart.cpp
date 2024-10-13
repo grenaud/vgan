@@ -37,7 +37,7 @@ const string Haplocart::usage() const{
                   "Options:\n\n"+
                   "  Algorithm parameters\n"+
                   "  \t"+"-e [FLOAT]" + "\t\t\t"+ "Background error probability for FASTA input (default 0.0001)\n" +
-                  "  \t"+"-pt [FLOAT]\t\t\t"+ "\t\t\t"+"Posterior threshold for ancient DNA (aligned with SAFARI) \n" +
+                  "  \t"+"-pt [FLOAT]"+ "\t\t\t"+"Posterior threshold for ancient DNA (aligned with SAFARI) \n" +
                   "  Input/Output\n"+
                   "  \t"+"--hc-files [STR]" + "\t\t" + "HaploCart graph directory location (default: \"../share/vgan/hcfiles/\")\n" +
                   "  \t"+"-f [STR]" + "\t\t\t" + "FASTA consensus input file\n" +
@@ -270,6 +270,7 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
         std::tie(fasta_seqs, fasta_ids) = Haplocart::read_fasta(dta->fastafilename);
         if (fasta_seqs.size() > 1 && dta->invoked_samplename) {throw std::runtime_error("[HaploCart] Error, cannot invoke -s on multifasta input.");}
         dta->n_samples = fasta_seqs.size();
+        if (dta->n_samples > 1 && dta->running_trailmix == true){throw runtime_error("[TrailMix] Cannot input a multiFASTA file for TrailMix.");}
         if (!dta->quiet) cerr << "Found " << dta->n_samples << " sequences in FASTA file\n";
                                    }
 
