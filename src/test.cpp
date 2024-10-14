@@ -19,6 +19,10 @@
 using namespace vg;
 
 
+void log_path(const string &path){
+cerr << "PATH: " << path << endl;
+}
+
 bool is_convertible_to_double(const std::string& str) {
     try {
         std::stod(str);
@@ -1357,7 +1361,7 @@ tm->run(trailmix_argvec.size(), argvtopass, getCWD(".")+"bin/");
                                 }
 
 
-void k1_run_interleaved(Trailmix * tm){
+void k1_run_split(Trailmix * tm){
 vector<string> trailmix_argvec;
 trailmix_argvec.emplace_back("vgan");
 trailmix_argvec.emplace_back("trailmix");
@@ -1365,6 +1369,40 @@ trailmix_argvec.emplace_back("-fq1");
 trailmix_argvec.emplace_back("../test/input_files/trailmix/Q1_1.fq.gz");
 trailmix_argvec.emplace_back("-fq2");
 trailmix_argvec.emplace_back("../test/input_files/trailmix/Q1_2.fq.gz");
+trailmix_argvec.emplace_back("-t");
+trailmix_argvec.emplace_back("50");
+trailmix_argvec.emplace_back("-k");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("-o");
+trailmix_argvec.emplace_back("../test/output_files/trailmix/Q1_split");
+trailmix_argvec.emplace_back("--iter");
+trailmix_argvec.emplace_back("5000");
+trailmix_argvec.emplace_back("--burnin");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("--chains");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("-z");
+trailmix_argvec.emplace_back("tempdir");
+trailmix_argvec.emplace_back("--tm-files");
+trailmix_argvec.emplace_back("../share/vgan/smaller_tmfiles/");
+trailmix_argvec.emplace_back("--dbprefix");
+trailmix_argvec.emplace_back("pub.graph");
+
+char** argvtopass = new char*[trailmix_argvec.size()];
+for (int i=0;i<trailmix_argvec.size();i++) {
+                   argvtopass[i] = const_cast<char*>(trailmix_argvec[i].c_str());
+                                       }
+
+tm->run(trailmix_argvec.size(), argvtopass, getCWD(".")+"bin/");
+                         }
+
+void k1_run_interleaved(Trailmix * tm){
+vector<string> trailmix_argvec;
+trailmix_argvec.emplace_back("vgan");
+trailmix_argvec.emplace_back("trailmix");
+trailmix_argvec.emplace_back("-fq1");
+trailmix_argvec.emplace_back("../test/input_files/trailmix/Q1_interleaved.fq.gz");
+trailmix_argvec.emplace_back("-i");
 trailmix_argvec.emplace_back("-t");
 trailmix_argvec.emplace_back("50");
 trailmix_argvec.emplace_back("-k");
@@ -1391,6 +1429,43 @@ for (int i=0;i<trailmix_argvec.size();i++) {
 
 tm->run(trailmix_argvec.size(), argvtopass, getCWD(".")+"bin/");
                          }
+
+
+void run_k1_gam(Trailmix * tm){
+vector<string> trailmix_argvec;
+trailmix_argvec.emplace_back("vgan");
+trailmix_argvec.emplace_back("trailmix");
+trailmix_argvec.emplace_back("-g");
+trailmix_argvec.emplace_back("../test/input_files/trailmix/alignments/Q1.gam");
+trailmix_argvec.emplace_back("-t");
+trailmix_argvec.emplace_back("50");
+trailmix_argvec.emplace_back("-k");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("-o");
+trailmix_argvec.emplace_back("../test/output_files/trailmix/Q1_GAM");
+trailmix_argvec.emplace_back("--iter");
+trailmix_argvec.emplace_back("5000");
+trailmix_argvec.emplace_back("--burnin");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("--chains");
+trailmix_argvec.emplace_back("1");
+trailmix_argvec.emplace_back("-z");
+trailmix_argvec.emplace_back("tempdir");
+trailmix_argvec.emplace_back("--tm-files");
+trailmix_argvec.emplace_back("../share/vgan/smaller_tmfiles/");
+trailmix_argvec.emplace_back("--dbprefix");
+trailmix_argvec.emplace_back("pub.graph");
+
+PRINTVEC(trailmix_argvec)
+
+char** argvtopass = new char*[trailmix_argvec.size()];
+for (int i=0;i<trailmix_argvec.size();i++) {
+                   argvtopass[i] = const_cast<char*>(trailmix_argvec[i].c_str());
+                                       }
+
+tm->run(trailmix_argvec.size(), argvtopass, getCWD(".")+"bin/");
+                         }
+
 
 void run_k2_HV4b_S3(Trailmix * tm){
 vector<string> trailmix_argvec;
@@ -1536,7 +1611,7 @@ BOOST_AUTO_TEST_CASE(k1_HV4b)
     BOOST_ASSERT(branchRecords[0].source == "HV4b");
 }
 
-BOOST_AUTO_TEST_CASE(fq_single_zipped)
+BOOST_AUTO_TEST_CASE(k1_single_zipped)
 {
   Trailmix tm;
   const string cwdProg = getFullPath(getCWD("."));
@@ -1545,6 +1620,14 @@ BOOST_AUTO_TEST_CASE(fq_single_zipped)
   tm_run_fq_single(&tm);
   auto branchRecords = load_branch_placement_diagnostics_file(output_path);
   BOOST_ASSERT(branchRecords[0].source == "Q1e1b");
+}
+
+BOOST_AUTO_TEST_CASE(k1_split)
+{
+    Trailmix tm;
+    k1_run_split(&tm);
+    auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/Q1_splitBranchEstimate.txt");
+    BOOST_ASSERT(branchRecords[0].source == "Q1e1b");
 }
 
 BOOST_AUTO_TEST_CASE(k1_interleaved)
@@ -1561,6 +1644,14 @@ BOOST_AUTO_TEST_CASE(k1_fasta)
     run_k1_G1a1a4_FASTA(&tm);
     auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/G1a1a4BranchEstimate.txt");
     BOOST_ASSERT(branchRecords[0].source == "G1a1a4");
+}
+
+BOOST_AUTO_TEST_CASE(k1_gam)
+{
+    Trailmix tm;
+    run_k1_gam(&tm);
+    auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/Q1_GAMBranchEstimate.txt");
+    BOOST_ASSERT(branchRecords[0].source == "Q1e1b");
 }
 
 BOOST_AUTO_TEST_CASE(k2_HV4b_S3)
@@ -1595,6 +1686,32 @@ BOOST_AUTO_TEST_CASE(k2_full_graph)
     BOOST_ASSERT((branchRecords[0].source == "HV4b" && branchRecords[1].source == "S3") || (branchRecords[0].source == "S3" && branchRecords[1].source == "HV4b"));
 }
 
+BOOST_AUTO_TEST_CASE(check_graph)
+{
+ Trailmix tm;
+ shared_ptr dta = make_unique<Trailmix_struct>();
+ dta->running_trailmix = true;
+ tm.readPHG(dta);
+ const int minid = dta->graph.min_node_id();
+ const int maxid = dta->graph.max_node_id();
+ const int nodecount = dta->graph.get_node_count();
+ const int edgecount = dta->graph.get_node_count();
+
+dta->graph.for_each_path_handle([&](const handlegraph::path_handle_t &path_handle) {
+    string path_name = dta->graph.get_path_name(path_handle);
+    tm.modifyPathNameInPlace(dta, path_name, false);
+    BOOST_ASSERT(std::find(dta->path_names.begin(), dta->path_names.end(), path_name) != dta->path_names.end());
+                                                                                   });
+
+ BOOST_CHECK_EQUAL(nodecount, 15722);
+ BOOST_CHECK_EQUAL(minid, 1);
+ BOOST_CHECK_EQUAL(maxid, 15722);
+ BOOST_CHECK_EQUAL(edgecount, 15722);
+
+     for (int i = minid; i<maxid; ++i) {
+         BOOST_ASSERT(dta->graph.get_degree(dta->graph.get_handle(i), false) + dta->graph.get_degree(dta->graph.get_handle(i), true) > 0);
+                                       }
+}
 
 BOOST_AUTO_TEST_SUITE_END()
 

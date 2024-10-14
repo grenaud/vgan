@@ -31,7 +31,6 @@ void run_gam2prof(shared_ptr<Trailmix_struct>& dta);
 const double get_likelihood_of_source(const shared_ptr<Trailmix_struct> &dta, const unsigned int &branch, const unsigned int &branch_parent, \
                                            const double &proposed_branch_position, double &theta);
 const double sum_log_likelihoods(vector<double> &log_lik_vec);
-void modifyPathNameInPlace(shared_ptr<Trailmix_struct> &dta, string &path_name, bool first=false);
 void load_read_probs(shared_ptr<Trailmix_struct> &dta);
 void precompute_incorrect_mapping_probs(shared_ptr<Trailmix_struct> &dta);
 void readPathHandleGraph (shared_ptr<Trailmix_struct> &dta);
@@ -61,6 +60,7 @@ public:
     void mcmc_setup(shared_ptr<Trailmix_struct> &dta);
     void run_trailmix(shared_ptr<Trailmix_struct> &dta);
     void readPHG(shared_ptr<Trailmix_struct> &dta);
+    void modifyPathNameInPlace(shared_ptr<Trailmix_struct> &dta, string &path_name, bool first=false);
 };
 
 int main_filter(int argc, char** argv);

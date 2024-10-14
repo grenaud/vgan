@@ -67,8 +67,20 @@ void Trailmix::run_mcmc(shared_ptr<Trailmix_struct>& dta) {
     if (dta->pid1 == 0) {
         if (dta->gamfilename == "") {
             Trailmix::map_giraffe(dta);
+            exit(0);
         }
-        exit(0);
+        else {
+            // Redirect buffer in case of GAM input
+            ifstream src(dta->gamfilename, std::ios::binary);
+            if (!src.is_open()) {
+                throw runtime_error("Error opening GAM file: " + dta->gamfilename);
+                                }
+            ofstream dst(dta->fifo_A);
+            dst << src.rdbuf();
+                   src.close();
+                   dst.close();
+            exit(0);
+             }
     }
 
     int status;

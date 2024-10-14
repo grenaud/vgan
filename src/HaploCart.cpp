@@ -319,8 +319,7 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
                // Redirect buffer in case of GAM input
                ifstream src(dta->gamfilename, std::ios::binary);
                if (!src.is_open()) {
-                    std::cerr << "Error opening GAM file: " << dta->gamfilename << std::endl;
-                    exit(1);
+                    throw runtime_error("Error opening GAM file: " + dta->gamfilename);
                                    }
                ofstream dst(dta->fifo_A);
                dst << src.rdbuf();

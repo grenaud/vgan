@@ -283,64 +283,31 @@ size_t pos = 0;
         p_index++;
     });
 
-    const size_t N_paths = dta->path_names.size();
-
-    vector<vector<bool>> node_path_matrix(N_nodes, vector<bool>(N_paths, false));
-
-    for (size_t path_id = 0; path_id < N_paths; ++path_id) {
-        // Get the nodes in the path
-        gbwt::vector_type path_nodes = dta->gbwt->extract(path_id);
-        for (const auto& node_id : path_nodes) {
-            //cout << node_id << " ";
-            // Convert the GBWT node ID to the node handle in the graph
-            bdsg::handle_t handle = dta->graph.get_handle(node_id);
-            // Determine the index in the node_path_matrix
-            int64_t index = dta->graph.get_id(handle) - 1;
-            //cout << index << endl;
-            if (index >= 0 && index < N_nodes) {
-                node_path_matrix[index][path_id] = true;
-                                //cout << "I get positive too " << endl;
-            }
-
-        }
-        //cout << endl;
-
-    }
-
-    int nbpaths = dta->path_names.size();
+    dta->nbpaths = dta->path_names.size();
 
     for(int64 i=dta->minid;i<=dta->maxid;++i){
-        //cerr << i << endl;
-        NodeInfo * nodetoadd = new NodeInfo(i,nbpaths,0);
+        NodeInfo * nodetoadd = new NodeInfo(i,dta->nbpaths,0);
         const auto nodehandle = dta->graph.get_handle(i);
         string seqtoadd = dta->graph.get_sequence(nodehandle);
         nodetoadd->seq = seqtoadd;
-        long unsigned int j;
-        for (j = 0; j < nbpaths; ++j) {
-            //nodetoadd->pathsgo[j] = node_path_matrix[i - 1][j];
-        }
         dta->nodevector.emplace_back(move(nodetoadd));
-
-        //std::this_thread::sleep_for (std::chrono::milliseconds(10));
     }
 
-    assert(dta->nodevector.size() != 0);
-    assert(dta->minid != 0);
-    // Check if at least one true value exists
-    bool hasTrueValue = false;
-    for (const auto& row : node_path_matrix) {
-        for (bool value : row) {
-            if (value) {
-                hasTrueValue = true;
-                                break;
-            }
-        }
-        if (hasTrueValue) {
-            break;
-        }
-    }
+if (dta->nodevector.size() == 0) {
+    throw std::runtime_error("Error: nodevector is empty. Expected non-empty nodevector.");
+}
 
-    assert(dta->path_names.size() != 0);
+if (dta->minid == 0) {
+    throw std::runtime_error("Error: minid is zero. Expected non-zero minid.");
+}
+
+if (dta->maxid == 0) {
+    throw std::runtime_error("Error: maxid is zero. Expected non-zero maxid.");
+}
+
+if (dta->path_names.size() == 0) {
+    throw std::runtime_error("Error: path_names is empty. Expected non-empty path_names.");
+}
 
    return;
 }
@@ -405,7 +372,6 @@ std::string Trailmix::usage() const {
           << "\t-pt [FLOAT]\t\t\t	Posterior threshold for ancient DNA (aligned with SAFARI) \n"
           << "\t--depth [INT]\t\t\t     Tree depth to whitelist the MCMC search space (-1 for no restriction)\n"
           << "Non-algorithm parameters:\n"
-          << "\t-s [STR]\t\t\t     Sample name\n"
           << "\t--dbprefix <prefix>\t\t     Specify the prefix for the database files\n"
           << "\t--tm-files [STR]\t\t      Specify the TrailMix file directory (default: \"../share/vgan/tmfiles/\") \n"
           << "\t-t\t\t\t\t     Number of threads\n"
@@ -414,7 +380,7 @@ std::string Trailmix::usage() const {
           << "Markov chain Monte Carlo options:\n"
           << "  \t--chains [INT]\t\t             Define the number of chains for the MCMC (default: 4)\n"
           << "  \t--iter [INT]\t\t             Define the number of iterations for the MCMC (default: 1.000.000)\n"
-          << "  \t--randStart [bool]          Set to get random starting nodes in the tree instead of the signature nodes (default: false)\n"
+          << "  \t--randStart [bool]\t\t          Set to get random starting nodes in the tree instead of the signature nodes (default: false)\n"
           << "  \t--burnin [INT]\t\t             Define the burn-in period for the MCMC (default: 100.000)\n"
           << "Initialization options:\n"
           << "  \t--library-type [STR] \t\t     Strand-specific library type (fr: read1 forward, rf: read1 reverse) (default: unstranded)\n"
