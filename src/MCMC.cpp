@@ -723,6 +723,10 @@ while (!pruned && iteration_counter < max_prune_iterations) {
 
 ////////////////////////////////////////////////////////////// SINGLE SOURCE //////////////////////////////////////////////////////////
 
+// Apply bounds to readLogLikeP
+const double minLogValue = log(0.0000001); // Lower bound to prevent extremely small values
+const double maxLogValue = log(0.9999999); // Upper bound
+
             if (pathNames.size() == 1)
             {
                 const double t = state_t_1.positions_tree[0].pos->dist;
@@ -750,6 +754,14 @@ if (read->detailMap.find(pathNames[0]) == read->detailMap.end()) {
     }
 }
 
+
+
+if (readLogLike > maxLogValue) {
+    readLogLike = maxLogValue;
+} else if (readLogLike < minLogValue) {
+    readLogLike = minLogValue;
+}
+
 if (read->detailMap.find(parentpathNames[0]) == read->detailMap.end()) {
     cerr << "Missing key in detailMap for parent path: " << parentpathNames[0] << endl;
     throw runtime_error("Missing key");
@@ -768,16 +780,11 @@ if (read->detailMap.find(parentpathNames[0]) == read->detailMap.end()) {
     }
 }
 
-// Apply bounds to readLogLikeP
-const double minLogValue = log(0.0000001); // Lower bound to prevent extremely small values
-const double maxLogValue = log(0.9999999); // Upper bound
-
 if (readLogLikeP > maxLogValue) {
     readLogLikeP = maxLogValue;
 } else if (readLogLikeP < minLogValue) {
     readLogLikeP = minLogValue;
 }
-
 
         // Compute intermediate values as before
         double interc2 = log(state_t_1.positions_tree[0].pos_branch) + readLogLike;
@@ -877,10 +884,6 @@ if (itParentPath == read->detailMap.end()) {
                 // When path support is true, use the Markov logic (mutation -> damage)
                 double mutationLogLikelihood = computeBaseLogLike(dta, read, params, basevec, base, parentpathNames[y], t1, t, dta->cont_mode);
 
-//cerr << "damageLogLikelihood with/without: " << itParentPath->second[basevec][base].logLikelihood << "\t" \
- //                                            << itParentPath->second[basevec][base].logLikelihoodNoDamage << \
-//<< "read/ref: " << itPath->second[basevec][base].readBase << "\t" << itPath->second[basevec][base].referenceBase << endl;
-
                 // Combine mutation and damage (if ancient)
                 readLogLikeP += mutationLogLikelihood + parentLogLikelihoodValue;
             } else {
@@ -932,9 +935,13 @@ if (!pruned && dta->depth != -1){logLike = -std::numeric_limits<double>::max();}
 
         likelihood_t_1 = logLike;
         state_t_1.logLike = likelihood_t_1;
-        double acceptance_prob = (state_t_1.logLike - state_t.logLike > 0) ? 1.0 : exp((state_t_1.logLike - state_t.logLike));
-        //acceptance_prob = max(acceptance_prob, 0.00001);
-        //acceptance_prob = min(acceptance_prob, 0.99999);
+        //double acceptance_prob = (state_t_1.logLike - state_t.logLike > 0) ? 1.0 : exp((state_t_1.logLike - state_t.logLike));
+double acceptance_prob = (std::isinf(state_t_1.logLike) && state_t_1.logLike < 0) || (std::isinf(state_t.logLike) && state_t.logLike < 0)
+    ? 0.0
+    : (state_t_1.logLike - state_t.logLike > 0) ? 1.0 : exp(state_t_1.logLike - state_t.logLike);
+
+        acceptance_prob = max(acceptance_prob, 0.00001);
+        acceptance_prob = min(acceptance_prob, 0.99999);
         const double u = dis(gen);
 
         if (u <= acceptance_prob || iteration == 0) {
