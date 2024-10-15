@@ -158,10 +158,12 @@ sudo chmod +w euka_dir/euka_db.dist
 
 ## Building vgan from source
 
-Please ensure that git is installed on your system.
+We do not recommend building from source unless you are a developer. Currently, the software will not build on newer operating systems. We are working on fixing this. 
+
+If you do need to build from source please ensure that git is installed on your system.
 You can check by typing "git --version".
 
-If you wish to build from source you will need the build-essential package. If it is not already installed, please run
+You will need the build-essential package. If it is not already installed, please run
 
 ```
 sudo apt-get install build-essential
