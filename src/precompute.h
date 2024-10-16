@@ -141,7 +141,7 @@ static vector<AlignmentInfo*>* precompute_GAM(
                     } else {
                         nID = a.path().mapping()[i].position().node_id();
                         pangenome_base = dta->pangenome_map.at(std::to_string(nID));
-                        mappability = max(1.0, dta->mappabilities[pangenome_base]);
+                        mappability = max(0.1, dta->mappabilities[pangenome_base]);
                         for (const auto& path : nodepaths.at(nID - minid)) {
                             probPaths.insert(pathNameToID[path]);
                         }
@@ -149,7 +149,7 @@ static vector<AlignmentInfo*>* precompute_GAM(
                 } else {
                     nID = a.path().mapping()[i].position().node_id();
                     pangenome_base = dta->pangenome_map.at(std::to_string(nID));
-                    mappability = max(1.0, dta->mappabilities[pangenome_base]);
+                    mappability = max(0.1, dta->mappabilities[pangenome_base]);
                     for (const auto& path : nodepaths.at(nID - minid)) {
                         probPaths.insert(pathNameToID[path]);
                     }
@@ -476,8 +476,8 @@ log_lik_marg = log_prob_damage; //logSumExp(log_lik_marg, log_prob_damage);
                                 info.readBase = '-';
                                 info.referenceBase = nodeSeq[s];
                                 info.pathSupport = false;
-                                info.logLikelihood = log((qscore_vec[90]));
-                                info.logLikelihoodNoDamage = log((qscore_vec[90]));
+                                info.logLikelihood = log((qscore_vec[50]));
+                                info.logLikelihoodNoDamage = log((qscore_vec[50]));
                                 {
 #pragma omp critical
                                     readInfo.emplace_back(move(info));
