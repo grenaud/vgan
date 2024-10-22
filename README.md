@@ -683,12 +683,12 @@ Contamination Mode Options:
 
 ## Quickstart
 ```
-TO ADD
+../bin/vgan trailmix -f ../test/input_files/trailmix/G1a1a4.fa.gz -t 4 -k 1 -o QUICKSTART --iter 5000 --burnin 1 --chains 1 -z tempdir --tm-files ../share/vgan/smaller_tmfiles/ --dbprefix pub.graph
 ```
 
 # Unit tests:
 
-We provide comprehensive unit tests for our main subcommands (HaploCart, euka and soibean). These are built on the Boost Test Suite. Running the tests requires building vgan from source because it involves compiling a separate executable. To run the unit tests, please run
+We provide comprehensive unit tests for our main subcommands (HaploCart, TrailMix, euka, and soibean). These are built on the Boost Test Suite. Running the tests requires building vgan from source because it involves compiling a separate executable. To run the unit tests, please run
 
 ```
 make test

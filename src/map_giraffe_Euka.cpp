@@ -1,6 +1,6 @@
 #include "Euka.h"
 #include <random>
-
+#define PRINTVEC(v) for (int i=0; i<v.size(); ++i){cerr << v[i] << '\t';}cerr << endl;
 
 //#define DEBUGGIRAFFE
 using namespace vg;
@@ -21,7 +21,7 @@ void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n
     int retcode;
     vector<string> arguments;
     arguments.emplace_back("vg");
-    arguments.emplace_back("giraffe");
+    arguments.emplace_back("safari");
 
     auto normal_cout = cout.rdbuf();
     ofstream cout(fifo_A);
@@ -29,6 +29,7 @@ void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n
 
     // Map with VG Giraffe to generate a GAM file
     string minimizer_to_use= prefix + ".min";
+    string rymer_to_use= prefix + ".ry";
 
     if (fastq1filename != "" && fastq2filename != "")
 	{
@@ -47,6 +48,14 @@ void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n
 	    arguments.emplace_back(prefix + ".gbwt");
 	    arguments.emplace_back("-x");
 	    arguments.emplace_back(prefix + ".og");
+            arguments.emplace_back("-q");
+            arguments.emplace_back(rymer_to_use);
+            arguments.emplace_back("--deam-3p");
+            arguments.emplace_back("../share/vgan/damageProfiles/none.prof");
+            arguments.emplace_back("--deam-5p");
+            arguments.emplace_back("../share/vgan/damageProfiles/none.prof");
+            arguments.emplace_back("-j");
+            arguments.emplace_back("1.01");
 	    char** argvtopass = new char*[arguments.size()];
 	    for (int i=0;i<arguments.size();i++) {
 		argvtopass[i] = const_cast<char*>(arguments[i].c_str());
@@ -74,6 +83,14 @@ void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n
 	    arguments.emplace_back(prefix + ".gbwt");
 	    arguments.emplace_back("-x");
 	    arguments.emplace_back(prefix + ".og");
+            arguments.emplace_back("-q");
+            arguments.emplace_back(rymer_to_use);
+            arguments.emplace_back("--deam-3p");
+            arguments.emplace_back("../share/vgan/damageProfiles/none.prof");
+            arguments.emplace_back("--deam-5p");
+            arguments.emplace_back("../share/vgan/damageProfiles/none.prof");
+            arguments.emplace_back("-j");
+            arguments.emplace_back("1.01");
 
 	    if (interleaved) {
 		arguments.emplace_back("-i");

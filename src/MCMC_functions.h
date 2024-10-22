@@ -81,27 +81,6 @@ inline spidir::Node* MCMC::findLCA(const spidir::Tree* tree, spidir::Node* node1
 }
 */
 
- // Optimized findLCA function
-    inline spidir::Node* MCMC::findLCA(const spidir::Tree* tree, spidir::Node* node1, spidir::Node* node2) {
-        std::unordered_set<spidir::Node*> ancestors;
-        
-        // Traverse ancestors of node1
-        while (node1 != nullptr) {
-            ancestors.insert(node1);
-            node1 = node1->parent;
-        }
-        
-        // Find LCA by traversing ancestors of node2
-        while (node2 != nullptr) {
-            if (ancestors.find(node2) != ancestors.end()) {
-                return node2;
-            }
-            node2 = node2->parent;
-        }
-        
-        throw std::runtime_error("No common ancestor found.");
-    }
-
 const double MCMC::calculateDistanceToAncestor(spidir::Node* startNode, spidir::Node* ancestor) {
     double distance = 0.0;
     spidir::Node* current = startNode;
@@ -119,7 +98,7 @@ const double MCMC::calculateDistanceToAncestor(spidir::Node* startNode, spidir::
     }
 }
 
-double getQuantile2(const std::vector<double>& sortedData, double q) {
+double MCMC::getQuantile2(const std::vector<double>& sortedData, double q) {
     if (sortedData.empty()) {
         throw std::runtime_error("Vector is empty");
     }
@@ -223,54 +202,6 @@ inline const double MCMC::calculateDistanceToLeaf(const std::shared_ptr<spidir::
     }
 }
 
-
-// Optimized getPatristicDistances function
-    inline const std::vector<double> MCMC::getPatristicDistances(spidir::Tree* tr, spidir::Node* node, int numofLeafs, double posonbranch) {
-        std::vector<double> distances(numofLeafs, 0.0);
-
-        #pragma omp parallel for num_threads(20)
-        for (int i = 0; i < tr->nodes.size(); ++i) {
-            const auto &leafNode = tr->nodes[i];
-            if (!leafNode || !leafNode->isLeaf()) {
-                continue;
-            }
-
-            spidir::Node* lca = findLCA(tr, node, leafNode);
-            double distanceToLCAFromNode = calculateDistanceToAncestor(node, lca) + (posonbranch * node->dist);
-            double distanceToLCAFromLeaf = calculateDistanceToAncestor(leafNode, lca);
-
-            if (distanceToLCAFromNode >= 0.0 && distanceToLCAFromLeaf >= 0.0) {
-                distances[i] = distanceToLCAFromNode + distanceToLCAFromLeaf;
-            } else {
-                std::cerr << "Error calculating distance for leaf ID " << leafNode->name << std::endl;
-            }
-        }
-
-        return distances;
-    }
-
-
-inline const double MCMC::calculateEuclideanDistance(const std::vector<double> &vec1, const std::vector<double> &vec2) {
-    if (vec1.empty() || vec2.empty()) {
-        throw std::runtime_error("Input vectors are empty.");
-    }
-
-    size_t minSize = std::min(vec1.size(), vec2.size());
-    if (minSize == 0) {
-        throw std::runtime_error("One of the vectors is empty.");
-    }
-
-    double sum = 0.0;
-    for (size_t i = 0; i < minSize; ++i) {
-        if (vec1[i] == std::numeric_limits<double>::max() || vec2[i] == std::numeric_limits<double>::max()) {
-            std::cerr << "Warning: Skipping comparison at index " << i << " due to invalid value." << std::endl;
-            continue;
-        }
-        double diff = vec1[i] - vec2[i];
-        sum += diff * diff;
-    }
-    return sqrt(sum);
-}
 
 void printUnorderedMap(const std::unordered_map<std::string, std::vector<std::vector<double>>>& myMap) {
     for (const auto& pair : myMap) {

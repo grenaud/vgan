@@ -67,7 +67,7 @@ public:
     vector<vector<tuple<int, int, double, double > > > load_clade_chunks(string clade_chunk_path);
     const vector<vector<bool>> load_path_supports_Euka(const string & pathsupportfile);
     vector<Clade *> *  load_clade_info(const string clade_info_path, int lengthToProf); //Mikkel last argument
-    const vector<double> compute_init_vec(vector<Clade *> * clade_vec, vector<int> &clade_id_list);
+    const vector<double> compute_init_vec(vector<Clade *> * clade_vec, vector<int> &clade_list_id);
     // mapping function
     void map_giraffe(string fastq1filename, string fastq2filename, const int n_threads, bool interleaved,
                             const char * fifo_A, const vg::subcommand::Subcommand* sc,

@@ -6,7 +6,7 @@
 #include "config/allocator_config.hpp"
 #include "io/register_libvg_io.hpp"
 #include "miscfunc.h"
-#include "readOG_Euka.h"
+#include "readOG.h"
 #include "MCMC.h"
 #include "damage.h"
 #include "baseshift.cpp" // Mikkel code
@@ -14,6 +14,7 @@
 using namespace google::protobuf;
 using namespace vg;
 
+#define PRINTVEC(v) for (int i=0; i<v.size(); ++i){cerr << v[i] << '\t';}cerr << endl;
 #define VERBOSE_S
 //#define DEBUGDEAM
 
@@ -87,7 +88,7 @@ const string Euka::usage() const{
           "\n\nNo damage example:\n"+
                   "\n\tvgan euka -fq1 seqreads.fq.gz\n"+
           "\n\nDamage example:\n"+
-                  "\n\tvgan euka -fq1 seqreads.fq.gz --deam5p ../share/damageProfiles/dhigh5.prof --deam3p ../share/damageProfiles/dhigh3.prof\n"+
+                  "\n\tvgan euka -fq1 seqreads.fq.gz --deam5p ../share/vgan/damageProfiles/dhigh5.prof --deam3p ../share/vgan/damageProfiles/dhigh3.prof\n"+
           "\n\nUser specific MCMC example:\n"+
                   "\n\tvgan euka -fq1 seqreads.fq.gz -iter 100000 -burnin 1000"
 
@@ -192,20 +193,20 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
             samplename=fastq1filename.substr(idx + 1);
             samplename=fastq1filename;
             if (fastq1filename.ends_with(".fa") || fastq1filename.ends_with(".fasta") || fastq1filename.ends_with(".fa.gz") || fastq1filename.ends_with(".fasta.gz"))
-                {throw runtime_error("[euka] Input file must be FASTQ, not FASTA");}
+                {throw runtime_error("[Euka] Input file must be FASTQ, not FASTA");}
             continue;
                                 }
 
         if(string(argv[i]) == "-fq2"){
             fastq2filename = argv[i+1];
             if (fastq2filename.ends_with(".fa") || fastq2filename.ends_with(".fasta") || fastq2filename.ends_with(".fa.gz") || fastq2filename.ends_with(".fasta.gz"))
-                {throw runtime_error("[euka] Input file must be FASTQ, not FASTA");}
+                {throw runtime_error("[Euka] Input file must be FASTQ, not FASTA");}
             continue;
         }
 
         if(string(argv[i]) == "-i"){
             interleaved = true;
-            if (fastq2filename != ""){throw runtime_error("[euka] If interleaved option chosen, Euka expects only one FASTQ file");}
+            if (fastq2filename != ""){throw runtime_error("[Euka] If interleaved option chosen, Euka expects only one FASTQ file");}
             continue;
                                }
 
@@ -242,13 +243,13 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
         if(string(argv[i]) == "--entropy"){
             ENTROPY_SCORE_THRESHOLD=stod(argv[i+1]);
             assert(ENTROPY_SCORE_THRESHOLD >= 0);
-            if (ENTROPY_SCORE_THRESHOLD > 5.0){throw runtime_error("[euka] Error, entropy thresold is too stringent");}
+            if (ENTROPY_SCORE_THRESHOLD > 5.0){throw runtime_error("[Euka] Error, entropy thresold is too stringent");}
             continue;
         }
         if(string(argv[i]) == "--minBins"){
             MINNUMOFBINS=stoi(argv[i+1]);
             assert(MINNUMOFBINS >= 0);
-            if (MINNUMOFBINS > 20){throw runtime_error("[euka] Error, minimum number of bins exceeds the total number of bins");}
+            if (MINNUMOFBINS > 20){throw runtime_error("[Euka] Error, minimum number of bins exceeds the total number of bins");}
             continue;
         }
         if(string(argv[i]) == "--minMQ"){
@@ -272,13 +273,13 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
 
 
         if(string(argv[i]) == "-t"){
-        if (stoi(argv[i+1]) < -1 || stoi(argv[i+1]) == 0) {throw std::runtime_error("[euka] Error, invalid number of threads");}
+        if (stoi(argv[i+1]) < -1 || stoi(argv[i+1]) == 0) {throw std::runtime_error("[Euka] Error, invalid number of threads");}
         if (stoi(argv[i+1]) == -1) {n_threads = std::thread::hardware_concurrency();}
         else if (stoi(argv[i+1]) <= std::thread::hardware_concurrency()) {
                 n_threads = stoi(argv[i+1]);
                                                                          }
         else {
-               cerr << "[euka] Warning, specified number of threads is greater than the number available. Using " << n_threads << " threads\n";
+               cerr << "[Euka] Warning, specified number of threads is greater than the number available. Using " << n_threads << " threads\n";
                n_threads = std::thread::hardware_concurrency();
              }
             continue;
@@ -375,9 +376,6 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
     cerr << "\t-------------------------------" << endl;
     vector<Clade *> * clade_vec = load_clade_info(cladefilename, lengthToProf);
     cerr << "... done!" << endl;
-    if (clade_vec->empty()) {
-    throw std::runtime_error("Error: The clade vector is empty. Unable to proceed. Check if the soibean.clade file is not empty.");
-    }
         cerr << "-------------------------------" << endl;
 
 
@@ -393,6 +391,7 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
         bool outgroup_found = false;
         for (unsigned int clade_idx = 0; clade_idx < clade_vec->size(); ++clade_idx){
             const string clade_name = clade_vec->at(clade_idx)->name;
+            cerr << "CLADE NAME: " << clade_name << endl;
             if (outGroup == clade_name){outgroup_found = true;}
                                                                                     }
    if (!outgroup_found){throw runtime_error("[euka] Outgroup not found in reference graph");}
@@ -404,7 +403,6 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
     vector<vector<tuple<int, int, double, double >>>  chunks = load_clade_chunks(binsfilename);
     cerr << "... done!" << endl;
     cerr << "\t-------------------------------" << endl;
-    if(chunks.empty()){throw runtime_error("Bins file is empty unable to proceed");}
 
 
 
@@ -472,7 +470,6 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
 
         cerr << "Mapping reads..." << endl;
         Euka::map_giraffe(fastq1filename, fastq2filename, n_threads, interleaved,
-
                       fifo_A, sc, tmpdir, euka_dir, dbprefix);
 
     while ((wpid = wait(&status)) > 0);
@@ -552,6 +549,7 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
 
     if (clade_id_list.size() < 2 || run_mcmc == false){
 
+
         const vector<double> init_vec = Euka::compute_init_vec(clade_vec, clade_id_list);
 
         ofstream outbin((outputfilename +"_coverage.tsv").c_str(), ios::trunc);
@@ -600,7 +598,6 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
                 out << clade_vec->at(i*6+1)->name << '\t' << "no" << '\t' << clade_vec->at(i*6+1)->count << '\t' << 0 << endl;
                 if (outGroup == clade_vec->at(i*6+1)->name)
                 {
-                                
 
                     outbin << clade_vec->at(i*6+1)->name << '\t';
 
@@ -831,22 +828,24 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
         cerr << "You can find all four output files ("+outputfilename + "_abundance.tsv, "+outputfilename +"_detected.tsv, and "+outputfilename+"_coverage.tsv, and the damage profiles) in your current working directory!" << endl;
         cerr << '\n';
         cerr << '\n';
-        cerr << "You have two options to visualize euka’s output. All scripts necessary for the visualization can be found in vgan/share/vgan/plottingScripts/." << endl; 
+        cerr << "You have two options to visualize euka’s output. All scripts necessary for the visualization can be found in vgan/tools/." << endl; 
         cerr << '\n';
         cerr << '\t' << '\t' << "1) ./visualize_detected_taxa.sh "+ outputfilename << endl;
         cerr << '\n';
         cerr << "This will provide you with a summary plot of each detected taxa, including their damage profiles, estimated coverage across the pangenome graph and fragment length distribution." << endl;
         cerr << '\n';
-        cerr << '\t' << '\t' << "2) python vgan/share/vgan/plottingScripts/make_tree_from_output.py " +outputfilename+"_abundance.tsv or python vgan/share/vgan/plottingScripts/make_tree_from_output.py " +outputfilename+"_detected.tsv" << endl; 
+        cerr << '\t' << '\t' << "2) python vgan/tools/make_tree_from_output.py " +outputfilename+"_abundance.tsv or python vgan/tools/make_tree_from_output.py " +outputfilename+"_detected.tsv" << endl; 
         cerr << '\n';
         cerr << "These two commands will plot a taxonomic tree with all ("+outputfilename+"_abundance.tsv) taxa or only the detected (" +outputfilename+"_detected.tsv) taxa." << endl; 
 
     }
-    // there are more than 1 group detected or the mcmc was not turned off.
+    // there are more than 1 group detected or the mcmc was not turned off. 
     else
     {
+
         const vector<double> init_vec = Euka::compute_init_vec(clade_vec, clade_id_list);
-        vector<double> clade_res = MCMC().run_euka(iter, burnin, 0.01, init_vec, clade_vec, clade_id_list);
+        throw runtime_error("DONE2");
+        vector<double > clade_res = MCMC().run(iter, burnin, 0.01, init_vec, clade_vec, clade_id_list);
 
     /////// CREATE OUTPUT FILES ///////
         
@@ -892,10 +891,11 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
             if (std::count(check_for_zero.begin(), check_for_zero.end(), 0.0) || check_for_zero.size() < MINNUMOFBINS || clade_vec->at(i*6+1)->count < MINNUMOFREADS)
             {
 
+                
                 out << clade_vec->at(i*6+1)->name << '\t' << "no" << '\t' << clade_vec->at(i*6+1)->count << '\t' << 0 << '\t' << 0 << '\t'<< 0 << '\t'<< 0 << '\t'<< 0 << endl;
                 if (outGroup == clade_vec->at(i*6+1)->name){
 
-                    //cout << outGroup << endl;
+                    //cout << outGroup << endl; 
 
                     outbin << clade_vec->at(i*6+1)->name << '\t';
 
@@ -920,6 +920,8 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
                     outinSize << endl;
                 }
 
+
+                      
             } else {
 
                 // creating a list of ids 
@@ -953,6 +955,7 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
 
                 for (int index = (clade_list_id.size()-1)*5; index<clade_list_id.size()*5;index++) {
                     out << clade_res.at(index);
+                    cerr << "ADDING TO OUTSURV: " << clade_res.at(index) << endl;
                     outsurv << clade_res.at(index);
                     if (index != clade_res.size()-1){
                         out << '\t';
@@ -1122,13 +1125,13 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
         cerr << "You can find all four output files ("+file_in_dir + "_abundance.tsv, "+file_in_dir +"_detected.tsv, "+file_in_dir+"_coverage.tsv, and the damage profils) in your current working directory!" << endl;
         cerr << '\n';
         cerr << '\n';
-        cerr << "You have two options to visualize euka’s output. All scripts necessary for the visualization can be found in vgan/share/vgan/plottingScripts/." << endl; 
+        cerr << "You have two options to visualize euka’s output. All scripts necessary for the visualization can be found in vgan/tools/." << endl; 
         cerr << '\n';
         cerr << '\t' << '\t' << "1) ./visualize_detected_taxa.sh "+ file_in_dir << endl;
         cerr << '\n';
         cerr << "This will provide you with a summary plot of each detected taxa, including their damage profiles, estimated coverage across the pangenome graph and fragment length distribution." << endl;
         cerr << '\n';
-        cerr << '\t' << '\t' << "2) python vgan/share/vgan/plottingScripts/make_tree_from_output.py " +file_in_dir+"_abundance.tsv or python vgan/share/vgan/plottingScripts/make_tree_from_output.py " +file_in_dir+"_detected.tsv" << endl; 
+        cerr << '\t' << '\t' << "2) python vgan/tools/make_tree_from_output.py " +file_in_dir+"_abundance.tsv or python vgan/tools/make_tree_from_output.py " +file_in_dir+"_detected.tsv" << endl; 
         cerr << '\n';
         cerr << "These two commands will plot a taxonomic tree with all ("+file_in_dir+"_abundance.tsv) taxa or only the detected (" +file_in_dir+"_detected.tsv) taxa." << endl; 
 

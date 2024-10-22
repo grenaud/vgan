@@ -66,12 +66,14 @@ public:
 
     template<typename T> const vector<T> softmax(vector<T> &log_vec);
     double calculateLogWeightedAverage(double logValueChild, double weightChild, double logValueParent, double weightParent);
-    vector<double> run(int iter, int burnin, double tol, const vector<double> &init_vec, vector<Clade *> * clade_vec, vector<int> &clade_list_id);
+    vector<double > run_euka(int iter, int burnin, double tol, const vector<double> &init_vec, vector<Clade *> * clade_vec, vector<int> &clade_list_id);
     const double get_proposal_likelihood(const vector <double> &proposal_vec, vector<Clade *> * clade_vec, vector<int> &clade_list_id);
     std::vector<MCMCiteration> run_tree_proportion(RunTreeProportionParams &params, std::vector<MCMCiteration> &state_t_vec, const bdsg::ODGI& graph, \
                              const vector<vector<string>> &nodepaths, string num, shared_ptr<Trailmix_struct> &dta, bool running_trailmix, int chain);
+    std::vector<MCMCiteration> run_tree_proportion_sb(RunTreeProportionParams params, std::vector<MCMCiteration> state_t_vec, \
+                                                   const bdsg::ODGI& graph, vector<vector<string>> nodepaths, string num, int n_threads, int numPaths, \
+                                                   int chainindex, double con);
     void validateInputs(const PosTree &current_position, const double move_distance);
-    inline spidir::Node* findLCA(const spidir::Tree* tree, spidir::Node* node1, spidir::Node* node2);
     //bool is_in_pruned(spidir::Node* p, const int depth, shared_ptr<Trailmix_struct> &dta, set<int> depths_used);
     //bool is_in_pruned_verbose(spidir::Node* p, const int depth, shared_ptr<Trailmix_struct> &dta, set<int> depths_used);
     bool is_in_pruned_set(spidir::Node* p, shared_ptr<Trailmix_struct> &dta);
@@ -81,10 +83,15 @@ public:
     const double calculateDistanceToAncestor(spidir::Node* startNode, spidir::Node* ancestor);
     const double getSumPatristicDistances(const PosTree &current_position, const shared_ptr<std::shared_ptr<spidir::Tree>> tr);
     double calculateRhat(const std::vector<double>& means, const std::vector<double>& variances, int chainLength, int numchains);
-    inline const std::vector<double> getPatristicDistances(spidir::Tree* tr, spidir::Node* node, int numofLeafs, double posonbranch);
-    inline const double calculateEuclideanDistance(const std::vector<double> &vec1, const std::vector<double> &vec2);
-    pair<unordered_map<string, vector<vector<double>>>, double> processMCMCiterations(shared_ptr<Trailmix_struct>& dta, const std::vector<MCMCiteration> &MCMCiterations, int k, const string &num, int chain, \
-                                                                                        spidir::Tree* tr, int numofleafs);
+    double getQuantile2(const std::vector<double>& sortedData, double q);
+    pair<unordered_map<string, vector<vector<double>>>, double> processMCMCiterations(shared_ptr<Trailmix_struct>& dta,\
+                                                                                      const std::vector<MCMCiteration> &MCMCiterations, int k, \
+                                                                                      const string &num, int chain, \
+                                                                                      spidir::Tree* tr, int numofleafs);
+    pair<unordered_map<string, vector<vector<double>>>, double> processMCMCiterations_sb(const std::vector<MCMCiteration> &MCMCiterations, int k, \
+                                                                                         string num, int chain, spidir::Tree* tr, int numofleafs);
+    inline double computeBaseLogLike(const AlignmentInfo* read, RunTreeProportionParams &params, const int basevec, const int base, \
+                                       const string &pathName, const double t, const double branch_len);
     double moveForward(PosTree &current_position, double move_distance_abs);
     void checkPositionErrors(const PosTree &current_position, double move_distance);
     inline const double calculateDistanceToLeaf(const std::shared_ptr<spidir::Tree> &tr, const spidir::Node* current, const spidir::Node* leaf, double currentDistance, \
@@ -411,7 +418,45 @@ std::vector<double> generateRandomNumbers(int size) {
     return distribution;
 }
 
+// Initialize current_positions
+std::vector<PosTree> initializePositions(const std::vector<double>& random_numbers, RunTreeProportionParams& params) {
+    std::vector<PosTree> current_positions(random_numbers.size());
+    int index = 0;
 
+    for (auto& p : current_positions) {
+        p.pos = params.tr->nodes[params.sources[index]];
+        p.pos_branch = 0.5;//1.0 / random_numbers.size();
+        p.theta = random_numbers[index];
+        p.branch_place_anc = 0.5;
+        p.branch_place_der = 0.5;
+        index++;
+    }
+
+    return current_positions;
+}
+
+MCMCiteration initializeState(RunTreeProportionParams& params) {
+    MCMCiteration state;
+    state.n_components = params.sources.size();
+
+    // Generate random numbers
+    std::vector<double> random_numbers = generateRandomNumbers(state.n_components);
+
+    // Initialize current_positions
+    state.positions_tree = initializePositions(random_numbers, params);
+
+    // Generate thetaVec and max_branch_lens
+    auto [thetaVec, max_branch_lens] = generateThetaVecAndMaxBranchLens(state.positions_tree);
+
+    state.proportions = thetaVec;
+    state.max_branch_lens = max_branch_lens;
+
+    //std::vector<double> LLvec_init = get_LLvec_init(state, params);
+    double likelihood_t = params.logLike;
+    state.logLike = likelihood_t;
+
+    return state;
+}
 
 // Initialize the MCMCiteration state
 MCMCiteration initializeState(RunTreeProportionParams& params, vector<double> &seed) {
@@ -460,6 +505,73 @@ std::vector<PosTree> initializePositions(const std::vector<double>& random_numbe
     return current_positions;
 }
 
+// Optimized getPatristicDistances function
+    inline const std::vector<double> getPatristicDistances(spidir::Tree* tr, spidir::Node* node, int numofLeafs, double posonbranch) {
+        std::vector<double> distances(numofLeafs, 0.0);
+
+        #pragma omp parallel for num_threads(20)
+        for (int i = 0; i < tr->nodes.size(); ++i) {
+            const auto &leafNode = tr->nodes[i];
+            if (!leafNode || !leafNode->isLeaf()) {
+                continue;
+            }
+
+            spidir::Node* lca = findLCA(tr, node, leafNode);
+            double distanceToLCAFromNode = calculateDistanceToAncestor(node, lca) + (posonbranch * node->dist);
+            double distanceToLCAFromLeaf = calculateDistanceToAncestor(leafNode, lca);
+
+            if (distanceToLCAFromNode >= 0.0 && distanceToLCAFromLeaf >= 0.0) {
+                distances[i] = distanceToLCAFromNode + distanceToLCAFromLeaf;
+            } else {
+                std::cerr << "Error calculating distance for leaf ID " << leafNode->name << std::endl;
+            }
+        }
+
+        return distances;
+    }
+
+inline const double calculateEuclideanDistance(const std::vector<double> &vec1, const std::vector<double> &vec2) {
+    if (vec1.empty() || vec2.empty()) {
+        throw std::runtime_error("Input vectors are empty.");
+    }
+
+    size_t minSize = std::min(vec1.size(), vec2.size());
+    if (minSize == 0) {
+        throw std::runtime_error("One of the vectors is empty.");
+    }
+
+    double sum = 0.0;
+    for (size_t i = 0; i < minSize; ++i) {
+        if (vec1[i] == std::numeric_limits<double>::max() || vec2[i] == std::numeric_limits<double>::max()) {
+            std::cerr << "Warning: Skipping comparison at index " << i << " due to invalid value." << std::endl;
+            continue;
+        }
+        double diff = vec1[i] - vec2[i];
+        sum += diff * diff;
+    }
+    return sqrt(sum);
+}
+
+ // Optimized findLCA function
+    inline spidir::Node* findLCA(const spidir::Tree* tree, spidir::Node* node1, spidir::Node* node2) {
+        std::unordered_set<spidir::Node*> ancestors;
+
+        // Traverse ancestors of node1
+        while (node1 != nullptr) {
+            ancestors.insert(node1);
+            node1 = node1->parent;
+        }
+
+        // Find LCA by traversing ancestors of node2
+        while (node2 != nullptr) {
+            if (ancestors.find(node2) != ancestors.end()) {
+                return node2;
+            }
+            node2 = node2->parent;
+        }
+
+        throw std::runtime_error("No common ancestor found.");
+    }
 
 /*
 std::vector<PosTree> initializePositions(const std::vector<double>& random_numbers, RunTreeProportionParams& params, vector<double> &seed) {

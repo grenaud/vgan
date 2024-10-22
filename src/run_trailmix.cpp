@@ -213,7 +213,7 @@ void Trailmix::run_mcmc(shared_ptr<Trailmix_struct>& dta) {
     }
 
     cerr << "Precomputing..." << endl;
-    auto gam = precompute_GAM_trailmix(dta);
+    auto gam = tm_precompute_GAM_(dta);
     cerr << "Done with precomputations" << endl;
 
     double max_posterior = -1.0; // Start with a very low value; assuming posterior probabilities are non-negative

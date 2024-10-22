@@ -446,12 +446,12 @@ static pair <vector<AlignmentInfo *>*, vector<int>> readGAM3(const bdsg::ODGI &g
 
     ////////////////// END CODE MODEL 2 //////////////////////
 
-                } // else statment ending of the S or rate bases case senario
+                } // else statment ending of the S or rate bases case scenario
 
                 in_clade_lik     += log_lik;
                 not_in_clade_lik += log_lik_2;
 #ifdef DEBUGDAMAGE2
-                cerr<<a.name()<<","<<(in_clade_lik - not_in_clade_lik)<< "," << clade_vec->at(c_n*4 +1)->name <<endl; 
+                cerr<<a.name()<<","<<(in_clade_lik - not_in_clade_lik)<< "," << clade_vec->at(c_n*6 +1)->name <<endl; 
 #endif
 
                 if(read_seq[m] != '-' && isrev == false){
@@ -504,16 +504,17 @@ static pair <vector<AlignmentInfo *>*, vector<int>> readGAM3(const bdsg::ODGI &g
             if (
                 ((in_clade_lik) - (not_in_clade_lik) > 1) && //if the likelihood of the in-clade model is greater than the random alignment one
                 
-                //cout << clade_vec->at(c_n*3 + 1)->name << '\t' << a.mapping_quality() << endl; 
-                (a.mapping_quality() > MINIMUMMQ) //&&                   //AND the mapping quality is greater than 29
-                //(entropy_score > ENTROPY_SCORE_THRESHOLD) 
+                //cout << clade_vec->at(c_n*6 + 1)->name << '\t' << a.mapping_quality() << endl;
+                (a.mapping_quality() > MINIMUMMQ) &&                   //AND the mapping quality is greater than 29
+                (entropy_score > ENTROPY_SCORE_THRESHOLD) 
                 
 
                 ){ // we only take detected reads and pass them on 
-
-                    clade_vec->at(c_n*4 +1)->count++;
-                    clade_vec->at(c_n*4+1)->inSize.emplace_back(a.sequence().size());
-                    clade_vec->at(c_n*4+1)->nameStorage.emplace_back(a.name());
+		    //cout << clade_vec->at(c_n*6 + 1)->name << '\t' << a.mapping_quality() << endl;
+                    //cerr << a.name() << ",PASS"<< "\t" <<((in_clade_lik) - (not_in_clade_lik))<<endl;
+                    clade_vec->at(c_n*6 +1)->count++;
+                    clade_vec->at(c_n*6+1)->inSize.emplace_back(a.sequence().size());
+                    clade_vec->at(c_n*6+1)->nameStorage.emplace_back(a.name());
 
 
 #ifdef DEBUGREADGAM
@@ -582,6 +583,7 @@ static pair <vector<AlignmentInfo *>*, vector<int>> readGAM3(const bdsg::ODGI &g
     int sum_of_clades = 0;
     for (int i = 1;i<clade_vec->size();i+=6) {
         sum_of_clades += clade_vec->at(i)->count;
+        //cout << "sum_of_clades" << sum_of_clades << endl;
 
        
     }

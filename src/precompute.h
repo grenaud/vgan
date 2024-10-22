@@ -38,7 +38,7 @@ using namespace std;
 using namespace google::protobuf;
 namespace fs = std::filesystem;
 
-static vector<AlignmentInfo*>* precompute_GAM(
+static vector<AlignmentInfo*>* tm_precompute_GAM(
     const bdsg::ODGI& graph,
     string gamfilename,
     vector<Clade*>* clade_vec,
@@ -88,7 +88,11 @@ static vector<AlignmentInfo*>* precompute_GAM(
             continue;
         }
 
-        double p_correctly_mapped = 1 - dta->incorrect_mapping_vec[a.mapping_quality()];
+        //double p_correctly_mapped = (dta == NULL) ? 1 : 1 - dta->incorrect_mapping_vec[a.mapping_quality()];
+        double p_correctly_mapped;
+
+        p_correctly_mapped = 1 - dta->incorrect_mapping_vec[a.mapping_quality()];
+
         p_correctly_mapped = max(p_correctly_mapped, 0.001);
 
         if (a.identity() != 0) {
@@ -605,12 +609,12 @@ log_lik_marg = log_prob_damage; //logSumExp(log_lik_marg, log_prob_damage);
     return read_vec;
 }  // end of static function
 
-static vector<AlignmentInfo*>* precompute_GAM_trailmix(shared_ptr<Trailmix_struct>& dta) {
+static vector<AlignmentInfo*>* tm_precompute_GAM_(shared_ptr<Trailmix_struct>& dta) {
     assert(!dta->path_names.empty());
     assert(!dta->qscore_vec.empty());
     vector<Clade*>* null_clade_vec = NULL;
 
-    return precompute_GAM(dta->graph,
+    return tm_precompute_GAM(dta->graph,
                           dta->fifo_A,
                           null_clade_vec,
                           dta->nodepaths,

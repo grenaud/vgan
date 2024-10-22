@@ -37,7 +37,7 @@ inline double autocorrelation(const std::vector<double>& v, int k) {
     const size_t n = v.size();
     const double m = mean(v);
     const double var = variance(v, m);
-    
+
     double numer = 0.0;
     for (size_t i = 0; i < n - k; ++i) {
         numer += ((v[i] - m) * (v[i + k] - m));

@@ -137,15 +137,15 @@ int main(int argc, char *argv[]) {
         
 
         soibean soibean_;
-        
+        const string cwdProg=getCWD(argv[0]);
+
         if( argc==2 ||
             (argc == 3 && (string(argv[2]) == "-h" || string(argv[2]) == "--help") )
             ){
-            cerr<<soibean_.usage()<<"\n";
+            cerr<<soibean_.usage(cwdProg)<<"\n";
             return 1;
         }
-        
-        const string cwdProg=getCWD(argv[0]);
+
             argv++;
             argc--;
             return soibean_.run(argc, argv, cwdProg);

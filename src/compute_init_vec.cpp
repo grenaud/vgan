@@ -13,7 +13,7 @@ const vector<double> Euka::compute_init_vec(vector<Clade *> * clade_vec, vector<
 
     for (int i=0; i<clade_list_id.size(); i++){
 
-    	total_frag_count += clade_vec->at(clade_list_id.at(i)*3+1)->count;
+    	total_frag_count += clade_vec->at(clade_list_id.at(i)*6+1)->count;
 
     }
 
@@ -24,7 +24,7 @@ const vector<double> Euka::compute_init_vec(vector<Clade *> * clade_vec, vector<
     vector<double> total_f_list;
     for (int n=0; n<clade_list_id.size(); n++){
 
-        const double frag_count = clade_vec->at(clade_list_id.at(n)*3+1)->count;
+        const double frag_count = clade_vec->at(clade_list_id.at(n)*6+1)->count;
 
         const double dis = frag_count/total_frag_count;
 
@@ -39,5 +39,46 @@ const vector<double> Euka::compute_init_vec(vector<Clade *> * clade_vec, vector<
         total_f_list.emplace_back(dis);
 
     }
+//     vector <double> new_vec;
+//     for (int j = 0; j<total_f_list.size(); j+=2){
+//         // Make sure we have an even number of elements
+//     	assert(total_f_list.size() % 2 == 0);
+
+//     	int vec_len = total_f_list.size()/2;
+//         double frac = total_f_list.at(j+1);
+//         double total_frac = 0.0;
+// #ifdef DEBUGINIT
+//         cerr << "vec_len " << vec_len << endl; 
+//         cerr << "frac " << frac << endl; 
+// #endif
+//     	for (int k = 1; k<clade_vec->at(total_f_list.at(j)*3+1)->clade_like.size(); k++){
+
+//             cerr << "clade like at position 0: " <<clade_vec->at(total_f_list.at(j)*3+1)->clade_like.at(0) << endl; 
+
+//             cerr << "clade like at postition " << k << ": " << clade_vec->at(total_f_list.at(j)*3+1)->clade_like.at(k) << endl; 
+
+//             //double inv = (frac * clade_vec->at(total_f_list.at(j)*3+1)->clade_like.at(k)) + (clade_vec->at(total_f_list.at(j)*3+1)->clade_not_like.at(k)/ vec_len);
+//     		total_frac += (frac * clade_vec->at(total_f_list.at(j)*3+1)->clade_like.at(k)) + (clade_vec->at(total_f_list.at(j)*3+1)->clade_not_like.at(k)/ vec_len);
+
+
+//     	}
+// #ifdef DEBUGINIT
+//     	cerr << total_frac << endl;
+//     	cerr << clade_vec->at(total_f_list.at(j)*3+1)->clade_like.size() << endl;
+// #endif
+
+//     	double new_frac = (total_frac/clade_vec->at(total_f_list.at(j)*3+1)->clade_like.size());
+
+
+//     	new_vec.emplace_back(new_frac);
+// #ifdef DEBUGINIT
+//     	cerr << "New fraction for clade " << clade_vec->at(total_f_list.at(j)*3+1)->name << " is " << new_frac << endl;
+// #endif
+
+
+//     }
+
     return total_f_list;
+
+
 }

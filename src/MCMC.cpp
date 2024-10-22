@@ -10,6 +10,7 @@
 //#define VERBOSE_MCMC
 //#define DEBUGMCMC
 //#define DEBUGMCMCPOS
+//#define DEBUGOUTPUT
 #define PRINTVEC(v) for (int i=0; i<v.size(); ++i){cerr << setprecision(10) << v[i] << '\t';}cerr << endl << endl;
 
 #define PRINT_SET(SET) \
@@ -487,7 +488,7 @@ std::vector<double> MCMC::sample_normal(std::vector<double>& x, double alpha) {
         throw std::invalid_argument("vector can't be empty");
     }
 
-    long double sum = 0.0L; // Variable to store the sum of sampled values
+    double sum = 0.0L; // Variable to store the sum of sampled values
 
     for (size_t i = 0; i < x.size(); ++i) {
         std::normal_distribution<double> dist(x[i], 0.1);
@@ -1016,65 +1017,64 @@ return state_t_vec;
 }
 
 
-// function to generate the proposal vector for the MCMC runs
 const vector<double> MCMC::generate_proposal(vector<double> &current_vec, const double &alpha, const bool branch_pos){
-        // checking that vector sums up to 1
+	// checking that vector sums up to 1
 
-        double check = 0.0;
-        for (size_t p = 0; p<current_vec.size(); p++){
+	double check = 0.0;
+	for (size_t p = 0; p<current_vec.size(); p++){
 #ifdef DEBUGGENERATEVEC
-                cerr << current_vec.at(p) << endl;
+		cerr << current_vec.at(p) << endl;
 #endif
-                check += current_vec.at(p);
-        }
+		check += current_vec.at(p);
+	}
 #ifdef DEBUGGENERATEVEC
-        cerr << "check "<< check << endl;
+	cerr << "check "<< check << endl;
 #endif
-        double lower = 0.99;
-        double upper = 1.01;
+	double lower = 0.99;
+	double upper = 1.01;
 
 
 #ifdef DEBUGGENERATEVEC
-        for (const auto &element:current_vec){
+	for (const auto &element:current_vec){
         cerr << "Current vec before log: "<< element << endl;
     }
 #endif
 
         //if(!branch_pos){assert(check > lower && check < upper);}
 
-        vector <double> current_vec_log;
-        // transform vector into log space.
-        for (size_t q = 0; q<current_vec.size(); q++){
-                current_vec_log.emplace_back(log(current_vec.at(q)));
+	vector <double> current_vec_log;
+	// transform vector into log space.
+	for (size_t q = 0; q<current_vec.size(); q++){
+		current_vec_log.emplace_back(log(current_vec.at(q)));
 
-        }
+	}
 #ifdef DEBUGGENERATEVEC
-        for (const auto &element:current_vec_log){
+	for (const auto &element:current_vec_log){
         cerr << "Current vec after log: "<< element << endl;
 
     }
 #endif
     // generate random number generator
-        std::random_device rd;
-        std::mt19937 g(rd());
-        // looping through the vector of log transformed distributions.
-        //For each element we will sample from a normal distribution to get a new draw.
+	std::random_device rd;
+	std::mt19937 g(rd());
+	// looping through the vector of log transformed distributions.
+	//For each element we will sample from a normal distribution to get a new draw.
         vector<double> projected_vec;
 
         if (!branch_pos) {
 
         vector<double> proposal_vec;
-        for (double element:current_vec_log){
-                std::normal_distribution<double> d{element,alpha};
+	for (double element:current_vec_log){
+		std::normal_distribution<double> d{element,alpha};
 
 #ifdef DEBUGGENERATEVEC
-                cerr << "exp proposal_vec " << exp(d(g)) << endl;
+		cerr << "exp proposal_vec " << exp(d(g)) << endl;
 #endif
-                proposal_vec.emplace_back(d(g));
-        }
+		proposal_vec.emplace_back(d(g));
+	}
 
-        // transforming the proposal_vec with the softmax function
-        projected_vec = MCMC::softmax(proposal_vec);
+	// transforming the proposal_vec with the softmax function
+	projected_vec = MCMC::softmax(proposal_vec);
                         }
 
         else{
@@ -1082,19 +1082,20 @@ const vector<double> MCMC::generate_proposal(vector<double> &current_vec, const 
             }
 
 #ifdef DEBUGGENERATEVEC
-        for (auto element:projected_vec){
+	for (auto element:projected_vec){
         cerr << "exp projected_vec: " << element << endl;
     }
 #endif
-        check = accumulate(projected_vec.begin(), projected_vec.end(), 0.0);
-        lower = 0.99;
-        upper = 1.01;
-        // Check that we have successfully projected back onto the unit simplex
+	check = accumulate(projected_vec.begin(), projected_vec.end(), 0.0);
+	lower = 0.99;
+	upper = 1.01;
+	// Check that we have successfully projected back onto the unit simplex
 
-        if(!branch_pos){assert(check > lower && check < upper);}
+	if(!branch_pos){assert(check > lower && check < upper);}
 
-        return projected_vec;
+	return projected_vec;
 }
+
 
 
 inline const double MCMC::get_proposal_likelihood(const vector <double> &proposal_vec, vector<Clade *> * clade_vec, vector<int> &clade_list_id){
@@ -1115,10 +1116,9 @@ inline const double MCMC::get_proposal_likelihood(const vector <double> &proposa
         const double frac = total_f_list.at(j+1);
         double total_frac = 0.0;
 
-        for (int k = 1; k<clade_vec->at(total_f_list.at(j)*3+1)->clade_like.size(); k++){
-
-                total_frac += log((frac * clade_vec->at(total_f_list.at(j)*3+1)->clade_like.at(k)) + \
-                                  (clade_vec->at(total_f_list.at(j)*3+1)->clade_not_like.at(k)/ vec_len));
+        for (int k = 1; k<clade_vec->at(total_f_list.at(j)*6+1)->clade_like.size(); k++){
+                total_frac += log((frac * clade_vec->at(total_f_list.at(j)*6+1)->clade_like.at(k)) + \
+                                  (clade_vec->at(total_f_list.at(j)*6+1)->clade_not_like.at(k)/ vec_len));
 
 
 #ifdef DEBUGGENERATEVEC
@@ -1141,22 +1141,23 @@ inline const double MCMC::get_proposal_likelihood(const vector <double> &proposa
 
 }
 
-vector<double > MCMC::run(int iter, int burnin, double tol, const vector<double> &init_vec, vector<Clade *> * clade_vec, vector<int> &clade_list_id){
+vector<double > MCMC::run_euka(int iter, int burnin, double tol, const vector<double> &init_vec, vector<Clade *> * clade_vec, vector<int> &clade_list_id){
 
-        MCMC mcmc;
+	MCMC mcmc;
 
-        vector <double> current_best = init_vec;
-        vector <double> proposal_vec;
+	vector <double> current_best = init_vec;
+	//vector <double> current_best = {0.0909090909,0.0909090909, 0.0909090909, 0.0909090909, 0.0909090909,0.0909090909,0.0909090909,0.0909090909,0.0909090909,0.0909090909,0.0909090909};
+	vector <double> proposal_vec;
 
-    double current_log_likelihood = -99999999999;
+    double current_log_likelihood = -9999999;
     double acceptance_prob = 0;
     double u=0;
     std::random_device rd;
     std::mt19937 gen(rd());
 
     struct mcmc_moves{
-        double log_like;
-        vector <double> abund_vec;
+    	double log_like;
+    	vector <double> abund_vec;
     };
 #ifdef DEBUGGENERATEVEC
     ofstream outputFile("proposal_log_likelihood.txt", ios::trunc);
@@ -1166,30 +1167,26 @@ vector<double > MCMC::run(int iter, int burnin, double tol, const vector<double>
     int no = 0;
 
     cerr << "Computing MCMC:" << endl;
-        for (int iteration = 0; iteration<iter; iteration++){
+	for (int iteration = 0; iteration<iter; iteration++){
 
-                //printprogressBarCerr( float(iteration + 1)/float(iter) );
+		//printprogressBarCerr( float(iteration + 1)/float(iter) );
 
-                proposal_vec = mcmc.generate_proposal(current_best, 0.1, false);
-        const double proposal_log_likelihood = mcmc.get_proposal_likelihood(proposal_vec, clade_vec, clade_list_id);
+		proposal_vec = mcmc.generate_proposal(current_best, 0.1, false);
+                double proposal_log_likelihood = mcmc.get_proposal_likelihood(proposal_vec, clade_vec, clade_list_id);
 
        // we are not adding proposal vectors to the struct before after the burin in period
-                if (iteration > burnin){
+		if (iteration > burnin){
 
         move[iteration].log_like = proposal_log_likelihood;
         move[iteration].abund_vec = proposal_vec;
-
-        }
+    	}
         else{
-
-                continue;
+        	continue;
         }
-
 
 
 #ifdef DEBUGGENERATEVEC
         outputFile << iteration << '\t' << proposal_log_likelihood << '\t' << proposal_vec[0] << '\t' << proposal_vec[1] <<'\t' << proposal_vec[2] << '\t' << proposal_vec[3] <<'\t' << '\t' << proposal_vec[4] << '\t' << proposal_vec[5] <<'\t' << '\t' << proposal_vec[6] << '\t' << proposal_vec[7] <<'\t' << '\t' << proposal_vec[8] << '\t' << proposal_vec[9] <<'\t' << '\t' << proposal_vec[10] << '\t';
-
         cerr << "proposal_log_likelihood " << proposal_log_likelihood << endl;
 #endif
         acceptance_prob = min((double)(1.0), exp(proposal_log_likelihood-current_log_likelihood));
@@ -1204,7 +1201,7 @@ vector<double > MCMC::run(int iter, int burnin, double tol, const vector<double>
 #endif
         if (u <= acceptance_prob || iteration == 0) {
 #ifdef DEBUGGENERATEVEC
-                outputFile << "accept" << endl;
+        	outputFile << "accept" << endl;
 #endif
 #ifdef VERBOSE_MCMC
             cerr << "ACCEPTING proposal." << endl;
@@ -1215,7 +1212,7 @@ vector<double > MCMC::run(int iter, int burnin, double tol, const vector<double>
                                                     }
         else {
 #ifdef DEBUGGENERATEVEC
-                outputFile << "reject" << endl;
+        	outputFile << "reject" << endl; 
 #endif
 #ifdef VERBOSE_MCMC
             cerr << "REJECTING proposal" << endl;
@@ -1225,69 +1222,69 @@ vector<double > MCMC::run(int iter, int burnin, double tol, const vector<double>
 #ifdef VERBOSE_MCMC
         cerr << "\n\nCurrent log likelihood: " << current_log_likelihood << endl;
 #endif
-        }
-        cerr<<endl;
+	}
+	cerr<<endl;
 
 #ifdef VERBOSE_MCMC
-        cerr << "MCMC completed. The final log likelihood is: " << current_log_likelihood << endl;
+	cerr << "MCMC completed. The final log likelihood is: " << current_log_likelihood << endl; 
 #endif
 
 
+	
+	int per85 = 0.85 * (iter - burnin); 
+	int per95 = 0.95 * (iter - burnin);
+	double sums[proposal_vec.size()] = {0.0};
+	vector<double> posterior_estimate;
+	vector<double> sorted_clade; 
 
-        int per85 = 0.85 * (iter - burnin);
-        int per95 = 0.95 * (iter - burnin);
-        double sums[proposal_vec.size()] = {0.0};
-        vector<double> posterior_estimate;
-        vector<double> sorted_clade;
+	// The posterior mean as well as the confidence intervalls will be calculated per clade (each clade is independent from each other)
+	//We are lọoping through the abundance vector with j
+	// 
+	for (int j=0; j<proposal_vec.size(); j++){
 
-
-        // The posterior mean as well as the confidence intervalls will be calculated per clade (each clade is independent from each other)
-        //We are lọoping through the abundance vector with j
-        //
-        for (int j=0; j<proposal_vec.size(); j++){
-
-                for (int i = burnin+1; i<iter; i++){
-
-                        sums[j] += move[i].abund_vec[j];
+		for (int i = burnin+1; i<iter; i++){
+			
+			sums[j] += move[i].abund_vec[j];
 #ifdef DEBUGOUTPUT
-                        cerr << "before " <<move[i].abund_vec[j] <<endl;
-#endif
-                        sorted_clade.emplace_back(move[i].abund_vec[j]);
+			//cerr << "before: " <<move[i].abund_vec[j] <<endl;
+#endif		
+			sorted_clade.emplace_back(move[i].abund_vec[j]);
 
-                }
-                // sorting the struct for highest posterior density intervall (HDI)
+		}
+		// sorting the struct for highest posterior density intervall (HDI)
 
-                sort(sorted_clade.begin(), sorted_clade.end());
+		sort(sorted_clade.begin(), sorted_clade.end());
 
-                const int m = sorted_clade.size()/2;
+		const int m = sorted_clade.size()/2;
+		
+		double p = sorted_clade[m];
 
-                double p = sorted_clade[m];
 
-
-                // posterior point estimate for each clade (each fraction of the abdundance vector)
-                //double p = sums[j]/(iter-burnin);
+		// posterior point estimate for each clade (each fraction of the abdundance vector)
+		//double p = sums[j]/(iter-burnin);
 #ifdef DEBUGOUTPUT
-                cerr << "posterior_estimate " << p << endl;
-#endif
-                posterior_estimate.emplace_back(p);
+		cerr << "posterior_estimate " << p << endl; 
+#endif 
+		posterior_estimate.emplace_back(p);
 
-                double low_end_85 = quant(sorted_clade, 0.15);
-                double high_end_85 = quant(sorted_clade, 0.85);
-                double low_end_95 = quant(sorted_clade, 0.05);
-                double high_end_95 = quant(sorted_clade, 0.95);
+		double low_end_85 = quant(sorted_clade, 0.15);
+		double high_end_85 = quant(sorted_clade, 0.85);
+		double low_end_95 = quant(sorted_clade, 0.05);
+		double high_end_95 = quant(sorted_clade, 0.95);
 
-                posterior_estimate.emplace_back(low_end_85);
-                posterior_estimate.emplace_back(high_end_85);
-                posterior_estimate.emplace_back(low_end_95);
-                posterior_estimate.emplace_back(high_end_95);
+		posterior_estimate.emplace_back(low_end_85);
+		posterior_estimate.emplace_back(high_end_85);
+		posterior_estimate.emplace_back(low_end_95); 
+		posterior_estimate.emplace_back(high_end_95);
 
-                sorted_clade.clear();
+		sorted_clade.clear();
 
 
-
-        }
-
-        cerr<<".. done"<<endl;
-        return posterior_estimate;
+		
+	}
+	
+	cerr<<".. done"<<endl;
+	return posterior_estimate;
 
 }
+
