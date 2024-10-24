@@ -79,7 +79,7 @@ public:
     bool is_in_pruned_set(spidir::Node* p, shared_ptr<Trailmix_struct> &dta);
     void add_nodes_at_depth(spidir::Node* p, const int depth, shared_ptr<Trailmix_struct> &dta);
     //const void updatePosition(std::shared_ptr<spidir::Tree> tr, PosTree &current_position, const double move_distance, bool move_forward);
-    inline void updatePosition(PosTree &current_position, const double move_distance, bool move_forward);
+    static inline void updatePosition(PosTree &current_position, const double move_distance, bool move_forward);
     const double calculateDistanceToAncestor(spidir::Node* startNode, spidir::Node* ancestor);
     const double getSumPatristicDistances(const PosTree &current_position, const shared_ptr<std::shared_ptr<spidir::Tree>> tr);
     double calculateRhat(const std::vector<double>& means, const std::vector<double>& variances, int chainLength, int numchains);

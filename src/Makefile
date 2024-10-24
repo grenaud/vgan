@@ -212,11 +212,11 @@ spimapmade:
 static: libgabmade rpvgmade spimapmade $(VGAN_PREREQS) vgmade
 	$(CXX) -o $(BIN_DIR)vgan $(FLAGS_STATIC)
 
-vgan: vgmade rpvgmade libgabmade $(VGAN_PREREQS)
+vgan: vgmade rpvgmade libgabmade spimapmade $(VGAN_PREREQS)
 	$(MAKE) autocomp
 	$(CXX) $(CLUSTER_FLAGS) -o $(BIN_DIR)vgan $(FLAGS_DYNAMIC) $(CLUSTER_LINKER_FLAGS)
 
-test: $(TEST_PREREQS) vgmade libgabmade
+test: $(TEST_PREREQS) vgmade libgabmade rpvgmade spimapmade
 	$(MAKE) autocomp
 	$(CXX) -o $(BIN_DIR)test $(FLAGS_TEST) $(CLUSTER_LINKER_FLAGS)
 	rm -f ../test/output_files/trailmix/*.txt
