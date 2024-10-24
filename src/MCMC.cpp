@@ -160,7 +160,7 @@ void MCMC::add_nodes_at_depth(spidir::Node* p, const int depth, shared_ptr<Trail
     }
 
 
-static inline void MCMC::updatePosition(PosTree &current_position, const double move_distance, bool move_forward) {
+void MCMC::updatePosition(PosTree &current_position, const double move_distance, bool move_forward) {
 #ifdef DEBUGMCMCPOS
     //current_position.pos_branch = 0.5;
     std::cerr << "---- Function Called ----" << std::endl;
