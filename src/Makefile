@@ -219,6 +219,13 @@ vgan: vgmade rpvgmade libgabmade $(VGAN_PREREQS)
 test: $(TEST_PREREQS) vgmade libgabmade
 	$(MAKE) autocomp
 	$(CXX) -o $(BIN_DIR)test $(FLAGS_TEST) $(CLUSTER_LINKER_FLAGS)
+	rm -f ../test/output_files/trailmix/*.txt
+	rm -f ../test/output_files/trailmix/*.mcmc
+	rm -f ../test/output_files/haplocart/*.txt
+	rm -f ../test/output_files/soibean/*.txt
+	rm -f ../test/output_files/soibean/*.mcmc
+	rm -f ../test/output_files/euka/*.tsv
+	rm -f ../test/output_files/euka/*.prof
 
 clean:
 	rm -f *.o
