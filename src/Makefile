@@ -221,6 +221,7 @@ test: $(TEST_PREREQS) vgmade libgabmade rpvgmade spimapmade
 	$(CXX) -o $(BIN_DIR)test $(FLAGS_TEST) $(CLUSTER_LINKER_FLAGS)
 	rm -f ../test/output_files/trailmix/*.txt
 	rm -f ../test/output_files/trailmix/*.mcmc
+	rm -f ../test/output_files/trailmix/*.gam
 	rm -f ../test/output_files/haplocart/*.txt
 	rm -f ../test/output_files/soibean/*.txt
 	rm -f ../test/output_files/soibean/*.mcmc

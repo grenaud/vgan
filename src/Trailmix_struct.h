@@ -20,6 +20,7 @@ struct Trailmix_struct {
     Damage dmg_none;
 
     // Boolean variables
+    bool save_gam = false;
     bool reads_already_processed = false;
     bool output_profs=false;
     bool webapp = false;
@@ -57,6 +58,7 @@ struct Trailmix_struct {
     string graph_prefix = "graph";
     string graphfilename = graph_prefix + ".og";
     string treePath;
+    string out_gam_filename = "sample.gam";
 
     // Giraffe parameters
     string cwdProg;

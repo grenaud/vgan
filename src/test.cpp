@@ -1290,6 +1290,15 @@ vector<string> trailmix_argvec = {"vgan", "trailmix", "-f", "../test/input_files
 run_trailmix(tm, trailmix_argvec);
                                       }
 
+void run_save_GAM(Trailmix * tm){
+vector<string> trailmix_argvec = {"vgan", "trailmix", "-f", "../test/input_files/trailmix/G1a1a4.fa.gz", "-t", "50",
+                   "-k", "1", "-o", "../test/output_files/trailmix/G1a1a4", "--iter", "5000", "--burnin", "1",
+                   "--chains", "1", "-z", "tempdir", "--tm-files", "../share/vgan/smaller_tmfiles/",
+                   "--dbprefix", "pub.graph", "--save-gam", "../test/output_files/trailmix/out.gam"};
+
+run_trailmix(tm, trailmix_argvec);
+                                      }
+
 void tm_run_fq_single(Trailmix * tm){
 vector<string> trailmix_argvec = {
     "vgan", "trailmix", "-fq1", "../test/input_files/trailmix/Q1_1.fq.gz", "-t", "50", "-k", "1", "-o",
@@ -1420,6 +1429,15 @@ BOOST_AUTO_TEST_CASE(k1_fasta)
     run_k1_G1a1a4_FASTA(&tm);
     auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/G1a1a4BranchEstimate.txt");
     BOOST_ASSERT(branchRecords[0].source == "G1a1a4");
+}
+
+BOOST_AUTO_TEST_CASE(save_GAM)
+{
+    Trailmix tm;
+    run_save_GAM(&tm);
+    auto branchRecords = load_branch_placement_diagnostics_file("../test/output_files/trailmix/G1a1a4BranchEstimate.txt");
+    BOOST_ASSERT(branchRecords[0].source == "G1a1a4");
+    BOOST_ASSERT(std::filesystem::exists("../test/output_files/trailmix/out.gam"));
 }
 
 BOOST_AUTO_TEST_CASE(k1_gam)

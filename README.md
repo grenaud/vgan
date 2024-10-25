@@ -664,7 +664,8 @@ Algorithm parameters:
 Non-algorithm parameters:
         -s [STR]                             Sample name
         --dbprefix <prefix>                  Specify the prefix for the database files
-        --tm-files [STR]                      Specify the TrailMix file directory (default: "../share/vgan/tmfiles/")
+        --tm-files [STR]                     Specify the TrailMix file directory (default: "../share/vgan/tmfiles/")
+        --save-gam [STR]                     Save GAM file to specified location (e.g. for reuse in contamination mode) 
         -t                                   Number of threads
         -v                                   Verbose mode
         -z                                   Temporary directory (default: /tmp/)

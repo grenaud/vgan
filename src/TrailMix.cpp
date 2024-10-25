@@ -374,6 +374,7 @@ std::string Trailmix::usage() const {
           << "Non-algorithm parameters:\n"
           << "\t--dbprefix <prefix>\t\t     Specify the prefix for the database files\n"
           << "\t--tm-files [STR]\t\t      Specify the TrailMix file directory (default: \"../share/vgan/tmfiles/\") \n"
+          << "\t--save-gam [STR]\t\t      Save GAM file to specified location (e.g. for reuse in contamination mode) \n"
           << "\t-t\t\t\t\t     Number of threads\n"
           << "\t-v\t\t\t\t     Verbose mode\n"
           << "\t-z\t\t\t\t     Temporary directory (default: /tmp/)\n"
@@ -413,6 +414,7 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     bool verbose = true;
     bool debug=false;
     string gamfilename, samplename, fastafilename, fastq1filename, fastq2filename, posteriorfilename;
+    string out_gam_filename = "sample.gam";
     string TM_outputfilename = "TM_out";
     string tmpdir = "/tmp/";
     string graph_dir = getFullPath(cwdProg+"../share/vgan/tmfiles/");
@@ -427,6 +429,7 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     bool specifiedDeam=false;
     bool run_mcmc=true;
     bool cont_mode=false;
+    bool save_gam=false;
     unsigned int iter=10000;
     unsigned int burnin=100;
     unsigned int chains=1;
@@ -574,9 +577,14 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
 
     if(string(argv[i]) == "--tm-files"){
             graph_dir=getFullPath(argv[i+1]);
-            //if (graph_dir.back() != '/'){graph_dir += '/';}
             continue;
                                       }
+
+     if(string(argv[i]) == "--save-gam"){
+            out_gam_filename= argv[i+1];
+            save_gam = true;
+            continue;
+                                        }
 
        if(string(argv[i]) == "--contamination-mode" || string(argv[i]) == "--cont-mode"){
             if (k != 2){
@@ -611,6 +619,8 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     //Haplocart hc;
 
     dta->running_trailmix=true;
+    dta->save_gam=save_gam;
+    dta->out_gam_filename = out_gam_filename;
     dta->is_ancient_vec = isAncient;
     dta->strand_specific = strand_specific;
     dta->strand_specific_library_type = strand_specific_library_type;

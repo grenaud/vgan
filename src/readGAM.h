@@ -69,7 +69,6 @@ function<void(vg::Alignment&)> lambda = [&n_reads, &read_vec, &dump_json, &json_
     ai->quality_scores = a.quality();
     ai->is_paired = a.read_paired();
     ai->identity = a.identity();
-
     read_vec->emplace_back(ai);
 };
 
@@ -81,9 +80,12 @@ if (dta->running_trailmix){
 
     std::cin.rdbuf(normal_cin);
 
-    //if (std::filesystem::is_fifo(dta->fifo_A) && !dta->dump_json) {remove(dta->fifo_A);}
+    if (std::filesystem::is_fifo(dta->fifo_A) && !dta->dump_json && !dta->running_trailmix) {remove(dta->fifo_A);}
     if (read_vec->empty()){throw std::runtime_error("Error, no reads found in GAM file");}
-
+if (dta->save_gam){
+    ofstream outgam(dta->out_gam_filename, std::ios::binary);
+    vg::io::write_buffered(outgam,to_emit,1);
+                  }
     return read_vec;
 }
 
