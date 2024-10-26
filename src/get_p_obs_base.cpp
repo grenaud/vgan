@@ -96,8 +96,8 @@ double P_no_mutation = pow(1 - mu, generations);
     double P_mutation = 1 - P_no_mutation;
 
     double R = 22.0 / 23.0; // Transition/transversion ratio
-    double P_transition = 22.0 / 23.0;
-    double P_transversion = (1.0-23.0) * 2;
+    double P_transition = R;
+    double P_transversion = R / 2.0;
 
     double P_no_error = 1 - epsilon;
     double P_error = epsilon / 3.0; // Equal probability for other bases
