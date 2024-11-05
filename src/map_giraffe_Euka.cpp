@@ -57,7 +57,7 @@ void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n
             arguments.emplace_back("--deam-5p");
             arguments.emplace_back(deam5pfreqE);
             arguments.emplace_back("-j");
-            arguments.emplace_back("1.01");
+            arguments.emplace_back(to_string(posterior_threshold));
 	    char** argvtopass = new char*[arguments.size()];
 	    for (int i=0;i<arguments.size();i++) {
 		argvtopass[i] = const_cast<char*>(arguments[i].c_str());
@@ -92,7 +92,7 @@ void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n
             arguments.emplace_back("--deam-5p");
             arguments.emplace_back(deam5pfreqE);
             arguments.emplace_back("-j");
-            arguments.emplace_back("1.01");
+            arguments.emplace_back(to_string(posterior_threshold));
 
 	    if (interleaved) {
 		arguments.emplace_back("-i");
