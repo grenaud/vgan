@@ -262,7 +262,7 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
     if (dta->quiet == false) {cerr << "Predicting sample: " << dta->samplename << '\n';}
     if (dta->quiet == false) {cerr << "Using " << dta->n_threads << " threads" << '\n';}
 
-    dta->graphfilename = getFullPath(dta->graph_dir + dta->graph_prefix+ ".og");
+    dta->graphfilename = getFullPath(dta->hc_graph_dir + dta->graph_prefix+ ".og");
 
     if (dta->fastafilename != "") {
         std::tie(fasta_seqs, fasta_ids) = Haplocart::read_fasta(dta->fastafilename);
