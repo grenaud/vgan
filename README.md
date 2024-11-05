@@ -179,7 +179,8 @@ vgan requires vg https://github.com/vgteam/vg. vg requires several packages to b
 
 ```
 git clone https://github.com/grenaud/vgan.git
-cd vgan/src && make
+git submodule update --init --recursive
+cd vgan/src && make vgan -j [# threads]
 ```
 
 Please be patient, this will take some time.
