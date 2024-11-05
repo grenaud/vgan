@@ -105,6 +105,7 @@ const string soibean::usage(const std::string& cwdProg) const {
         "  -t <threads>                Specify the number of threads to use (default: 1)\n" +
         "  -z <directory>              Specify the temporary directory for intermediate files (default: /tmp/)\n" +
         "  -i                          Enable interleaved input mode\n" +
+        "  -pt [FLOAT]                 Posterior threshold for ancient DNA (aligned with SAFARI) \n" +
 
         "Damage options:"+"\n"+
         "  --deam5p [.prof]            5p deamination frequency for eukaryotic species (default: no damage)"+"\n"+
@@ -222,6 +223,7 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
   bool randStart = false;
   bool specifiedk = false;
   double con = 0.0;
+  double posterior_threshold = 1.01;
   int k = 1;
   size_t cutk = 0;
 
@@ -331,10 +333,18 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
         specifiedDeam=true;
             continue;
         }
+
         if(string(argv[i]) == "-o"){
             outputfilename = argv[i+1];
             continue;
         }
+
+
+       if(string(argv[i]) == "-pt"){
+            posterior_threshold = stod(argv[i+1]);
+            continue;
+                                }
+
         if(string(argv[i]) == "--randStart"  || string(argv[i]) == "--randstart"){
             randStart=true;
             continue;
@@ -396,7 +406,6 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
    
     cerr << "Reading in variation graph ..." << endl;
 
-  
     auto [nodevector, minid, graph, node_path_matrix, path_names] = ek.readPathHandleGraph(ogfilename, 1, gbwtfilename, dbprefixS, clade_vec);
     if (nodevector.empty()) {
 	throw std::runtime_error("Error: The nodevector is empty. Unable to proceed.");
@@ -474,7 +483,7 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
 	// Code for writing to the FIFO
 	if (gamfilename == "") {
 	    //cerr << "Mapping reads..." << endl;
-	    ek.map_giraffe(fastq1filename, fastq2filename, n_threads, interleaved, fifo_A, sc, tmpdir, sbdir, dbprefix);
+	    ek.map_giraffe(fastq1filename, fastq2filename, n_threads, interleaved, fifo_A, sc, tmpdir, sbdir, dbprefix, deam3pfreqE, deam5pfreqE, posterior_threshold);
 	    //cerr << "and done" << endl;
 	    exit(0);
 	} else {

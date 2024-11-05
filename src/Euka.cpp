@@ -104,6 +104,7 @@ const string Euka::usage() const{
                   "\t\t"+""  +"" +"-o [STR]"   +"\t\t" + "Output file prefix (default: euka_output) "+"\n"+
                   "\t\t"+""  +"" +"-t"   +"\t\t\t" + "Number of threads (-1 for all available)"+"\n"+
                   "\t\t"+""  +"" +"-Z"   +"\t\t\t" + "Temporary directory (default: /tmp)"+"\n"+
+                  "\t\t"+""  +"" +"-pt [FLOAT]"+ "\t\t\t"+"Posterior threshold for ancient DNA (aligned with SAFARI) \n" +
                   "\n"+
                   "Filter options:\n"+
                   "\t\t"+""  +"" +"--minMQ [INT]"    +"\t\t"      +"Set the mapping quality minimum for a fragment (default: 29)"+"\n"+
@@ -150,6 +151,7 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
     string deam5pfreqE  = getFullPath(cwdProg+"../share/vgan/damageProfiles/none.prof");
     string deam3pfreqE  =  getFullPath(cwdProg+"../share/vgan/damageProfiles/none.prof");
 
+    double posterior_threshold = 1.01;
     bool specifiedDeam=false;
     bool interleaved=false;
     bool run_mcmc=true;
@@ -288,6 +290,11 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
             outputfilename = argv[i+1];
             continue;
                                }
+
+       if(string(argv[i]) == "-pt"){
+            posterior_threshold = stod(argv[i+1]);
+            continue;
+                                }
 
         if(string(argv[i]) == "-z"){
             tmpdir = argv[i+1];
@@ -472,20 +479,18 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
 
         cerr << "Mapping reads..." << endl;
         Euka::map_giraffe(fastq1filename, fastq2filename, n_threads, interleaved,
-
-                      fifo_A, sc, tmpdir, euka_dir, dbprefix);
+                      fifo_A, sc, tmpdir, euka_dir, dbprefix, deam3pfreqE, deam5pfreqE, posterior_threshold);
 
     while ((wpid = wait(&status)) > 0);
     exit(0);
             }
-                   
 
     else {
     // Redirect buffer in case of GAM input
            ifstream src(gamfilename);
            ofstream dst(fifo_A);
            dst << src.rdbuf();
-           exit(0); 
+           exit(0);
        }
    }
 

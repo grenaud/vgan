@@ -144,6 +144,7 @@ $VG_EXECUTABLE_PATH view ${SCRIPT_DIR}/${input_name}.vg > ${SCRIPT_DIR}/${input_
 $VG_EXECUTABLE_PATH gbwt -o ${SCRIPT_DIR}/${input_name}.gbwt -g ${SCRIPT_DIR}/${input_name}.gg -G ${SCRIPT_DIR}/${input_name}.gfa
 $VG_EXECUTABLE_PATH index -j ${SCRIPT_DIR}/${input_name}.dist ${SCRIPT_DIR}/${input_name}.vg
 $VG_EXECUTABLE_PATH minimizer -g ${SCRIPT_DIR}/${input_name}.gbwt -i ${SCRIPT_DIR}/${input_name}.min -k 20 -w 10 ${SCRIPT_DIR}/${input_name}.vg
+$VG_EXECUTABLE_PATH rymer -g ${SCRIPT_DIR}/${input_name}.gbwt -i ${SCRIPT_DIR}/${input_name}.ry -k 20 -w 10 ${SCRIPT_DIR}/${input_name}.vg
 $VG_EXECUTABLE_PATH convert -g ${SCRIPT_DIR}/${input_name}.gfa -o > ${SCRIPT_DIR}/${input_name}.og
 
 chmod +w ${SCRIPT_DIR}/${input_name}.dist

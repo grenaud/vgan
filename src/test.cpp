@@ -261,9 +261,9 @@ void run_soibean(soibean* sb, const vector<string>& soibean_argvec) {
 }
 
 void run_k1(soibean * sb){
-
+const string cwdProg = getFullPath(getCWD("."));
 vector<string> soibean_argvec = {
-    "vgan", "soibean", "-fq1", getCWD(".") + "bin/" + "../test/input_files/soibean/k1.fq.gz",
+    "vgan", "soibean", "-fq1", cwdProg + "test/input_files/soibean/k1.fq.gz",
     "-t", "50", "-o", getCWD(".") + "bin/" + "../test/output_files/soibean/k1",
     "--dbprefix", "Ursidae", "--iter", "1000", "--burnin", "150", "--chains", "1"
 };
@@ -272,8 +272,9 @@ run_soibean(sb, soibean_argvec);
                          }
 
 void run_k2(soibean * sb){
+const string cwdProg = getFullPath(getCWD("."));
 vector<string> soibean_argvec = {
-    "vgan", "soibean", "-fq1", getCWD(".") + "bin/" + "../test/input_files/soibean/k2.fq.gz",
+    "vgan", "soibean", "-fq1", cwdProg + "test/input_files/soibean/k2.fq.gz",
     "-t", "50", "-o", getCWD(".") + "bin/" + "../test/output_files/soibean/k2",
     "-k", "2", "--dbprefix", "Ursidae", "--iter", "1000", "--burnin", "150", "--chains", "1"
 };

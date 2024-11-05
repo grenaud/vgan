@@ -45,15 +45,17 @@ int main(int argc, char *argv[]) {
     string_view usage=string("\n")+
         "   vgan is a suite of tools for pangenomics. \n"+
         "   We currently support two subcommands: euka (for the classification of eukaryotic taxa) \n"+
-	"   And haplocart (for modern human mtDNA haplogroup classification). \n"+
-        "   The underlying data structure is the VG graph. \n\n" +
+	"   And HaploCart (for modern human mtDNA haplogroup classification). \n"+
+        "   The underlying data structure is the vg graph. \n\n" +
         string(argv[0]) +" <command> options\n"+
         "\n"+
-        "   Commands:\n"+
+        "   Subcommands:\n"+
         "      euka         Classify eukaryotic taxa "+"\n"+
         "      haplocart    Predict human mitochondrial haplogroup  "+"\n"+
         "      soibean      Identify eukaryotic species " +"\n"+
         "      trailmix     Inference on ancient human mtDNA mixture                                        "+"\n"+
+        "      duprm        PCR duplicate removal" + "\n"+
+        "      gam2prof     Damage profile from GAM input" + "\n"+
 	"";
 
     if( argc==1 ||

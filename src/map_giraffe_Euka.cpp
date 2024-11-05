@@ -15,7 +15,9 @@ const char get_dummy_qual_score(double &background_error_prob)             {
 
 void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n_threads, bool interleaved,
 		       const char * fifo_A, const vg::subcommand::Subcommand* sc,
-		       const string &tmpdir, const string &cwdProg, const string &prefix){
+		       const string &tmpdir, const string &cwdProg, const string &prefix, const string &deam3pfreqE, const string &deam5pfreqE,
+                       const double posterior_threshold){
+
     cerr << "Mapping reads..." << endl;
 
     int retcode;
@@ -51,9 +53,9 @@ void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n
             arguments.emplace_back("-q");
             arguments.emplace_back(rymer_to_use);
             arguments.emplace_back("--deam-3p");
-            arguments.emplace_back("../share/vgan/damageProfiles/none.prof");
+            arguments.emplace_back(deam3pfreqE);
             arguments.emplace_back("--deam-5p");
-            arguments.emplace_back("../share/vgan/damageProfiles/none.prof");
+            arguments.emplace_back(deam5pfreqE);
             arguments.emplace_back("-j");
             arguments.emplace_back("1.01");
 	    char** argvtopass = new char*[arguments.size()];
@@ -61,7 +63,7 @@ void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n
 		argvtopass[i] = const_cast<char*>(arguments[i].c_str());
 	    }
 
-	    auto* sc = vg::subcommand::Subcommand::get(arguments.size(), argvtopass);	    
+	    auto* sc = vg::subcommand::Subcommand::get(arguments.size(), argvtopass);
 	    auto normal_cerr = cerr.rdbuf();
 	    //std::cerr.rdbuf(NULL);
 	    (*sc)(arguments.size(), argvtopass);
@@ -86,9 +88,9 @@ void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n
             arguments.emplace_back("-q");
             arguments.emplace_back(rymer_to_use);
             arguments.emplace_back("--deam-3p");
-            arguments.emplace_back("../share/vgan/damageProfiles/none.prof");
+            arguments.emplace_back(deam3pfreqE);
             arguments.emplace_back("--deam-5p");
-            arguments.emplace_back("../share/vgan/damageProfiles/none.prof");
+            arguments.emplace_back(deam5pfreqE);
             arguments.emplace_back("-j");
             arguments.emplace_back("1.01");
 
@@ -99,7 +101,7 @@ void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n
 	    char** argvtopass = new char*[arguments.size()];
 	    for (int i=0;i<arguments.size();i++) {
 		argvtopass[i] = const_cast<char*>(arguments[i].c_str());
-#ifdef DEBUGGIRAFFE		
+#ifdef DEBUGGIRAFFE
 		cerr<<"argvtopass["<<i<<"] = "<<argvtopass[i] <<endl;
 #endif
 	    }
