@@ -148,4 +148,4 @@ $VG_EXECUTABLE_PATH convert -g ${SCRIPT_DIR}/${input_name}.gfa -o > ${SCRIPT_DIR
 
 chmod +w ${SCRIPT_DIR}/${input_name}.dist
 
-echo "... done! You can find your graph files in ${SCRIPT_DIR}!"
+echo "... done! You can find your graph files in ${SCRIPT_DIR}"

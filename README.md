@@ -183,7 +183,13 @@ git submodule update --init --recursive
 cd vgan/src && make vgan -j [# threads]
 ```
 
-Please be patient, this will take some time.
+Please be patient, this will take some time. Note that you may need to run
+
+```
+make vgan -j [# threads]
+```
+
+a second time if it stops early.
 
 If you are building on a WSL subsystem you may receive an error due to VG not building entirely.
 This is likely to be a permissions issue. Please run the above command as a root user. (i.e. cd vgan/src && sudo make)
