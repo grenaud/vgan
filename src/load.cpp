@@ -345,8 +345,9 @@ dta->path_supports = move(path_supports);
 }
 
 void Haplocart::load_parents(shared_ptr<Trailmix_struct> &dta) {
+string graph_dir = dta->running_trailmix ? dta->graph_dir : dta->hc_graph_dir;
 igzstream myfile;
-myfile.open(getFullPath(dta->graph_dir+"parents.txt").c_str(), ios::in);
+myfile.open(getFullPath(graph_dir+"parents.txt").c_str(), ios::in);
 string line;
 while (getline(myfile, line)) {
     const vector<string> tokens= allTokensWhiteSpaces(line);
@@ -366,8 +367,9 @@ return;
 }
 
 void Haplocart::load_children(shared_ptr<Trailmix_struct> &dta) {
+string graph_dir = dta->running_trailmix ? dta->graph_dir : dta->hc_graph_dir;
 igzstream myfile;
-myfile.open(getFullPath(dta->graph_dir+"children.txt").c_str(), ios::in);
+myfile.open(getFullPath(graph_dir+"children.txt").c_str(), ios::in);
 string line;
 while (getline(myfile, line)) {
     const vector<string> tokens= allTokensWhiteSpaces(line);
