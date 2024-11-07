@@ -83,6 +83,6 @@ public:
     Euka & operator= (const Euka & other);
 
     const string usage() const;
-    const int run(int argc, char *argv[] , const string cwdProg);
+    const int run(int argc, char *argv[] , const string &cwdProg);
 
 };

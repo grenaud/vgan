@@ -135,7 +135,7 @@ const string Euka::usage() const{
 
 
 
-const int Euka::run(int argc, char *argv[], const string cwdProg){
+const int Euka::run(int argc, char *argv[], const string &cwdProg){
 
     preflight_check();
     configure_memory_allocator();

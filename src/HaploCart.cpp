@@ -196,8 +196,11 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
 
                               }
 
-    dta->deam5pfreqE  =  dta->cwdProg+"../share/vgan/damageProfiles/none.prof";
-    dta->deam3pfreqE  =  dta->cwdProg+"../share/vgan/damageProfiles/none.prof";
+    dta->hc_graph_dir = dta->cwdProg + "../share/vgan/hcfiles/";
+    dta->graph_dir = dta->cwdProg + "../share/vgan/tmfiles/";
+
+    dta->deam5pfreqE  =  getFullPath(dta->cwdProg + "../share/vgan/damageProfiles/none.prof");
+    dta->deam3pfreqE  =  getFullPath(dta->cwdProg + "../share/vgan/damageProfiles/none.prof");
 
     std::cerr << "Loading GBWT index..." << std::endl << std::flush;
     dta->gbwt = vg::io::VPKG::load_one<gbwt::GBWT>(dta->hc_graph_dir + "graph.gbwt");
@@ -363,9 +366,6 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
 
         //////////////////////// NOW BACK TO YOUR REGULARLY SCHEDULED PROGRAMMING ////////////////////////
 
-        if (i==0){
-
-                 }
         dta->algnvector = move(readGAM(dta));
         assert(!dta->algnvector->empty());
         if(dta->running_trailmix){
@@ -373,7 +373,6 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
                                  }
 
         if (dta->algnvector->size() == 0) {throw std::runtime_error("[HaploCart] Error, no reads mapped");}
-
         if (dta->quiet == false && dta->fastafilename=="") {cerr << "Removing PCR duplicates ..." << '\n';}
 
 //shared_ptr<vector<bool>> thing = Dup_Remover().remove_duplicates_internal(dta->algnvector, dta->n_threads, dta->quiet);

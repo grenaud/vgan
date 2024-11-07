@@ -275,7 +275,7 @@ void run_k1(soibean * sb){
 std::filesystem::path execPath = getExecutablePath();
 vector<string> soibean_argvec = {
     "vgan", "soibean", "-fq1", execPath / "../test/input_files/soibean/k1.fq.gz",
-    "-t", "50", "-o",  execPath / "../test/output_files/soibean/k1",
+    "-t", "1", "-o",  execPath / "../test/output_files/soibean/k1",
     "--dbprefix", "Ursidae", "--iter", "1000", "--burnin", "150", "--chains", "1"
 };
 run_soibean(sb, soibean_argvec);
@@ -286,7 +286,7 @@ void run_k2(soibean * sb){
 std::filesystem::path execPath = getExecutablePath();
 vector<string> soibean_argvec = {
     "vgan", "soibean", "-fq1", execPath / "../test/input_files/soibean/k2.fq.gz",
-    "-t", "50", "-o", execPath / "../test/output_files/soibean/k2",
+    "-t", "1", "-o", execPath / "../test/output_files/soibean/k2",
     "-k", "2", "--dbprefix", "Ursidae", "--iter", "1000", "--burnin", "150", "--chains", "1"
 };
 run_soibean(sb, soibean_argvec);
@@ -481,7 +481,7 @@ arguments.emplace_back("../test/input_files/haplocart/rCRS.fq");
 arguments.emplace_back("-o");
 arguments.emplace_back("/dev/null");
 arguments.emplace_back("-t");
-arguments.emplace_back("50");
+arguments.emplace_back("1");
 arguments.emplace_back("-pf");
 arguments.emplace_back(posterior_output_path);
 arguments.emplace_back("-z");
@@ -506,7 +506,7 @@ arguments.emplace_back(input_path);
 arguments.emplace_back("-o");
 arguments.emplace_back(output_path);
 arguments.emplace_back("-t");
-arguments.emplace_back("50");
+arguments.emplace_back("1");
 if(quiet){arguments.emplace_back("-q");}
 arguments.emplace_back("-z");
 arguments.emplace_back("tempdir");
@@ -529,7 +529,7 @@ arguments.emplace_back(input_path);
 arguments.emplace_back("-o");
 arguments.emplace_back(output_path);
 arguments.emplace_back("-t");
-arguments.emplace_back("50");
+arguments.emplace_back("1");
 arguments.emplace_back("-e");
 arguments.emplace_back(to_string(background_error_prob));
 if(quiet){arguments.emplace_back("-q");}
@@ -554,7 +554,7 @@ arguments.emplace_back(input_path);
 arguments.emplace_back("-o");
 arguments.emplace_back(output_path);
 arguments.emplace_back("-t");
-arguments.emplace_back("50");
+arguments.emplace_back("1");
 if(quiet){arguments.emplace_back("-q");}
 arguments.emplace_back("-z");
 arguments.emplace_back("tempdir");
@@ -578,7 +578,7 @@ arguments.emplace_back("-i");
 arguments.emplace_back("-o");
 arguments.emplace_back(output_path);
 arguments.emplace_back("-t");
-arguments.emplace_back("50");
+arguments.emplace_back("1");
 if(quiet){arguments.emplace_back("-q");}
 arguments.emplace_back("-z");
 arguments.emplace_back("tempdir");
@@ -604,7 +604,7 @@ arguments.emplace_back(input_path_2);
 arguments.emplace_back("-o");
 arguments.emplace_back(output_path);
 arguments.emplace_back("-t");
-arguments.emplace_back("50");
+arguments.emplace_back("1");
 if(quiet){arguments.emplace_back("-q");}
 arguments.emplace_back("-z");
 arguments.emplace_back("tempdir");
@@ -627,7 +627,7 @@ arguments.emplace_back(input_path_1);
 arguments.emplace_back("-o");
 arguments.emplace_back(output_path);
 arguments.emplace_back("-t");
-arguments.emplace_back("50");
+arguments.emplace_back("1");
 if(quiet){arguments.emplace_back("-q");}
 arguments.emplace_back("-z");
 arguments.emplace_back("tempdir");
@@ -655,16 +655,16 @@ BOOST_AUTO_TEST_CASE(fq_single_zipped)
 BOOST_AUTO_TEST_CASE(multifasta)
 {
   Haplocart hc;
+  std::filesystem::path execPath = getExecutablePath();
   const string cwdProg = getFullPath(getCWD("."));
-  const string input_path = cwdProg + "test/input_files/haplocart/multifasta.fa";
-  const string output_path = cwdProg + "test/output_files/haplocart/multifasta.txt";
+  const string input_path = execPath / "../test/input_files/haplocart/multifasta.fa";
+  const string output_path = execPath / "../test/output_files/haplocart/multifasta.txt";
   vector<string> truth{"J2a1a1", "Z", "H2a2a1g"};
   hc_run_fasta(input_path, output_path, &hc, false);
   vector<string> preds = get_haplocart_preds(output_path);
   BOOST_CHECK_EQUAL_COLLECTIONS(preds.begin(), preds.end(), truth.begin(), truth.end());
 }
 */
-
 
 BOOST_AUTO_TEST_CASE(load)
 {
@@ -909,9 +909,9 @@ BOOST_AUTO_TEST_CASE(missing_input_gam)
 BOOST_AUTO_TEST_CASE(multifasta_zipped)
 {
   Haplocart hc;
-  const string cwdProg = getFullPath(getCWD("."));
-  const string input_path = cwdProg + "test/input_files/haplocart/multifasta.fa.gz";
-  const string output_path = cwdProg + "test/output_files/haplocart/multifasta_zipped.txt";
+  std::filesystem::path execPath = getExecutablePath();
+  const string input_path = execPath / "test/input_files/haplocart/multifasta.fa.gz";
+  const string output_path = execPath / "test/output_files/haplocart/multifasta_zipped.txt";
   hc_run_fasta(input_path, output_path, &hc, false, execPath);
   vector<string> truth {"J2a1a1", "Z", "H2a2a1g"};
   vector<string> preds = get_haplocart_preds(output_path);
@@ -1308,7 +1308,7 @@ void run_trailmix(Trailmix *tm, const vector<string>& trailmix_argvec) {
 
 void run_k1_HV4b(Trailmix *tm) {
     vector<string> trailmix_argvec = {
-        "vgan", "trailmix", "-fq1", "../test/input_files/trailmix/HV4b.fq.gz", "-t", "50", "-k", "1", \
+        "vgan", "trailmix", "-fq1", "../test/input_files/trailmix/HV4b.fq.gz", "-t", "1", "-k", "1", \
         "-o", "../test/output_files/trailmix/k1_HV4b", "--iter", "2000", "--burnin", "1", "--chains", "4", \
         "-z", "tempdir", "--tm-files", "../share/vgan/smaller_tmfiles/", "--dbprefix", "pub.graph"
     };
@@ -1316,7 +1316,7 @@ void run_k1_HV4b(Trailmix *tm) {
 }
 
 void run_k1_G1a1a4_FASTA(Trailmix * tm){
-vector<string> trailmix_argvec = {"vgan", "trailmix", "-f", "../test/input_files/trailmix/G1a1a4.fa.gz", "-t", "50",
+vector<string> trailmix_argvec = {"vgan", "trailmix", "-f", "../test/input_files/trailmix/G1a1a4.fa.gz", "-t", "1",
                    "-k", "1", "-o", "../test/output_files/trailmix/G1a1a4", "--iter", "5000", "--burnin", "1",
                    "--chains", "1", "-z", "tempdir", "--tm-files", "../share/vgan/smaller_tmfiles/",
                    "--dbprefix", "pub.graph"};
@@ -1325,7 +1325,7 @@ run_trailmix(tm, trailmix_argvec);
                                       }
 
 void run_save_GAM(Trailmix * tm){
-vector<string> trailmix_argvec = {"vgan", "trailmix", "-f", "../test/input_files/trailmix/G1a1a4.fa.gz", "-t", "50",
+vector<string> trailmix_argvec = {"vgan", "trailmix", "-f", "../test/input_files/trailmix/G1a1a4.fa.gz", "-t", "1",
                    "-k", "1", "-o", "../test/output_files/trailmix/G1a1a4", "--iter", "5000", "--burnin", "1",
                    "--chains", "1", "-z", "tempdir", "--tm-files", "../share/vgan/smaller_tmfiles/",
                    "--dbprefix", "pub.graph", "--save-gam", "../test/output_files/trailmix/out.gam"};
@@ -1335,7 +1335,7 @@ run_trailmix(tm, trailmix_argvec);
 
 void tm_run_fq_single(Trailmix * tm){
 vector<string> trailmix_argvec = {
-    "vgan", "trailmix", "-fq1", "../test/input_files/trailmix/Q1_1.fq.gz", "-t", "50", "-k", "1", "-o",
+    "vgan", "trailmix", "-fq1", "../test/input_files/trailmix/Q1_1.fq.gz", "-t", "1", "-k", "1", "-o",
     "../test/output_files/trailmix/Q1", "--iter", "5000", "--burnin", "1", "--chains", "1", "-z", "tempdir",
     "--tm-files", "../share/vgan/smaller_tmfiles/", "--dbprefix", "pub.graph"
 };
@@ -1346,7 +1346,7 @@ run_trailmix(tm, trailmix_argvec);
 
 void k1_run_split(Trailmix * tm){
 std::vector<std::string> trailmix_argvec = {"vgan", "trailmix", "-fq1", "../test/input_files/trailmix/Q1_1.fq.gz", "-fq2", \
-                                            "../test/input_files/trailmix/Q1_2.fq.gz", "-t", "50", "-k", "1", "-o", \
+                                            "../test/input_files/trailmix/Q1_2.fq.gz", "-t", "1", "-k", "1", "-o", \
                                             "../test/output_files/trailmix/Q1_split", "--iter", "5000", "--burnin", "1", \
                                             "--chains", "1", "-z", "tempdir", "--tm-files", "../share/vgan/smaller_tmfiles/", "--dbprefix", "pub.graph"};
 run_trailmix(tm, trailmix_argvec);
@@ -1354,7 +1354,7 @@ run_trailmix(tm, trailmix_argvec);
 
 void k1_run_interleaved(Trailmix * tm){
 std::vector<std::string> trailmix_argvec = {"vgan", "trailmix", "-fq1", "../test/input_files/trailmix/Q1_interleaved.fq.gz",
-                                            "-i", "-t", "50", "-k", "1", "-o", "../test/output_files/trailmix/Q1_interleaved",
+                                            "-i", "-t", "1", "-k", "1", "-o", "../test/output_files/trailmix/Q1_interleaved",
                                             "--iter", "5000", "--burnin", "1", "--chains", "1", "-z", "tempdir",
                                             "--tm-files", "../share/vgan/smaller_tmfiles/", "--dbprefix", "pub.graph"};
 
@@ -1364,7 +1364,7 @@ run_trailmix(tm, trailmix_argvec);
 
 void run_k1_gam(Trailmix * tm){
 std::vector<std::string> trailmix_argvec = {"vgan", "trailmix", "-g", "../test/input_files/trailmix/alignments/Q1.gam",
-                                            "-t", "50", "-k", "1", "-o", "../test/output_files/trailmix/Q1_GAM",
+                                            "-t", "1", "-k", "1", "-o", "../test/output_files/trailmix/Q1_GAM",
                                             "--iter", "5000", "--burnin", "1", "--chains", "1", "-z", "tempdir",
                                             "--tm-files", "../share/vgan/smaller_tmfiles/", "--dbprefix", "pub.graph"};
 
@@ -1374,14 +1374,14 @@ run_trailmix(tm, trailmix_argvec);
 
 void run_k1_cont_mode(Trailmix * tm){
 std::vector<std::string> trailmix_argvec = {"vgan", "trailmix", "-g", "../test/input_files/trailmix/alignments/Q1.gam",
-                                            "-t", "50", "-k", "1", "-z", "tempdir", "--contamination-mode"};
+                                            "-t", "1", "-k", "1", "-z", "tempdir", "--contamination-mode"};
 
 run_trailmix(tm, trailmix_argvec);
                                      }
 
 
 void run_k2_HV4b_S3(Trailmix * tm){
-vector<string> trailmix_argvec = {"vgan", "trailmix", "-fq1", "../test/input_files/trailmix/HV4b_S3.fq.gz", "-t", "50", "-k", "2", \
+vector<string> trailmix_argvec = {"vgan", "trailmix", "-fq1", "../test/input_files/trailmix/HV4b_S3.fq.gz", "-t", "1", "-k", "2", \
                                   "-o", "../test/output_files/trailmix/k2_HV4b_S3", "--iter", "5000", "--burnin", "1", "--chains", "1", "-z", "tempdir", \
                                   "--tm-files", "../share/vgan/smaller_tmfiles/", "--dbprefix", "pub.graph"};
 run_trailmix(tm, trailmix_argvec);
@@ -1389,14 +1389,14 @@ run_trailmix(tm, trailmix_argvec);
 
 
 void run_k2_HV4b_S3_randStart(Trailmix * tm){
-vector<string> trailmix_argvec = {"vgan", "trailmix", "-fq1", "../test/input_files/trailmix/HV4b_S3.fq.gz", "-t", "50", "-k", "2", \
+vector<string> trailmix_argvec = {"vgan", "trailmix", "-fq1", "../test/input_files/trailmix/HV4b_S3.fq.gz", "-t", "1", "-k", "2", \
                                   "-o", "../test/output_files/trailmix/k2_HV4b_S3_randStart", "--iter", "5000", "--burnin", "1", "--chains", "1", "-z", "tempdir", \
                                   "--tm-files", "../share/vgan/smaller_tmfiles/", "--dbprefix", "pub.graph", "--randStart"};
 run_trailmix(tm, trailmix_argvec);
                                             }
 
 void run_k2_wrong_matrix(Trailmix * tm){
-vector<string> trailmix_argvec = {"vgan", "trailmix", "-fq1", "../test/input_files/trailmix/HV4b_S3.fq.gz", "-t", "50", "-k", "2", "-o", "../test/output_files/trailmix/k2_wrong_matrix", 
+vector<string> trailmix_argvec = {"vgan", "trailmix", "-fq1", "../test/input_files/trailmix/HV4b_S3.fq.gz", "-t", "1", "-k", "2", "-o", "../test/output_files/trailmix/k2_wrong_matrix", 
                                   "--iter", "5000", "--burnin", "1", "--chains", "1", "-z", "tempdir", "--tm-files", "../share/vgan/smaller_tmfiles/", "--dbprefix", "pub.graph", 
                                   "--deam3p", "../share/vgan/damageProfiles/dhigh3p.prof", "--deam5p", "../share/vgan/damageProfiles/dhigh5p.prof"};
 run_trailmix(tm, trailmix_argvec);
