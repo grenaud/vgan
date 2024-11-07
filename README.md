@@ -697,39 +697,22 @@ Contamination Mode Options:
 # Unit tests:
 
 We provide comprehensive unit tests for our main subcommands (HaploCart, TrailMix, euka, and soibean). These are built on the Boost Test Suite.
-Running the tests requires building vgan from source because it involves compiling a separate executable. To run the unit tests, please run
+Running the tests requires building vgan from source because it involves compiling a separate executable. To compile please run
 
 ```
 make test
-./../bin/test --run_test
 ```
 
-You can also run subcommand-specific tests:
+ To view all available unit tests, please run
 
 ```
-make test
-./../bin/test --run_test=haplocart
+./vgan/bin/test --list_content
 ```
 
-or
+A particular test can be run with (for example)
 
 ```
-make test
-./../bin/test --run_test=euka
-```
-
-or
-
-```
-make test
-./../bin/test --run_test=Soibean
-```
-
-or
-
-```
-make test
-./../bin/test --run_test=TrailMix
+./vgan/bin/test --run_test=haplocart/gam
 ```
 
 # General notes:
