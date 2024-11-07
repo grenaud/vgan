@@ -40,6 +40,8 @@ void vg_preflight() {
 
 int main(int argc, char *argv[]) {
 
+    std::filesystem::path execPath = std::filesystem::canonical(argv[0]);
+
     vg_preflight();
 
     string_view usage=string("\n")+
@@ -82,7 +84,7 @@ int main(int argc, char *argv[]) {
 
     }else{      if(string(argv[1]) == "haplocart"){
         Haplocart  haplocart_;
-        const string cwdProg = getCWD(argv[0]);
+        const string cwdProg = execPath;
         shared_ptr<Trailmix_struct> dta = make_unique<Trailmix_struct>();
         dta->cwdProg = cwdProg;
 

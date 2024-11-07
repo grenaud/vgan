@@ -696,7 +696,8 @@ Contamination Mode Options:
 
 # Unit tests:
 
-We provide comprehensive unit tests for our main subcommands (HaploCart, TrailMix, euka, and soibean). These are built on the Boost Test Suite. Running the tests requires building vgan from source because it involves compiling a separate executable. To run the unit tests, please run
+We provide comprehensive unit tests for our main subcommands (HaploCart, TrailMix, euka, and soibean). These are built on the Boost Test Suite.
+Running the tests requires building vgan from source because it involves compiling a separate executable. To run the unit tests, please run
 
 ```
 make test
@@ -740,7 +741,7 @@ vgan euka -fq1 <(zcat reads1.fq.gz reads2.fq.gz) -t 30
 
 # Support:
 
-Vgan is actively supported and maintained.
+vgan is actively supported and maintained.
 If you discover an issue with the program, please submit a bug report on GitHub or send an email. 
 
 Contact:<br>

@@ -196,8 +196,8 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
 
                               }
 
-    dta->deam5pfreqE  =  getFullPath(dta->cwdProg+"../share/vgan/damageProfiles/none.prof");
-    dta->deam3pfreqE  =  getFullPath(dta->cwdProg+"../share/vgan/damageProfiles/none.prof");
+    dta->deam5pfreqE  =  dta->cwdProg+"../share/vgan/damageProfiles/none.prof";
+    dta->deam3pfreqE  =  dta->cwdProg+"../share/vgan/damageProfiles/none.prof";
 
     std::cerr << "Loading GBWT index..." << std::endl << std::flush;
     dta->gbwt = vg::io::VPKG::load_one<gbwt::GBWT>(dta->hc_graph_dir + "graph.gbwt");
@@ -436,7 +436,10 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
     }
 
         const unsigned int maxh_index = max_element(final_vec.begin(), final_vec.end()) - final_vec.begin();
-        const string proposed_haplotype = dta->path_names[maxh_index];
+        string proposed_haplotype = dta->path_names[maxh_index];
+        proposed_haplotype = (proposed_haplotype.size() > 1 && isalpha(proposed_haplotype[0]) && proposed_haplotype[1] == '_')
+            ? proposed_haplotype.substr(0, 1)
+            : proposed_haplotype;
 
         // Write output to file
 

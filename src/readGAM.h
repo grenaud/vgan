@@ -37,8 +37,12 @@ const string fifo_to_read = dta->running_trailmix ? dta->fifo_A : dta->fifo_C;
     unsigned int n_reads=0;
     vector<AlignmentInfo*> v;
     shared_ptr<vector<AlignmentInfo*>> read_vec = make_shared<vector<AlignmentInfo*>>(v);
-    ofstream json_out(dta->jsonfilename);
 
+    std::ofstream json_out; // Declare json_out regardless
+
+if (dump_json) {
+    json_out.open(dta->jsonfilename); // Open only if dump_json is true
+}
 
     string emit_file = dta->running_trailmix ? dta->rpvg_gamfilename : "/dev/null";
     auto emitter = vg::io::VGAlignmentEmitter(emit_file, "GAM", dta->n_threads);
@@ -47,8 +51,6 @@ const string fifo_to_read = dta->running_trailmix ? dta->fifo_A : dta->fifo_C;
     if (dta->running_trailmix){
        cerr << "Emitting to: " << dta->rpvg_gamfilename << endl;
                              }
-
-//ofstream fastq_out("aligned_reads.fastq");
 
 function<void(vg::Alignment&)> lambda = [&n_reads, &read_vec, &dump_json, &json_out, &to_emit](vg::Alignment& a) {
     //static std::ofstream aligned_file("aligned.tsv");  // Open the file once and use it in the lambda
@@ -80,12 +82,13 @@ if (dta->running_trailmix){
 
     std::cin.rdbuf(normal_cin);
 
-    if (std::filesystem::is_fifo(dta->fifo_A) && !dta->dump_json && !dta->running_trailmix) {remove(dta->fifo_A);}
     if (read_vec->empty()){throw std::runtime_error("Error, no reads found in GAM file");}
+
 if (dta->save_gam){
     ofstream outgam(dta->out_gam_filename, std::ios::binary);
     vg::io::write_buffered(outgam,to_emit,1);
                   }
+
     return read_vec;
 }
 
