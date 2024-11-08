@@ -92,7 +92,6 @@ shared_ptr<vector<bool>> Dup_Remover::remove_duplicates_internal(shared_ptr<vect
             sorted_unduplicated_algnvector.emplace_back(sorted_algnvector->at(i));
                                     }
                                                                    }
- if (!quiet) { cerr << "PCR duplicates removed." << endl;}
                                                    }
 //delete progress; progress = nullptr;
 return is_dup;

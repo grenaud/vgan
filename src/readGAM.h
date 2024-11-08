@@ -38,7 +38,7 @@ const string fifo_to_read = dta->running_trailmix ? dta->fifo_A : dta->fifo_C;
     vector<AlignmentInfo*> v;
     shared_ptr<vector<AlignmentInfo*>> read_vec = make_shared<vector<AlignmentInfo*>>(v);
 
-    std::ofstream json_out; // Declare json_out regardless
+    std::ofstream json_out;
 
 if (dump_json) {
     json_out.open(dta->jsonfilename); // Open only if dump_json is true

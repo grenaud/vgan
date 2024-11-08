@@ -292,9 +292,9 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
     mkfifo(dta->fifo_B, 0666);
     mkfifo(dta->fifo_C, 0666);
 
-    for (i=0; i<dta->n_samples; ++i) {
+    for (int sample=0; sample<dta->n_samples; ++sample) {
         if(dta->n_samples>1){dta->n_threads=1;} // Mulithreading for MULTIFASTA input in the updated version has an unsolved issue, this is a workaround.
-        if(!dta->quiet){cerr << "Processing sample " << i+1 << " of " << dta->n_samples << endl;}
+        if(!dta->quiet){cerr << "Processing sample " << sample+1 << " of " << dta->n_samples << endl;}
         if (fasta_ids.size() > 0 && dta->fastafilename != "") {dta->samplename = fasta_ids[i];}
 
 
@@ -311,7 +311,7 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
     if(dta->pid1 == 0) {
         // Child
         if (dta->gamfilename == "") {
-                Haplocart::map_giraffe(fasta_seqs[i], dta->fastq1filename, dta->fastq2filename, dta->n_threads, \
+                Haplocart::map_giraffe(fasta_seqs[sample], dta->fastq1filename, dta->fastq2filename, dta->n_threads, \
                                     dta->interleaved, dta->background_error_prob, dta->samplename, dta->fifo_A, dta->sc, dta->tmpdir, \
                                     dta->hc_graph_dir, dta->quiet, dta->deam3pfreqE, dta->deam5pfreqE, dta->posterior_threshold);
            while ((dta->wpid = wait(&dta->status)) > 0);
@@ -375,14 +375,14 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
         if (dta->algnvector->size() == 0) {throw std::runtime_error("[HaploCart] Error, no reads mapped");}
         if (dta->quiet == false && dta->fastafilename=="") {cerr << "Removing PCR duplicates ..." << '\n';}
 
-//shared_ptr<vector<bool>> thing = Dup_Remover().remove_duplicates_internal(dta->algnvector, dta->n_threads, dta->quiet);
+        shared_ptr<vector<bool>> thing = Dup_Remover().remove_duplicates_internal(dta->algnvector, dta->n_threads, dta->quiet);
 
         if (dta->fastafilename != ""){
             if (dta->quiet == false) {cerr << "Using background error probability of " << dta->background_error_prob << '\n';}
                 dta->use_background_error_prob = true;
                 dta->is_consensus_fasta = true;
                                      }
-        //if (dta->quiet == false) {cerr << "Computing haplogroup likelihoods from " << dta->algnvector->size() << " reads." << '\n';}
+        if (dta->quiet == false && dta->fastaseq=="") {cerr << "Computing haplogroup likelihoods from " << dta->algnvector->size() << " reads." << '\n';}
 
     dta->reads_already_processed=true;
 
