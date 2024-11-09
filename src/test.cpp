@@ -412,30 +412,35 @@ std::string get_haplocart_pred(const std::string &output_path) {
     return "";
 }
 
-vector<string> get_haplocart_preds(const string& output_path) {
-    vector<string> haplogroups;
-    ifstream input_file(output_path);
-    string line;
+std::vector<std::string> get_haplocart_preds(const std::string& output_path) {
+    std::vector<std::string> haplogroups;
+    std::ifstream input_file(output_path);
+    std::string line;
 
-    // Skip the header line
-    getline(input_file, line);
+    while (std::getline(input_file, line)) {
+        // Remove potential carriage return and leading/trailing spaces
+        line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
+        line.erase(line.find_last_not_of(" \n\r\t")+1);
 
-    // Read in the haplogroups from the second column of each subsequent line
-    while (getline(input_file, line)) {
-        stringstream ss(line);
-        string field;
+        // Skip empty lines
+        if (line.empty())
+            continue;
 
-        // Skip the first field
-        getline(ss, field, '\t');
+        // Skip header lines that start with "Sample"
+        if (line.rfind("Sample", 0) == 0)
+            continue;
 
-        // Read the haplogroup from the second field
-        getline(ss, field, '\t');
-        haplogroups.push_back(field);
+        // Tokenize the line (assuming whitespace-separated)
+        std::vector<std::string> tokens = tokenize(line);
+
+        if (tokens.size() >= 2) {
+            // Second token is the haplogroup
+            haplogroups.push_back(tokens[1]);
+        }
     }
 
     return haplogroups;
 }
-
 
 string get_sample_name(const string &output_path)   {
 igzstream myfile;
@@ -651,7 +656,7 @@ BOOST_AUTO_TEST_CASE(fq_single_zipped)
   BOOST_CHECK_EQUAL(get_sample_name(output_path), "Q1_1.fq.gz");
 }
 
-/*
+
 BOOST_AUTO_TEST_CASE(multifasta)
 {
   Haplocart hc;
@@ -664,7 +669,7 @@ BOOST_AUTO_TEST_CASE(multifasta)
   vector<string> preds = get_haplocart_preds(output_path);
   BOOST_CHECK_EQUAL_COLLECTIONS(preds.begin(), preds.end(), truth.begin(), truth.end());
 }
-*/
+
 
 BOOST_AUTO_TEST_CASE(load)
 {
@@ -905,19 +910,18 @@ BOOST_AUTO_TEST_CASE(missing_input_gam)
   BOOST_CHECK_THROW(hc_run_gam("not_a_real_file.gam", "/dev/null", &hc, true, execPath), std::runtime_error);
 }
 
-/*
+
 BOOST_AUTO_TEST_CASE(multifasta_zipped)
 {
   Haplocart hc;
   std::filesystem::path execPath = getExecutablePath();
-  const string input_path = execPath / "test/input_files/haplocart/multifasta.fa.gz";
-  const string output_path = execPath / "test/output_files/haplocart/multifasta_zipped.txt";
+  const string input_path = execPath / "../test/input_files/haplocart/multifasta.fa.gz";
+  const string output_path = execPath / "../test/output_files/haplocart/multifasta_zipped.txt";
   hc_run_fasta(input_path, output_path, &hc, false, execPath);
   vector<string> truth {"J2a1a1", "Z", "H2a2a1g"};
   vector<string> preds = get_haplocart_preds(output_path);
   BOOST_CHECK_EQUAL_COLLECTIONS(preds.begin(), preds.end(), truth.begin(), truth.end());
 }
-*/
 
 BOOST_AUTO_TEST_CASE(interleaved)
 {

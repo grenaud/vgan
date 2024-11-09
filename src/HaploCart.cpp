@@ -276,13 +276,16 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
                                    }
 
 
+    for (int sample=0; sample<dta->n_samples; ++sample) {
+
+    // Create FIFOs for this sample
     unlink(dta->fifo_A);
     unlink(dta->fifo_B);
     unlink(dta->fifo_C);
 
-    dta->first_fifo = dta->tmpdir+random_string(7);
-    dta->second_fifo = dta->tmpdir+random_string(7);
-    dta->third_fifo = dta->tmpdir+random_string(7);
+    dta->first_fifo = dta->tmpdir + random_string(7);
+    dta->second_fifo = dta->tmpdir + random_string(7);
+    dta->third_fifo = dta->tmpdir + random_string(7);
 
     dta->fifo_A = dta->first_fifo.c_str();
     dta->fifo_B = dta->second_fifo.c_str();
@@ -292,10 +295,9 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
     mkfifo(dta->fifo_B, 0666);
     mkfifo(dta->fifo_C, 0666);
 
-    for (int sample=0; sample<dta->n_samples; ++sample) {
         if(dta->n_samples>1){dta->n_threads=1;} // Mulithreading for MULTIFASTA input in the updated version has an unsolved issue, this is a workaround.
         if(!dta->quiet){cerr << "Processing sample " << sample+1 << " of " << dta->n_samples << endl;}
-        if (fasta_ids.size() > 0 && dta->fastafilename != "") {dta->samplename = fasta_ids[i];}
+        if (fasta_ids.size() > 0 && dta->fastafilename != "") {dta->samplename = fasta_ids[sample];}
 
 
     /////////////// GIRAFFE ///////////////////////////
@@ -382,7 +384,7 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
                 dta->use_background_error_prob = true;
                 dta->is_consensus_fasta = true;
                                      }
-        if (dta->quiet == false && dta->fastaseq=="") {cerr << "Computing haplogroup likelihoods from " << dta->algnvector->size() << " reads." << '\n';}
+        if (dta->quiet == false && dta->fastafilename=="") {cerr << "Computing haplogroup likelihoods from " << dta->algnvector->size() << " reads." << '\n';}
 
     dta->reads_already_processed=true;
 
@@ -393,6 +395,7 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
 {
         #pragma omp parallel for num_threads(dta->n_threads) private(i, log_likelihood_vec) schedule(dynamic)
         for(size_t i=0;i!=dta->algnvector->size();++i){
+             cerr << i << endl;
             // Discard unmapped reads
             if (dta->algnvector->at(i) -> identity < 1e-10) {continue;}
 
