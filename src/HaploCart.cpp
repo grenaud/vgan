@@ -395,7 +395,6 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
 {
         #pragma omp parallel for num_threads(dta->n_threads) private(i, log_likelihood_vec) schedule(dynamic)
         for(size_t i=0;i!=dta->algnvector->size();++i){
-             cerr << i << endl;
             // Discard unmapped reads
             if (dta->algnvector->at(i) -> identity < 1e-10) {continue;}
 
