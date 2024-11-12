@@ -81,6 +81,7 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
     vector<string> fasta_seqs{""};
     vector<string> fasta_ids{""};
     auto start = std::chrono::system_clock::now();
+    bool debug = false;
 
     for(unsigned int i=1;i<(argc);++i){
 
@@ -191,6 +192,11 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
     if(string(argv[i]) == "-z"){
             dta->tmpdir = argv[i+1];
             if (dta->tmpdir.back() != '/') {dta->tmpdir += '/';}
+            continue;
+                               }
+
+     if(string(argv[i]) == "--debug"){
+            debug=true;
             continue;
                                }
 
@@ -414,7 +420,7 @@ void Haplocart::run(int argc, char *argv[], shared_ptr<Trailmix_struct> &dta){
 
 
 
-  if (false) {
+  if (debug) {
         std::cerr << "Writing log likelihoods to disk" << std::endl;
         std::vector<int> indices(final_vec.size());
         std::iota(indices.begin(), indices.end(), 0);

@@ -486,7 +486,7 @@ arguments.emplace_back("../test/input_files/haplocart/rCRS.fq");
 arguments.emplace_back("-o");
 arguments.emplace_back("/dev/null");
 arguments.emplace_back("-t");
-arguments.emplace_back("1");
+arguments.emplace_back("-1");
 arguments.emplace_back("-pf");
 arguments.emplace_back(posterior_output_path);
 arguments.emplace_back("-z");
@@ -499,7 +499,7 @@ for (size_t i=0;i<arguments.size();i++) {
 
                                                                                            }
 
-void hc_run_fasta(string input_path, string output_path, Haplocart * hc, bool quiet, const string &execPath="") {
+void hc_run_fasta(string input_path, string output_path, Haplocart * hc, bool quiet, const string &execPath="", bool multifasta=false) {
 shared_ptr dta = make_unique<Trailmix_struct>();
 dta->hc_graph_dir = execPath + "../share/vgan/hcfiles/";
 dta->cwdProg = execPath;
@@ -511,7 +511,8 @@ arguments.emplace_back(input_path);
 arguments.emplace_back("-o");
 arguments.emplace_back(output_path);
 arguments.emplace_back("-t");
-arguments.emplace_back("1");
+if(multifasta){arguments.emplace_back("1");}
+else{arguments.emplace_back("-1");}
 if(quiet){arguments.emplace_back("-q");}
 arguments.emplace_back("-z");
 arguments.emplace_back("tempdir");
@@ -534,7 +535,7 @@ arguments.emplace_back(input_path);
 arguments.emplace_back("-o");
 arguments.emplace_back(output_path);
 arguments.emplace_back("-t");
-arguments.emplace_back("1");
+arguments.emplace_back("-1");
 arguments.emplace_back("-e");
 arguments.emplace_back(to_string(background_error_prob));
 if(quiet){arguments.emplace_back("-q");}
@@ -559,7 +560,7 @@ arguments.emplace_back(input_path);
 arguments.emplace_back("-o");
 arguments.emplace_back(output_path);
 arguments.emplace_back("-t");
-arguments.emplace_back("1");
+arguments.emplace_back("-1");
 if(quiet){arguments.emplace_back("-q");}
 arguments.emplace_back("-z");
 arguments.emplace_back("tempdir");
@@ -583,7 +584,7 @@ arguments.emplace_back("-i");
 arguments.emplace_back("-o");
 arguments.emplace_back(output_path);
 arguments.emplace_back("-t");
-arguments.emplace_back("1");
+arguments.emplace_back("-1");
 if(quiet){arguments.emplace_back("-q");}
 arguments.emplace_back("-z");
 arguments.emplace_back("tempdir");
@@ -609,7 +610,7 @@ arguments.emplace_back(input_path_2);
 arguments.emplace_back("-o");
 arguments.emplace_back(output_path);
 arguments.emplace_back("-t");
-arguments.emplace_back("1");
+arguments.emplace_back("-1");
 if(quiet){arguments.emplace_back("-q");}
 arguments.emplace_back("-z");
 arguments.emplace_back("tempdir");
@@ -632,7 +633,7 @@ arguments.emplace_back(input_path_1);
 arguments.emplace_back("-o");
 arguments.emplace_back(output_path);
 arguments.emplace_back("-t");
-arguments.emplace_back("1");
+arguments.emplace_back("-1");
 if(quiet){arguments.emplace_back("-q");}
 arguments.emplace_back("-z");
 arguments.emplace_back("tempdir");
@@ -665,7 +666,7 @@ BOOST_AUTO_TEST_CASE(multifasta)
   const string input_path = execPath / "../test/input_files/haplocart/multifasta.fa";
   const string output_path = execPath / "../test/output_files/haplocart/multifasta.txt";
   vector<string> truth{"J2a1a1", "Z", "H2a2a1g"};
-  hc_run_fasta(input_path, output_path, &hc, false);
+  hc_run_fasta(input_path, output_path, &hc, false, execPath, true);
   vector<string> preds = get_haplocart_preds(output_path);
   BOOST_CHECK_EQUAL_COLLECTIONS(preds.begin(), preds.end(), truth.begin(), truth.end());
 }
@@ -917,7 +918,7 @@ BOOST_AUTO_TEST_CASE(multifasta_zipped)
   std::filesystem::path execPath = getExecutablePath();
   const string input_path = execPath / "../test/input_files/haplocart/multifasta.fa.gz";
   const string output_path = execPath / "../test/output_files/haplocart/multifasta_zipped.txt";
-  hc_run_fasta(input_path, output_path, &hc, false, execPath);
+  hc_run_fasta(input_path, output_path, &hc, false, execPath, true);
   vector<string> truth {"J2a1a1", "Z", "H2a2a1g"};
   vector<string> preds = get_haplocart_preds(output_path);
   BOOST_CHECK_EQUAL_COLLECTIONS(preds.begin(), preds.end(), truth.begin(), truth.end());
@@ -1110,7 +1111,7 @@ euka_argvec.emplace_back("euka");
 euka_argvec.emplace_back("-fq1");
 euka_argvec.emplace_back(getCWD(".")+"bin/" + "../test/input_files/euka/three_none_100.fq.gz");
 euka_argvec.emplace_back("-t");
-euka_argvec.emplace_back("15");
+euka_argvec.emplace_back("-1");
 euka_argvec.emplace_back("-o");
 euka_argvec.emplace_back(getCWD(".")+"bin/" + "../test/output_files/euka/three_none_100");
 //euka_argvec.emplace_back("--minMQ");
@@ -1155,7 +1156,7 @@ euka_argvec.emplace_back("euka");
 euka_argvec.emplace_back("-fq1");
 euka_argvec.emplace_back(getCWD(".") +"bin/" + "../test/input_files/euka/three_dmid_100.fq.gz");
 euka_argvec.emplace_back("-t");
-euka_argvec.emplace_back("15");
+euka_argvec.emplace_back("-1");
 euka_argvec.emplace_back("-o");
 euka_argvec.emplace_back(getCWD(".") +"bin/" + "../test/output_files/euka/three_dmid_100");
 //euka_argvec.emplace_back("--minMQ");
@@ -1189,7 +1190,7 @@ euka_argvec.emplace_back("euka");
 euka_argvec.emplace_back("-fq1");
 euka_argvec.emplace_back(getCWD(".") + "bin/" +"../test/input_files/euka/three_dhigh_100.fq.gz");
 euka_argvec.emplace_back("-t");
-euka_argvec.emplace_back("15");
+euka_argvec.emplace_back("-1");
 euka_argvec.emplace_back("-o");
 euka_argvec.emplace_back(getCWD(".")+"bin/" + "../test/output_files/euka/three_dhigh_100");
 //euka_argvec.emplace_back("--minMQ");
@@ -1222,7 +1223,7 @@ euka_argvec.emplace_back("euka");
 euka_argvec.emplace_back("-fq1");
 euka_argvec.emplace_back(getCWD(".") + "test/input_files/euka/formicidae.fq.gz");
 euka_argvec.emplace_back("-t");
-euka_argvec.emplace_back("15");
+euka_argvec.emplace_back("-1");
 euka_argvec.emplace_back("-o");
 euka_argvec.emplace_back(getCWD(".") + "test/output_files/euka/formicidae");
 euka_argvec.emplace_back("--minBins");
@@ -1251,7 +1252,7 @@ euka_argvec.emplace_back("euka");
 euka_argvec.emplace_back("-fq1");
 euka_argvec.emplace_back(getCWD(".") + "test/input_files/euka/formicidae.fq.gz");
 euka_argvec.emplace_back("-t");
-euka_argvec.emplace_back("15");
+euka_argvec.emplace_back("-1");
 euka_argvec.emplace_back("-o");
 euka_argvec.emplace_back(getCWD(".") + "test/output_files/euka/formicidae2");
 euka_argvec.emplace_back("--entropy");

@@ -68,7 +68,7 @@ struct Trailmix_struct {
     string fastq1filename;
     string fastq2filename;
     string gamfilename;
-    string posteriorfilename;
+    string posteriorfilename = "/dev/stdout";
     string jsonfilename;
     string outputfilename = "/dev/stdout";
     string TM_outputfilename;

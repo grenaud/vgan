@@ -4,6 +4,7 @@
 
 void Haplocart::write_posterior_log(const string &samplename, const string &posteriorfilename, vector<string> clade_vec, vector<double> confidence_vec,
                                     const bool &webapp) {
+
     ofstream posteriorFile(posteriorfilename, ios::app);
 
     if (webapp == false) {
