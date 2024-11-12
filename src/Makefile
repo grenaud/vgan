@@ -10,7 +10,7 @@ BIN_DIR := ../bin/
 NPROCS:=$(shell grep -c ^processor /proc/cpuinfo)
 
 # Compiler and flags
-CXX := g++ -w -g -std=c++2a -Wextra -Wshadow -Wpedantic
+CXX := g++ -w -g -std=c++2a -Wextra -Wshadow -Wpedantic -O3
 
 # Include directories
 CLUSTER_FLAGS := -I${RPVGDIR}deps/gbwt/include/ \
