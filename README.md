@@ -40,7 +40,7 @@ mkdir -P $HOME/share/vgan/damageProfiles/
 mkdir -P $HOME/share/vgan/plottingScripts/
 ```
 Once the folder structure is created, we can download the necessary files. 
-Find download instructions for **euka**, **HaploCart**, and **soibean** in our **wiki**. 
+Find download instructions as well as detailed manuals for **euka**, **HaploCart**, and **soibean** in our **wiki**. 
 
 # Support:
 
