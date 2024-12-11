@@ -3,7 +3,7 @@
 
 vgan is a suite of tools for pangenomics. We currently support three main subcommands: Haplocart (for modern human mtDNA haplogroup classification), euka (for bilaterian abundance estimation of ancient environmental DNA) and soibean (for species identification and multiple source estimation or bilateria from ancient environmental DNA). The underlying data structure is the VG graph (see https://github.com/vgteam/vg).
 
-You can find the [Installation] guide and detailed manuals for each subcommand in our wiki.
+You can find the installation guide and detailed manuals for each subcommand in our wiki.
 
 # Support:
 
