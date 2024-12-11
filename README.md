@@ -3,7 +3,44 @@
 
 vgan is a suite of tools for pangenomics. We currently support three main subcommands: Haplocart (for modern human mtDNA haplogroup classification), euka (for bilaterian abundance estimation of ancient environmental DNA) and soibean (for species identification and multiple source estimation or bilateria from ancient environmental DNA). The underlying data structure is the VG graph (see https://github.com/vgteam/vg).
 
-You can find the installation guide and detailed manuals for each subcommand in our wiki.
+You can find the complete **installation guide** and detailed **manuals** for each subcommand in our **wiki**.
+
+**vgan is supported for use on Linux systems.**
+
+## Release build (recommended)
+
+The easiest way to run vgan is to download the static binary. 
+
+**Step 1**: Download the static binary.
+
+The list of releases is here: https://github.com/grenaud/vgan/tags. Each release comes with a static binary. Find the URL of the static binary by right-clicking and selecting "copy link"
+
+```
+wget [URL TO RELEASE BINARY]
+```
+
+Where you paste the URL of the binary, copy the executable in a bin/ directory in your home directory:
+
+```
+mkdir -P $HOME/bin/
+cp vgan $HOME/bin/
+```
+
+**Step 2**: Mark the binary executable:
+
+```
+chmod +x $HOME/bin/vgan
+```
+**Step 3**: Create the vgan folder structure:
+```
+mkdir -P $HOME/share/vgan/euka_dir/
+mkdir -P $HOME/share/vgan/hcfiles/
+mkdir -P $HOME/share/vgan/soibean_dir/
+mkdir -P $HOME/share/vgan/damageProfiles/
+mkdir -P $HOME/share/vgan/plottingScripts/
+```
+Once the folder structure is created, we can download the necessary files. 
+Find download instructions for **euka**, **HaploCart**, and **soibean** in our **wiki**. 
 
 # Support:
 
