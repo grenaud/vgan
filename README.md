@@ -22,7 +22,7 @@ wget [URL TO RELEASE BINARY]
 Where you paste the URL of the binary, copy the executable in a bin/ directory in your home directory:
 
 ```
-mkdir -P $HOME/bin/
+mkdir -p $HOME/bin/
 cp vgan $HOME/bin/
 ```
 
@@ -33,11 +33,11 @@ chmod +x $HOME/bin/vgan
 ```
 **Step 3**: Create the vgan folder structure:
 ```
-mkdir -P $HOME/share/vgan/euka_dir/
-mkdir -P $HOME/share/vgan/hcfiles/
-mkdir -P $HOME/share/vgan/soibean_dir/
-mkdir -P $HOME/share/vgan/damageProfiles/
-mkdir -P $HOME/share/vgan/plottingScripts/
+mkdir -p $HOME/share/vgan/euka_dir/
+mkdir -p $HOME/share/vgan/hcfiles/
+mkdir -p $HOME/share/vgan/soibean_dir/
+mkdir -p $HOME/share/vgan/damageProfiles/
+mkdir -p $HOME/share/vgan/plottingScripts/
 ```
 Once the folder structure is created, we can download the necessary files. 
 Find download instructions as well as detailed manuals for **euka**, **HaploCart**, and **soibean** in our **wiki**. 
