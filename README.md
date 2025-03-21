@@ -3,7 +3,7 @@
 
 vgan is a suite of tools for pangenomics. We currently support three main subcommands: Haplocart (for modern human mtDNA haplogroup classification), euka (for bilaterian abundance estimation of ancient environmental DNA) and soibean (for species identification and multiple source estimation of filtered bilateria data from ancient environmental DNA). The underlying data structure is the VG graph (see https://github.com/vgteam/vg).
 
-You can find the complete **installation guide** and detailed **manuals** for each subcommand in our **wiki**.
+You can find the complete **installation guide** and detailed **manuals** for each subcommand in our [**wiki**](https://github.com/grenaud/vgan/wiki).
 
 **vgan is supported for use on Linux systems.**
 
@@ -40,7 +40,7 @@ mkdir -p $HOME/share/vgan/damageProfiles/
 mkdir -p $HOME/share/vgan/plottingScripts/
 ```
 Once the folder structure is created, we can download the necessary files. 
-Find download instructions as well as detailed manuals for **euka**, **HaploCart**, and **soibean** in our **wiki**. 
+Find download instructions as well as detailed manuals for **euka**, **HaploCart**, and **soibean** in our [**wiki**](https://github.com/grenaud/vgan/wiki). 
 
 # Support:
 
