@@ -238,7 +238,7 @@ const int Haplocart::run(int argc, char *argv[], const string &cwdProg){
     
     // Check that input files exist
     if (!(filesystem::exists(hcfiledir)))
-        {throw std::runtime_error("[HaploCart] Error, hc file directory (tried "+hcfiledir+" ) not found. This may be because you have downloaded the requisite files. \n Please see README.md for further instructions. ");}
+        {throw std::runtime_error("[HaploCart] Error, hc file directory (tried "+hcfiledir+" ) not found. This may be because you have not downloaded the requisite files. \n Please see README.md for further instructions. ");}
     
     if (gamfilename != "") {if(!(filesystem::exists(gamfilename)))
                       {throw std::runtime_error("[HaploCart] Error, GAM input file " + gamfilename + " does not exist");}}
