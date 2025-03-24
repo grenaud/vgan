@@ -102,9 +102,12 @@ string soibean::usage(const std::string& cwdProg) const {
         "  -o [STR]                    Output file prefix (default: beanOut) "+"\n"+
         "  -fq1 <filename>             Specify the input FASTQ file (single-end or first pair)\n" +
         "  -fq2 <filename>             Specify the input FASTQ file (second pair)\n" +
+        "  -g <filename>               Specify the input GAM file (SAFARI output)\n" +
         "  -t <threads>                Specify the number of threads to use (default: 1)\n" +
         "  -z <directory>              Specify the temporary directory for intermediate files (default: /tmp/)\n" +
         "  -i                          Enable interleaved input mode\n" +
+        " -M <filename>                Specify an alternative minimizer index (default: <prefix>.rec.min) \n"+
+        " -P [int]                     Penalty for unsupported paths (default: 7) \n"+
 
         "Damage options:"+"\n"+
         "  --deam5p [.prof]            5p deamination frequency for eukaryotic species (default: no damage)"+"\n"+
@@ -117,7 +120,11 @@ string soibean::usage(const std::string& cwdProg) const {
         "  --iter [INT]                Define the number of iterations for the MCMC (default: 500.000)\n" +
         "  --burnin [INT]              Define the burn-in period for the MCMC (default: 75.000)\n"+
         "  --randStart [bool]          Set to get random starting nodes in the tree instead of the signature nodes (default: false)\n"+
-        "  -k [INT]                    User defined value of k (k = number of expected sources) (default: not defined)\n";
+        "  -k [INT]                    User defined value of k (k = number of expected sources) (default: not defined)\n"+
+
+        "Additional output options:\n" +
+        " --alignment-detail [bool]    Additional TSV file with all match alignment information to identify SNPs (default: false)\n"+
+        " --pathThres [INT]            Reports all matches in additional TSV file for nodes with a number of paths less or equal to the threshold set (default: all paths)\n";
 }
 ///////////// Begin of function storage - temporary ////////////////////////////
 
@@ -214,8 +221,8 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
   string dbprefixS = "soibean_db";
   string outputfilename = "beanOut";
   int lengthToProf = 5;
-  unsigned int iter=100000;
-  unsigned int burnin=15000;
+  unsigned int iter=500000;
+  unsigned int burnin=75000;
   unsigned int chains = 4;
   bool dbprefixFound=false;
   bool specifiedDeam=false;
@@ -224,10 +231,31 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
   double con = 0.0;
   int k = 1;
   size_t cutk = 0;
+  string altMin = "soibean_db";
+  bool saf = false;
+  bool safari = false;
+  int PATHTHRES = 500;
+  int PENALTY = 7; 
+  bool getDetail = false;
+  bool inputThres = false;
+  
+    string deam5pfreqE;
+    string deam3pfreqE;
 
-  string deam5pfreqE  = getFullPath(cwdProg+"../share/vgan/damageProfiles/none.prof");
-  string deam3pfreqE  =  getFullPath(cwdProg+"../share/vgan/damageProfiles/none.prof");
+    ifstream file(cwdProg + "../share/vgan/damageProfiles/none.prof");
 
+    if (file) {
+        // Load deamination profiles
+        deam5pfreqE = getFullPath(cwdProg + "../share/vgan/damageProfiles/none.prof");
+        deam3pfreqE = getFullPath(cwdProg + "../share/vgan/damageProfiles/none.prof");
+    } else {
+        // Handle error when getFullPath fails
+        cerr << "Warning: deamination profile not found. Proceeding without the assumption of ancient damage." << endl;
+        deam5pfreqE = ""; // Set to empty to handle it later
+        deam3pfreqE = "";
+    }
+
+    
 
   for(int i=1;i<(argc);i++)
   {
@@ -273,6 +301,10 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
         samplename = gamfilename;
         continue;
                             }
+    if(string(argv[i]) == "-M"){
+        altMin = argv[i+1];
+        continue;
+                        }
 
     if(string(argv[i]) == "-t"){
       if (stoi(argv[i+1]) < -1 || stoi(argv[i+1]) == 0) {throw runtime_error("[soibean] Error, invalid number of threads");}
@@ -345,14 +377,24 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
             specifiedk = true;
             continue;
         }
-        if(string(argv[i]) == "--con"){
-            con=stod(argv[i+1]);
-            //assert(con >= 0);
+        if(string(argv[i]) == "--pathThres"){
+            PATHTHRES=stoi(argv[i+1]);
+            assert(PATHTHRES > 0);
+            inputThres = true;
             continue;
         }
-        if(string(argv[i]) == "-cutk"){
-            cutk=stoi(argv[i+1]);
-            assert(cutk >= 0);
+       if(string(argv[i]) == "-P"){
+            PENALTY=stoi(argv[i+1]);
+            assert(PENALTY > 0);
+            continue;
+        }
+        if(string(argv[i]) == "--alignment-detail" || string(argv[i]) == "--alignment_detail"){
+            getDetail = true;
+            continue;
+        }
+        if(string(argv[i]) == "-S" || string(argv[i]) == "--SAFARI"){
+            saf = argv[i+1];
+            safari = false;
             continue;
         }
 
@@ -362,8 +404,13 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
 
 
     Euka ek;
-
+    string altMinFull;
     string dbprefix              = sbdir + dbprefixS;
+    if (altMin == "soibean_db"){
+        altMinFull            = sbdir + dbprefixS;
+    }else{
+        altMinFull            = sbdir + altMin;
+    }
 
     string ogfilename     = dbprefix+".og";
     string vgfilename     = dbprefix+".vg";
@@ -414,8 +461,9 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
         cerr << i << '\t' << path_names[i] << endl;
     }
 #endif
-
-
+    if(!inputThres){
+        PATHTHRES = path_names.size();
+    }
     //read information about different taxa
 
     //vector<vector<tuple<int, int, double, double >>> chunks =  ek.load_clade_chunks(binsfilename);
@@ -474,9 +522,10 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
 	// Code for writing to the FIFO
 	if (gamfilename == "") {
 	    //cerr << "Mapping reads..." << endl;
-	    ek.map_giraffe(fastq1filename, fastq2filename, n_threads, interleaved, fifo_A, sc, tmpdir, sbdir, dbprefix);
+	    ek.map_giraffe(fastq1filename, fastq2filename, n_threads, interleaved, fifo_A, sc, tmpdir, sbdir, dbprefix, altMinFull);
 	    //cerr << "and done" << endl;
 	    exit(0);
+   
 	} else {
 	    // Redirect buffer in case of GAM input
 	    ifstream src(gamfilename);
@@ -506,7 +555,7 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
         }
     }
 
-    auto gam = analyse_GAM(graph,fifo_A,clade_vec,nodevector, nodepaths, path_names, qscore_vec, false, minid, false, dmg.subDeamDiNuc);
+    auto gam = analyse_GAM(graph,fifo_A,clade_vec,nodevector, nodepaths, path_names, qscore_vec, false, minid, PATHTHRES, PENALTY ,getDetail, outputfilename ,false, dmg.subDeamDiNuc);
     
     //turn all alignment likelihoods for each path into a vector<vector<int>> for the MCMC input
     vector<vector<double>> probMatrix = convertMapsToVector(gam);
@@ -658,6 +707,7 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
             if (sigNodes.empty()){
                 k = 3;
                 specifiedk = true;
+                randStart = true;
                 cerr << "Still, no signature node-sets could be identified. Initiating the MCMC with k = 3 and random starting nodes." << endl;
             }
         }else{
@@ -670,8 +720,14 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
 
     
         if (randStart){
-
-            sigNodes = soibean::generateRandomNumbers(probMatrix[0].size(), sigPaths.size());
+            if(sigPaths.empty()){
+                sigNodes = soibean::generateRandomNumbers(probMatrix[0].size(), 3);
+                for(int i = 0; i < sigNodes.size(); ++i) {
+                    sigPaths.emplace_back(taxatree.nodes[sigNodes[i]]->longname);
+                 }
+            }else{
+                 sigNodes = soibean::generateRandomNumbers(probMatrix[0].size(), sigPaths.size());
+            }
             cerr << "Random starting nodes: ";
             
             for(int i = 0; i < sigNodes.size(); ++i) {
@@ -784,70 +840,100 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
             }
         
 
+               // Now, calculate R-hat statistics for each branch across all chains
+                int numChains = branchStatsMap.begin()->second.size(); // Assuming all branches have stats for the same number of chains
+                int chainLength = iter - burnin; // Assume all chains have the same length
 
-            // Now, calculate R-hat statistics for each branch across all chains
-            int numChains = branchStatsMap.begin()->second.size(); // Assuming all branches have stats for the same number of chains
-            int chainLength = iter - burnin; // Assume all chains have the same length
-
-            // Iterate over each branch
-            int source_idx = 0;
-            for (const auto& branchStat : branchStatsMap) {
-
-                //cerr << "Looking at branch " << branchStat.first << endl;
-                const auto& branchName = branchStat.first;
-                const auto& allChainStats = branchStat.second;
-                if(allChainStats.empty()){throw runtime_error("all Chains vector is empty");}
-                std::vector<double> Propmeans(numChains);
-                std::vector<double> Propvariances(numChains);
-                std::vector<double> Posmeans(numChains);
-                std::vector<double> Posvariances(numChains);
-
-                // Collect the statistics for each chain for this branch the branch can have only one name for now
-
-                for (int chain = 0; chain < numChains; ++chain) {
-                    if(!allChainStats[chain].empty()){
-                    Propmeans[chain] = allChainStats[chain][0][0];
-                    Propvariances[chain] = allChainStats[chain][0][1]; 
-                    Posmeans[chain] = allChainStats[chain][0][2]; 
-                    Posvariances[chain] = allChainStats[chain][0][3]; }
+                if (chainLength <= 0) {
+                    std::cerr << "Warning: Chain length is zero or negative. Ensure iter is greater than burnin." << std::endl;
                 }
-                double maxLogLike = chainLogLikes[0];
-                
-                int maxIndex = 0;
-                for (int h = 0; h <chainLogLikes.size(); ++h){
-                    if(chainLogLikes[h] > maxLogLike){
-                        maxLogLike = chainLogLikes[h];
-                        maxIndex = h;
+
+                // Iterate over each branch
+                int source_idx = 0;
+                for (const auto& branchStat : branchStatsMap) {
+                    const auto& branchName = branchStat.first;
+                    auto allChainStats = branchStat.second;
+
+                    // Check if allChainStats is empty for this branch
+                    if (allChainStats.empty()) {
+                        std::cerr << "Warning: All chains vector is empty for branch " << branchName 
+                                  << ". Using default values of 1.0." << std::endl;
+                        allChainStats.push_back({{1.0, 1.0, 1.0, 1.0}});
                     }
-                }
 
-                // Calculate R-hat for proportions
-                double PropRhat = soibean::calculateRhat(Propmeans, Propvariances, chainLength);
-                if(isnan(PropRhat)){
-                    cerr << "Warning: R-hat for the proportion estimate is not computed because we are handling a single source." << endl;
-                }
-                else if (PropRhat == -1){
-                    cerr << "Warning: The R-hat cannot be computed for a single chain." << endl;
-                }
-                else if(PropRhat > 1.05){
-                    std::cerr << "Warning: R-hat for proportion of branch " << branchName << " is above 1.05, indicating that the chains have not converged for the parameter." << std::endl;
-                }
+                    std::vector<double> Propmeans(numChains, 1.0);
+                    std::vector<double> Propvariances(numChains, 1.0);
+                    std::vector<double> Posmeans(numChains, 1.0);
+                    std::vector<double> Posvariances(numChains, 1.0);
 
-                // Calculate R-hat for positions
-                double PosRhat = soibean::calculateRhat(Posmeans, Posvariances, chainLength);
-                if(isnan(PosRhat)){
-                    cerr << "Warning: R-hat cannot be computed. The value for the parameter is identical in every iteration." << endl;
-                }
-                else if (PosRhat == -1){
-                    cerr << "Warning: The R-hat cannot be computed for a single chain." << endl;
-                }
-                else if(PosRhat > 1.05){
-                    std::cerr << "Warning: R-hat for position of branch " << branchName << " is above 1.05, indicating that the chains have not converged for the parameter." << std::endl;
-                }
+                    // Collect the statistics for each chain for this branch
+                    for (int chain = 0; chain < numChains; ++chain) {
+                        // If the current chain's stats vector is empty, initialize with default values
+                        if (allChainStats[chain].empty()) {
+                            std::cerr << "Warning: Chain data is empty for branch " << branchName << " in chain " << chain 
+                                      << ". Using default values of 1.0." << std::endl;
+                            allChainStats[chain] = {{1.0, 1.0, 1.0, 1.0}};
+                        }
 
-                // Write the R-hat statistics for this branch to the diagnostics file
-                diagnostics << branchName << '\t' << maxLogLike << '\t' << maxIndex << '\t' << PropRhat << '\t' << PosRhat << endl;
-                source_idx++;
+                        // Check if the stats vector for this chain has fewer than 4 values and fill in with default values if necessary
+                        if (allChainStats[chain][0].size() < 4) {
+                            std::cerr << "Warning: Chain statistics for branch " << branchName << " are incomplete for chain " 
+                                      << chain << ". Filling with default values of 1.0." << std::endl;
+                            allChainStats[chain][0].resize(4, 1.0);
+                        }
+
+                        // Assign statistics from allChainStats
+                        Propmeans[chain] = allChainStats[chain][0][0];
+                        Propvariances[chain] = allChainStats[chain][0][1];
+                        Posmeans[chain] = allChainStats[chain][0][2];
+                        Posvariances[chain] = allChainStats[chain][0][3];
+                    }
+
+                    // Check for an empty chainLogLikes vector and initialize with a default value if empty
+                    if (chainLogLikes.empty()) {
+                        std::cerr << "Warning: Chain log-likelihoods vector is empty. Using a default value of 1.0." << std::endl;
+                        chainLogLikes.push_back(1.0);
+                    }
+
+                    // Find the maximum log-likelihood value in chainLogLikes
+                    double maxLogLike = chainLogLikes[0];
+                    int maxIndex = 0;
+                    for (int h = 0; h < chainLogLikes.size(); ++h) {
+                        if (chainLogLikes[h] > maxLogLike) {
+                            maxLogLike = chainLogLikes[h];
+                            maxIndex = h;
+                        }
+                    }
+
+                    // Calculate R-hat for proportions
+                    double PropRhat = soibean::calculateRhat(Propmeans, Propvariances, chainLength);
+                    if (isnan(PropRhat)) {
+                        std::cerr << "Warning: R-hat for the proportion estimate is NaN for branch " << branchName 
+                                  << " due to handling a single source." << std::endl;
+                    } else if (PropRhat == -1) {
+                        std::cerr << "Warning: The R-hat cannot be computed for a single chain." << std::endl;
+                    } else if (PropRhat > 1.05) {
+                        std::cerr << "Warning: R-hat for proportion of branch " << branchName 
+                                  << " is above 1.05, indicating that the chains have not converged for the parameter." << std::endl;
+                    }
+
+                    // Calculate R-hat for positions
+                    double PosRhat = soibean::calculateRhat(Posmeans, Posvariances, chainLength);
+                    if (isnan(PosRhat)) {
+                        std::cerr << "Warning: R-hat cannot be computed for branch " << branchName 
+                                  << ". The value for the parameter is identical in every iteration." << std::endl;
+                    } else if (PosRhat == -1) {
+                        std::cerr << "Warning: The R-hat cannot be computed for a single chain." << std::endl;
+                    } else if (PosRhat > 1.05) {
+                        std::cerr << "Warning: R-hat for position of branch " << branchName 
+                                  << " is above 1.05, indicating that the chains have not converged for the parameter." << std::endl;
+                    }
+
+                    // Write the R-hat statistics for this branch to the diagnostics file
+                    diagnostics << branchName << '\t' << maxLogLike << '\t' << maxIndex << '\t' << PropRhat << '\t' << PosRhat << std::endl;
+                    source_idx++;
+
+
             }
         }
 

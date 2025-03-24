@@ -43,7 +43,7 @@ static pair <vector<AlignmentInfo *>*, vector<int>> readGAM3(const bdsg::ODGI &g
  const double * base_freq, const double t_T_ratio['T' + 1]['T' +1 ], \
  const bool * rare_bases, vector<vector<tuple<int, int, double, double >>> &chunks, \
  vector <vector<diNucleotideProb> > &subDeamDiNuc, int lengthToProf, string prof_out_file_path, const unsigned int &MINIMUMMQ, const unsigned int &MINNUMOFREADS, \
- const unsigned int &MINNUMOFBINS, const double &ENTROPY_SCORE_THRESHOLD)
+ const unsigned int &MINNUMOFBINS, const double &ENTROPY_SCORE_THRESHOLD, const int &MAXIMUMOFBINS)
 {
 
     if (std::filesystem::exists(gamfilename) == false){
@@ -66,7 +66,7 @@ static pair <vector<AlignmentInfo *>*, vector<int>> readGAM3(const bdsg::ODGI &g
 
     function<void(vg::Alignment&)> lambda = [&graph, &n_reads,&read_vec,&populatevector, &n_map_reads, &clade_vec, &nodevector, &qscore_vec, \
        &base_freq, &t_T_ratio, &rare_bases, &chunks, &subDeamDiNuc, &lengthToProf, &prof_out_file_path, &MINIMUMMQ, &MINNUMOFREADS, &MINNUMOFBINS, \
-       &ENTROPY_SCORE_THRESHOLD](vg::Alignment& a)   // Mikkel code two arguments lengthToProf & prof_out_file_path
+       &ENTROPY_SCORE_THRESHOLD, &MAXIMUMOFBINS](vg::Alignment& a)   // Mikkel code two arguments lengthToProf & prof_out_file_path
     {
 
         ++n_reads;
@@ -593,21 +593,24 @@ static pair <vector<AlignmentInfo *>*, vector<int>> readGAM3(const bdsg::ODGI &g
     vector<int> clade_list_count;
     vector<int> extra;
 
-    for (int i = 0; i< chunks.size(); i++) {
+
+    int max_allowed_zero_bins = MAXIMUMOFBINS;
+
+    for (int i = 0; i < chunks.size(); i++) {
 
         vector<int> check_for_zero;
-        for (int k = 0; k<chunks[i].size()-1; k++){
-            if (get<2>(chunks.at(i).at(k)) > ENTROPY_SCORE_THRESHOLD){
-                    //cerr <<  get<3>(chunks[i].at(k)) << endl;
-                    check_for_zero.emplace_back(get<3>(chunks[i].at(k)));
-                }
-
+        for (int k = 0; k < chunks[i].size() - 1; k++) {
+            if (get<2>(chunks.at(i).at(k)) > ENTROPY_SCORE_THRESHOLD) {
+                // cerr <<  get<3>(chunks[i].at(k)) << endl;
+                check_for_zero.emplace_back(get<3>(chunks[i].at(k)));
+            }
         }
 
+    // Count how many zeros are in the vector
+    int num_zero_bins = std::count(check_for_zero.begin(), check_for_zero.end(), 0.0);
 
-
-        if (std::count(check_for_zero.begin(), check_for_zero.end(), 0.0) || check_for_zero.size() < MINNUMOFBINS || clade_vec->at(i*6+1)->count < MINNUMOFREADS){
-
+    // Modify the condition to allow a certain number of zero bins
+    if (num_zero_bins > max_allowed_zero_bins || check_for_zero.size() < MINNUMOFBINS || clade_vec->at(i*6+1)->count < MINNUMOFREADS) {
 
 #ifdef VERBOSE_S
             cerr << "The clade " << clade_vec->at(i*6+1)->name << " could not be detected." << endl;

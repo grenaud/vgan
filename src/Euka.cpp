@@ -80,7 +80,7 @@ const string Euka::usage() const{
 		    "/  __/ /_/ / ,< / /_/ / \n"+
 		    "\\___/\\__,_/_/|_|\\__,_/  \n"+
 
-                  "\neuka performs abundance estimation of eukaryotic taxa from a sedimentary DNA sample.\n"+
+                  "\neuka performs abundance estimation of eukaryotic taxa from an environmental DNA sample.\n"+
 		  "\n"+
 
           "vgan euka [options] \n"+
@@ -100,7 +100,8 @@ const string Euka::usage() const{
                   "\t\t"+""  +"" +"-fq1 [STR]"   +"\t\t" + "Input FASTQ file (for merged and single-end reads)"+"\n"+
                   "\t\t"+""  +"" +"-fq2 [STR]"   +"\t\t" + "Second input FASTQ file (for paired-end reads)"+"\n"+
                   "\t\t"+""  +"" +"-i"   +"\t\t\t" + "Paired-end reads are interleaved (default: false)"+"\n"+
-                  //"\t\t"+""  +"" +"-g"   +"\t\t" + "GAM input file"+"\n"+ 
+                  "\t\t"+""  +"" +"-g [STR]"   +"\t\t" + "GAM input file"+"\n"+ 
+                  "\t\t"+""  +"" +"-M [STR]"   +"\t\t" + "Alternative minimizer prefix input (defualt: euka_db)"+"\n"+
                   "\t\t"+""  +"" +"-o [STR]"   +"\t\t" + "Output file prefix (default: euka_output) "+"\n"+
                   "\t\t"+""  +"" +"-t"   +"\t\t\t" + "Number of threads (-1 for all available)"+"\n"+
                   "\t\t"+""  +"" +"-Z"   +"\t\t\t" + "Temporary directory (default: /tmp)"+"\n"+
@@ -109,7 +110,8 @@ const string Euka::usage() const{
                   "\t\t"+""  +"" +"--minMQ [INT]"    +"\t\t"      +"Set the mapping quality minimum for a fragment (default: 29)"+"\n"+
                   "\t\t"+""  +"" +"--minFrag [INT]"    +"\t\t"      +"Minimum amount of fragments that need to map to a group (default: 10)"+"\n"+
                   "\t\t"+""  +"" +"--entropy [double]"    +"\t\t"      +"Minimum entropy score for a bin to be considered (default: 1.17)"+"\n"+
-                  "\t\t"+""  +"" +"--minBins [INT]"    +"\t\t"      +"Minimum number of bins that need to be available for a group (default: 6)"+"\n"+
+                  "\t\t"+""  +"" +"--minBins [INT]"    +"\t\t"      +"Minimum number of bins with an entropy higher than the thresold (default: 6)"+"\n"+
+                  "\t\t"+""  +"" +"--maxBins [INT]"    +"\t\t"      +"Maximum number of bins without coverage (default: 0)"+"\n"+
                   "\n"+
                   "Damage options:"+"\n"+
 		          "\t\t"+""  +"" +"--deam5p"   +"\t\t"      +"[.prof]"  +"\t"+"5p deamination frequency for eukaryotic species (default: no damage)"+"\n"+
@@ -147,8 +149,21 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
                                       }
     int lastOpt=1;
 
-    string deam5pfreqE  = getFullPath(cwdProg+"../share/vgan/damageProfiles/none.prof");
-    string deam3pfreqE  =  getFullPath(cwdProg+"../share/vgan/damageProfiles/none.prof");
+    string deam5pfreqE;
+    string deam3pfreqE;
+
+    ifstream file(cwdProg + "../share/vgan/damageProfiles/none.prof");
+
+    if (file) {
+        // Load deamination profiles
+        deam5pfreqE = getFullPath(cwdProg + "../share/vgan/damageProfiles/none.prof");
+        deam3pfreqE = getFullPath(cwdProg + "../share/vgan/damageProfiles/none.prof");
+    } else {
+        // Handle error when getFullPath fails
+        cerr << "Warning: deamination profile not found. Proceeding without the assumption of ancient damage." << endl;
+        deam5pfreqE = ""; // Set to empty to handle it later
+        deam3pfreqE = "";
+    }
 
     bool specifiedDeam=false;
     bool interleaved=false;
@@ -166,10 +181,13 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
     string prof_out_file_path = getFullPath(cwdProg+"../");
     unsigned int MINNUMOFBINS = 6; 
     unsigned int MINNUMOFREADS = 10; 
-    unsigned int MINIMUMMQ = 29; 
+    unsigned int MINIMUMMQ = 29;
+    int MAXIMUMOFBINS = 0;
     double ENTROPY_SCORE_THRESHOLD = 1.17;
     bool outFrag = false;
-    string outGroup = ""; 
+    string outGroup = "";
+    string altMin = dbprefixS;
+    bool safari = false;
 
 
     for(int i=1;i<(argc);i++){
@@ -214,6 +232,10 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
             samplename = gamfilename;
             continue;
                                 }
+        if(string(argv[i]) == "-M"){
+            altMin = argv[i+1];
+            continue;
+                                }
         if(string(argv[i]) == "--deam5p"  ){
             deam5pfreqE=string(argv[i+1]);
 	    specifiedDeam=true;
@@ -251,6 +273,12 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
             if (MINNUMOFBINS > 20){throw runtime_error("[euka] Error, minimum number of bins exceeds the total number of bins");}
             continue;
         }
+        if(string(argv[i]) == "--maxBins"){
+            MAXIMUMOFBINS=stoi(argv[i+1]);
+            assert(MAXIMUMOFBINS >= 0);
+            if (MAXIMUMOFBINS > 20){throw runtime_error("[euka] Error, maximum number of bins exceeds the total number of bins");}
+            continue;
+        }
         if(string(argv[i]) == "--minMQ"){
             MINIMUMMQ=stoi(argv[i+1]);
             assert(MINIMUMMQ >= 0 && MINIMUMMQ <= 60);
@@ -267,6 +295,10 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
         }
         if(string(argv[i]) == "--outGroup"){
             outGroup = argv[i+1];
+            continue;
+        }
+        if(string(argv[i]) == "-S"  ){
+            safari=true;
             continue;
         }
 
@@ -329,6 +361,7 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
 
 
     string dbprefix              = euka_dir + dbprefixS;
+    string altMinFull            = euka_dir + altMin;
 
 
     string ogfilename     = dbprefix+".og";
@@ -471,9 +504,11 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
         if (gamfilename == "") {
 
         cerr << "Mapping reads..." << endl;
+       
         Euka::map_giraffe(fastq1filename, fastq2filename, n_threads, interleaved,
 
-                      fifo_A, sc, tmpdir, euka_dir, dbprefix);
+                      fifo_A, sc, tmpdir, euka_dir, dbprefix, altMinFull);
+    
 
     while ((wpid = wait(&status)) > 0);
     exit(0);
@@ -499,7 +534,7 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
     auto [readgam, clade_id_list] = readGAM3(graph,fifo_A,populateAlignmentVector,clade_vec,\
                                              nodevector,qscore_vec, base_freq, t_T_ratio, rare_bases,\
                                              chunks, dmg.subDeamDiNuc, lengthToProf, prof_out_file_path, MINIMUMMQ,\
-                                             MINNUMOFREADS, MINNUMOFBINS, ENTROPY_SCORE_THRESHOLD);
+                                             MINNUMOFREADS, MINNUMOFBINS, ENTROPY_SCORE_THRESHOLD, MAXIMUMOFBINS);
     remove(fifo_A);
     cerr << " .. done!" << endl;
     cerr << "\t-------------------------------" << endl;

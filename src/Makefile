@@ -6,7 +6,7 @@ RPVGDIR := ../dep/rpvg/
 # Directory where the binaries are placed
 BIN_DIR := ../bin/
 
-VGAN_PREREQS = soibean.o soibean_functions.o compute_init_vec.o MCMC.o haplocart_functions.o map_giraffe_Euka.o damage.o Euka.o gam2prof.o vgan.o Clade.o update_likelihood.o ../lib/libgab/libgab.o HaploCart.o get_posterior.o process_mapping.o fa2fq.o get_p_obs_base.o \
+VGAN_PREREQS = assembly.o soibean.o soibean_functions.o compute_init_vec.o MCMC.o haplocart_functions.o map_giraffe_Euka.o damage.o Euka.o gam2prof.o vgan.o Clade.o update_likelihood.o ../lib/libgab/libgab.o HaploCart.o get_posterior.o process_mapping.o fa2fq.o get_p_obs_base.o \
         read_fasta.o map_giraffe.o rmdup.o load.o readPathHandleGraph.o NodeInfo.o AlignmentInfo.o ../lib/libgab/libgab.a \
         ../lib/libgab/gzstream/gzstream.o ${VGDIR}obj/subcommand/subcommand.o ${VGDIR}obj/subcommand/giraffe_main.o  \
         ${VGDIR}obj/subcommand/gamsort_main.o ${VGDIR}obj/subcommand/gbwt_main.o ${VGDIR}obj/subcommand/subcommand.o \
@@ -23,7 +23,7 @@ NPROCS:=$(shell grep -c ^processor /proc/cpuinfo)
 # Only take half as many processors as available
 NPROCS := $(shell echo "$(NPROCS)/2"|bc)
 
-CXX      = g++ -w -g -std=c++2a -w -Wextra -Wshadow -Wpedantic
+CXX      = g++ -w -std=c++2a -w -Wextra -Wshadow -Wpedantic -s ## -g
 
 
 CLUSTER_FLAGS = -I ${RPVGDIR}deps/gbwt/include/ -I ${RPVGDIR}deps/sdsl-lite/include/ -I${RPVGDIR}deps/sparsepp/ \
@@ -35,7 +35,7 @@ CXXFLAGS =  -fopenmp -fconcepts -Wno-unused-variable -Wno-char-subscripts -Wno-r
             -I../lib/libgab/gzstream/ -I${VGDIR}include/ -I${VGDIR}deps/progress_bar/ -I${VGDIR}src/io \
             -I/usr/lib -I${VGDIR}src/algorithms ${CLUSTER_FLAGS} -I${VGDIR}src -I${VGDIR}deps/libvgio/include/ -c
 
-FLAGS_STATIC = ${SPIMAPDIR}src/treevis.o ${SPIMAPDIR}src/newick.o ${SPIMAPDIR}src/logging.o ${SPIMAPDIR}src/parsing.o soibean.o soibean_functions.o haplocart_functions.o MCMC.o compute_init_vec.o gam2prof.o map_giraffe_Euka.o damage.o Euka.o vgan.o Clade.o update_likelihood.o HaploCart.o get_posterior.o \
+FLAGS_STATIC = ${SPIMAPDIR}src/treevis.o ${SPIMAPDIR}src/newick.o ${SPIMAPDIR}src/logging.o ${SPIMAPDIR}src/parsing.o assembly.o soibean.o soibean_functions.o haplocart_functions.o MCMC.o compute_init_vec.o gam2prof.o map_giraffe_Euka.o damage.o Euka.o vgan.o Clade.o update_likelihood.o HaploCart.o get_posterior.o \
                process_mapping.o  fa2fq.o get_p_obs_base.o read_fasta.o map_giraffe.o rmdup.o load.o readPathHandleGraph.o NodeInfo.o \
                AlignmentInfo.o ../lib/libgab/libgab.a ../lib/libgab/gzstream/gzstream.o ../dep/vg/obj/subcommand/subcommand.o \
                ../dep/vg/obj/subcommand/giraffe_main.o ../dep/vg/obj/subcommand/gamsort_main.o ../dep/vg/obj/subcommand/gbwt_main.o \
@@ -51,7 +51,7 @@ FLAGS_STATIC = ${SPIMAPDIR}src/treevis.o ${SPIMAPDIR}src/newick.o ${SPIMAPDIR}sr
 
 FLAGS_DYNAMIC = ${SPIMAPDIR}src/treevis.o ${SPIMAPDIR}src/newick.o ${SPIMAPDIR}src/logging.o ${SPIMAPDIR}src/parsing.o haplocart_functions.o \
                  map_giraffe_Euka.o rmdup.o damage.o Euka.o vgan.o Clade.o update_likelihood.o HaploCart.o get_posterior.o \
-                 process_mapping.o fa2fq.o MCMC.o compute_init_vec.o gam2prof.o soibean.o soibean_functions.o \
+                 process_mapping.o fa2fq.o MCMC.o compute_init_vec.o gam2prof.o soibean.o soibean_functions.o assembly.o \
                  get_p_obs_base.o read_fasta.o map_giraffe.o load.o readPathHandleGraph.o NodeInfo.o AlignmentInfo.o ../lib/libgab/libgab.a \
                 ../lib/libgab/gzstream/gzstream.o ../dep/vg/obj/subcommand/subcommand.o ../dep/vg/obj/subcommand/giraffe_main.o \
                 ../dep/vg/obj/subcommand/gamsort_main.o ../dep/vg/obj/subcommand/gbwt_main.o ../dep/vg/obj/config/allocator_config_jemalloc.o \

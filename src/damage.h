@@ -39,7 +39,7 @@ public:
     probSubstition   defaultSubMatch;
     diNucleotideProb defaultSubMatchMatrix;
 
-    unsigned int MINLENGTHFRAGMENT  =    25;      // minimal length for fragment
+    unsigned int MINLENGTHFRAGMENT  =    15;      // minimal length for fragment
     unsigned int MAXLENGTHFRAGMENT  =    1000;    //  maximal length for fragment
     double base_freq [int ('T') +1];
     double t_T_ratio [int ('T') +1][int ('T') +1];

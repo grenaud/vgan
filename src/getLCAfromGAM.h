@@ -38,6 +38,10 @@ static vector<AlignmentInfo*>* analyse_GAM(
     const vector<double> qscore_vec,
     bool trailmix, 
     int minid,
+    int PATHTHRES,
+    int PENALTY,
+    bool getDetail,
+    string outputname,
     bool singlesource, vector <vector<diNucleotideProb> > &subDeamDiNuc)
 {
     int n_reads = 0;
@@ -66,7 +70,12 @@ static vector<AlignmentInfo*>* analyse_GAM(
     vector<AlignmentInfo*>* read_vec = new vector<AlignmentInfo*>();
     std::ifstream gam_file(gamfilename, std::ios::binary);
     vg::io::ProtobufIterator<vg::Alignment> iter(gam_file);
-
+    std::ofstream detailtsv;
+    if(getDetail){
+        detailtsv.open(outputname +"_MatchInfo.tsv");
+        detailtsv << "Path name\tRead name\tNode sequence\tIndex on node\tNode Base\tRead Sequence\tIndex on read\n";
+    }
+    // cutting path names string to be 100. 
     std::unordered_map<std::string, long double> results_map;
     int maxLength = 101;
     vector<string> pathNamesS;
@@ -139,6 +148,9 @@ static vector<AlignmentInfo*>* analyse_GAM(
                 cerr << "Mappig size " << mppg_sizes.size() << endl;
                 cerr << "iter " << i << endl;
 #endif
+
+                // extract all possible paths for a current node ID. There are discrptancies between the generated mapping lengths and the provided mapping length.
+                //nodepaths has all path names for each node IDs listed.
                 vector<string> probPaths;
                 int nID = 0;
                 if (mppg_sizes.size() != a.path().mapping().size())
@@ -182,10 +194,31 @@ static vector<AlignmentInfo*>* analyse_GAM(
                     if (find(probPaths.begin(), probPaths.end(), pathNames[m]) != probPaths.end())
                     {
                         supportMap[pathNames[m]] = true;
-                        
+
+
                         for (int s = 0; s < nodeSeq.size(); ++s)
                         {
-                            if (nodeSeq[s] != partReadSeq[s]){mismatch++;}
+			    if(getDetail){
+                                //cerr << pathNames.size() << " " << PATHTHRES << endl; 
+			        if(nodeSeq[s] == partReadSeq[s] && probPaths.size() <= PATHTHRES){
+                                    detailtsv 
+ 			                << pathNames[m] << '\t' 
+        		                << a.name() << '\t' 
+                                        << nodeSeq << '\t' 
+        			        << s << '\t' 
+        			        << nodeSeq[s] << '\t' 
+         			        << a.sequence() << '\t' 
+        			        << baseIX + s << '\n'; 
+
+			        }
+                            }
+
+                            if (nodeSeq[s] != partReadSeq[s]){mismatch++;
+#ifdef DEBUGANALYSEGAM
+                                //get<2>(sancheck[pathNames[m]]) += 1;
+                                //get<8>(sancheck[pathNames[m]]) += log((qscore_vec[base_quality])/3);
+#endif
+		            }
 #ifdef DEBUGDAMAGE
                             cerr << "Base Index " << baseOnRead << endl;
                             cerr << "Graph Base " << nodeSeq[s] << endl;
@@ -197,7 +230,8 @@ static vector<AlignmentInfo*>* analyse_GAM(
                                 pathMap[pathNames[m]] += log(0.25);
 
 #ifdef DEBUGANALYSEGAM          
-                                get<4>(sancheck[pathNames[m]]) += 1;
+                                get<3>(sancheck[pathNames[m]]) += 1;
+                                get<8>(sancheck[pathNames[m]]) += log((qscore_vec[base_quality])/3);
 #endif
                                 BaseInfo info;
                                 info.readBase = partReadSeq[s];
@@ -348,6 +382,12 @@ static vector<AlignmentInfo*>* analyse_GAM(
 #endif
                                 readInfo.push_back(info);
 
+#ifdef DEBUGANALYSEGAM
+                                get<1>(sancheck[pathNames[m]]) += 1;
+                                get<8>(sancheck[pathNames[m]]) += log(1 -(qscore_vec[base_quality])/3);
+#endif
+
+
 
                                 
                             
@@ -430,7 +470,7 @@ static vector<AlignmentInfo*>* analyse_GAM(
                             
                             }else
                             {
-                                if (abs(baseOnRead) % 7 == 0)
+                                if (abs(baseOnRead) % PENALTY  == 0)
                                 {   
                                     pathMap[pathNames[m]] += log(1 - (qscore_vec[base_quality]));
                                     BaseInfo info;
@@ -658,7 +698,7 @@ static vector<AlignmentInfo*>* analyse_GAM(
         } // end of if identity statement
 
     } // end of iteration through reads in gam file
-
+    detailtsv.close();
     gam_file.close();
 
      for (const auto& pair : results_map) {

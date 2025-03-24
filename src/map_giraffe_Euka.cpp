@@ -15,7 +15,7 @@ const char get_dummy_qual_score(double &background_error_prob)             {
 
 void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n_threads, bool interleaved,
 		       const char * fifo_A, const vg::subcommand::Subcommand* sc,
-		       const string &tmpdir, const string &cwdProg, const string &prefix){
+		       const string &tmpdir, const string &cwdProg, const string &prefix, const string &minprefix){
     cerr << "Mapping reads..." << endl;
 
     int retcode;
@@ -28,7 +28,7 @@ void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n
     std::cout.rdbuf(cout.rdbuf());
 
     // Map with VG Giraffe to generate a GAM file
-    string minimizer_to_use= prefix + ".min";
+    string minimizer_to_use= minprefix + ".min";
 
     if (fastq1filename != "" && fastq2filename != "")
 	{
@@ -99,3 +99,7 @@ void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n
     std::cout.rdbuf(normal_cout);
     std::cerr << "Reads mapped" << endl;
 }
+
+
+
+

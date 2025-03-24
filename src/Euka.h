@@ -71,7 +71,8 @@ public:
     // mapping function
     void map_giraffe(string fastq1filename, string fastq2filename, const int n_threads, bool interleaved,
                             const char * fifo_A, const vg::subcommand::Subcommand* sc,
-                            const string & tmpdir, const string & cwdProg, const string &prefix);
+                            const string & tmpdir, const string & cwdProg, const string &prefix, const string &minprefix);
+    
     tuple<vector<NodeInfo *>, int, bdsg::ODGI, vector<vector<bool>>, vector<string>> readPathHandleGraph(string &ogfilename, int n_threads, string &gbtwfilename, string &db_prefix,  vector<Clade *> *&  clade_vec);
     // get the average damage profile of all clades for 2.round euka input
 

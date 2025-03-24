@@ -15,10 +15,11 @@ Gam2prof::~Gam2prof(){
 
 const string Gam2prof::usage() const{
 
-    return string(string("") +"\nvgan gam2prof [options] <database prefix> <reads.gam>\n"+
+    return string(string("") +"\nvgan gam2prof\n"+
            "\n"+
                   "\n\n"+
                   //"Options:\n"+
+		  "\t\t"+""  +"" +"-g"   +"\t\t" + "Input gam file"+"\n"+
                   "\t\t"+""  +"" +"-l"   +"\t\t" + "Set length for substitution matrix (default: 5)"+"\n"+
                   "\t\t"+""  +"" +"-p"   +"\t\t" + "Path for output prof-file (default: stdout)"+"\n"+
           ""
@@ -30,6 +31,7 @@ const int Gam2prof::run(int argc, char *argv[], const string &cwdProg){
     // Check options
     int lengthToProf = 5;
     string prof_out_file_path = "/dev/stdout";
+    string gamfile;
 
     for(int i=1;i<(argc);i++){
 
@@ -42,12 +44,16 @@ const int Gam2prof::run(int argc, char *argv[], const string &cwdProg){
             prof_out_file_path = string(argv[i+1]);
             continue;
         }
+        if(string(argv[i]) == "-g"){
+            gamfile = string(argv[i+1]);
+            continue;
+        }
 
     }
 
     // Get file names
-    const string gamfilename  = cwdProg + string(argv[argc-1]);
-    const string dbprefix    = cwdProg + string(argv[argc-2]);
+    string gamfilename  = gamfile;
+    const string dbprefix    = cwdProg + "../share/vgan/euka_dir/euka_db";
     const string ogfilename     = dbprefix+".og";
     const string cladefilename  = dbprefix+".clade";
     const string binsfilename   = dbprefix+".bins";

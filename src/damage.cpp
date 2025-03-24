@@ -42,10 +42,26 @@ void Damage::initDeamProbabilities(const string & deam5pfreqE,const string & dea
 
     vector<substitutionRates> sub5pT;
     vector<substitutionRates> sub3pT;
+    // If deam5pfreqE is not empty, read the substitution rates, otherwise fill with zeros
+    if (!deam5pfreqE.empty()) {
+        readNucSubstitionRatesFreq(deam5pfreqE, sub5pT);
+    } else {
+        // Fill sub5pT with zero substitutionRates
+        substitutionRates zeroRates;
+        std::fill(std::begin(zeroRates.s), std::end(zeroRates.s), 0.0L);  // Initialize all values to 0
+        sub5pT.resize(MAXLENGTHFRAGMENT, zeroRates); // Fill for MAXLENGTHFRAGMENT positions
+    }
 
-    readNucSubstitionRatesFreq(deam5pfreqE,sub5pT);
-    readNucSubstitionRatesFreq(deam3pfreqE,sub3pT);
-
+    // If deam3pfreqE is not empty, read the substitution rates, otherwise fill with zeros
+    if (!deam3pfreqE.empty()) {
+        readNucSubstitionRatesFreq(deam3pfreqE, sub3pT);
+    } else {
+        // Fill sub3pT with zero substitutionRates
+        substitutionRates zeroRates;
+        std::fill(std::begin(zeroRates.s), std::end(zeroRates.s), 0.0L);  // Initialize all values to 0
+        sub3pT.resize(MAXLENGTHFRAGMENT, zeroRates); // Fill for MAXLENGTHFRAGMENT positions
+    }
+    
     //5'
     for(unsigned int i=0;i<sub5pT.size();i++){
 	probSubstition toadd;
