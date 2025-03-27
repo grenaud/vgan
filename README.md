@@ -50,6 +50,6 @@ If you discover an issue with the program, please submit a bug report on GitHub 
 Contact:<br>
 
   Haplocart: jdru@dtu.dk or gabriel.reno@gmail.com 
-  euka: navo@dtu.dk or gabriel.reno@gmail.com
-  soibean: navo@dtu.dk or gabriel.reno@gmail.com
+  euka: n.alexandra.vogel@gmail.com or gabriel.reno@gmail.com
+  soibean: n.alexandra.vogel@gmail.com or gabriel.reno@gmail.com
 <br>
