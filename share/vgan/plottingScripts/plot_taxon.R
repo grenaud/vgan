@@ -120,24 +120,24 @@ dam <- ggarrange(first, second, ncol=2, common.legend = TRUE, legend="top")
 
 #############################
 # inSize plot
-col_names <- colnames(ne)
-n <- which(args[2] == col_names)
+# Ensure column names and args[2] are character and trimmed
+col_names <- trimws(colnames(ne))
+arg_col <- trimws(as.character(args[2]))
+n <- which(arg_col == col_names)
 
 if(length(n) == 1) {
-  # Convert the specified column to numeric, omitting NA values
-  ne_data <- data.frame(value = as.numeric(na.omit(ne[, n])))
+  ne_data <- data.frame(value = as.numeric(na.omit(ne[[n]])))
   
-  # Create the histogram plot
   inSize_plot <- ggplot(ne_data, aes(x = value)) +
     geom_histogram(binwidth = 3, fill = "darkblue") +
     theme_bw() +
     xlab("Fragment Lengths") +
     ggtitle("Fragment Length Distribution")
   
-  # Print the plot
   print(inSize_plot)
 } else {
-  # Error handling if the column is not found
+  cat("DEBUG: Column not found. args[2] =", arg_col, "\n")
+  cat("DEBUG: colnames(ne) =", paste(col_names, collapse = ", "), "\n")
   stop("Specified column not found in the data frame.")
 }
 
