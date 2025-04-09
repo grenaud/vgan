@@ -123,8 +123,7 @@ dam <- ggarrange(first, second, ncol=2, common.legend = TRUE, legend="top")
 # Ensure column names and args[2] are character and trimmed
 col_names <- trimws(colnames(ne))
 arg_col <- trimws(as.character(args[2]))
-n <- which(arg_col == col_names)
-
+n <- match(arg_col, col_names)
 if(length(n) == 1) {
   ne_data <- data.frame(value = as.numeric(na.omit(ne[[n]])))
   
