@@ -630,7 +630,7 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
                 }
             }
             // a group is disregarded if they have an empty bin, their minimum number of bins above the entropy threshold is too low or their total amount of reads is to low.
-            if (std::count(check_for_zero.begin(), check_for_zero.end(), 0.0) || check_for_zero.size() < MINNUMOFBINS  || clade_vec->at(i*6+1)->count < MINNUMOFREADS)
+            if (std::count(check_for_zero.begin(), check_for_zero.end(), 0) > MAXIMUMOFBINS || check_for_zero.size() < MINNUMOFBINS  || clade_vec->at(i*6+1)->count < MINNUMOFREADS)
             {
 
                 // in case a group is defined to be analysed no matter what this chunk of code will produce the coverage file
@@ -927,7 +927,7 @@ const int Euka::run(int argc, char *argv[], const string cwdProg){
                 }
             }
             // disregarded groups except its defined as outgroup
-            if (std::count(check_for_zero.begin(), check_for_zero.end(), 0.0) || check_for_zero.size() < MINNUMOFBINS || clade_vec->at(i*6+1)->count < MINNUMOFREADS)
+            if (std::count(check_for_zero.begin(), check_for_zero.end(), 0) > MAXIMUMOFBINS || check_for_zero.size() < MINNUMOFBINS || clade_vec->at(i*6+1)->count < MINNUMOFREADS)
             {
 
                 
