@@ -15,7 +15,7 @@
 #include "Clade.h"
 #include "getLCAfromGAM.h"
 #include "subcommand/subcommand.hpp"
-#include "bdsg/odgi.hpp"
+#include "bdsg/hash_graph.hpp"
 #include "../dep/spimap/src/Tree.h"
 #include "../dep/spimap/src/newick.h"
 
@@ -25,7 +25,7 @@ class soibean{
 
 private:
 
-	vector<string> paths_through_node(const bdsg::ODGI& graph, const bdsg::handle_t& node);
+	vector<string> paths_through_node(const bdsg::HashGraph& graph, const bdsg::handle_t& node);
 	std::vector<std::vector<double>> convertMapsToVector(vector<AlignmentInfo*>* & gam);
 	unordered_map<int, int> makePathToNode(spidir::Tree &tree, vector<string>& path_names);
 	std::vector<int> generateRandomNumbers(const int maxNum, const int k);

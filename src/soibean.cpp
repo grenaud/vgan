@@ -40,7 +40,7 @@ soibean::~soibean(){
 void soibeanSetup() {
 
  preflight_check();
-  configure_memory_allocator();
+  vg::AllocatorConfig::configure();
   enable_crash_handling();
   temp_file::set_system_dir();
 

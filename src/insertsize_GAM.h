@@ -1,5 +1,5 @@
 #pragma once
-#include "bdsg/odgi.hpp"
+#include "bdsg/hash_graph.hpp"
 #include <iostream>
 #include <vector>
 #include <fstream>

@@ -18,7 +18,7 @@
 #include "Clade.h"
 #include "getLCAfromGAM.h"
 #include "subcommand/subcommand.hpp"
-#include "bdsg/odgi.hpp"
+#include "bdsg/hash_graph.hpp"
 
 
 using namespace std;
@@ -142,7 +142,7 @@ struct MergeResult {
 class assembly{
 
 private:
-    void reindex_odgi_graph(bdsg::ODGI& graph, GraphData& new_graph_data, int startNode, int endNode);
+    void reindex_odgi_graph(bdsg::HashGraph& graph, GraphData& new_graph_data, int startNode, int endNode);
     void writeContigsToFasta(const std::vector<std::tuple<std::string, std::vector<std::unordered_map<char, double>>, std::vector<int>, std::string, std::vector<std::unordered_map<char, int>>, pair<bool, int>>>& contigs, const std::string& filename);
     void saveToFastaGz(const std::string& fasta, const std::string& filename);
 	string reverse_complement(const std::string& dna);

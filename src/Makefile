@@ -7,15 +7,16 @@ RPVGDIR := ../dep/rpvg/
 BIN_DIR := ../bin/
 
 VGAN_PREREQS = assembly.o soibean.o soibean_functions.o compute_init_vec.o MCMC.o haplocart_functions.o map_giraffe_Euka.o damage.o Euka.o gam2prof.o vgan.o Clade.o update_likelihood.o ../lib/libgab/libgab.o HaploCart.o get_posterior.o process_mapping.o fa2fq.o get_p_obs_base.o \
-        read_fasta.o map_giraffe.o rmdup.o load.o readPathHandleGraph.o NodeInfo.o AlignmentInfo.o ../lib/libgab/libgab.a \
+        read_fasta.o map_giraffe.o rmdup.o load.o readPathHandleGraph.o NodeInfo.o AlignmentInfo.o TrailMix.o run_trailmix.o ../lib/libgab/libgab.a \
         ../lib/libgab/gzstream/gzstream.o ${VGDIR}obj/subcommand/subcommand.o ${VGDIR}obj/subcommand/giraffe_main.o  \
         ${VGDIR}obj/subcommand/gamsort_main.o ${VGDIR}obj/subcommand/gbwt_main.o ${VGDIR}obj/subcommand/subcommand.o \
         ${VGDIR}obj/config/allocator_config_jemalloc.o ${VGDIR}obj/subcommand/filter_main.o ${VGDIR}obj/subcommand/view_main.o
 
 TEST_PREREQS =  test.o ${VGAN_PREREQS}
 
-CLUSTER_LINKER_FLAGS = -L${RPVGDIR}lib/ -L${RPVGDIR}deps/sdsl-lite/lib/ -L../dep/vg/lib ../dep/vg/lib/libvg.a \
-                       ${RPVGDIR}deps/gbwt/lib/libgbwt.a
+# libvg.a and vg lib dir are now carried in FLAGS_DYNAMIC (see below). The old rpvg-bundled
+# gbwt/sdsl libs are intentionally NOT linked: they are built against old vg and clash with v1.75.
+CLUSTER_LINKER_FLAGS =
 
 # https://stackoverflow.com/questions/2527496/how-can-i-write-a-makefile-to-auto-detect-and-parallelize-the-build-with-gnu-mak
 NPROCS:=$(shell grep -c ^processor /proc/cpuinfo)
@@ -35,33 +36,46 @@ CXXFLAGS =  -fopenmp -fconcepts -Wno-unused-variable -Wno-char-subscripts -Wno-r
             -I../lib/libgab/gzstream/ -I${VGDIR}include/ -I${VGDIR}deps/progress_bar/ -I${VGDIR}src/io \
             -I/usr/lib -I${VGDIR}src/algorithms ${CLUSTER_FLAGS} -I${VGDIR}src -I${VGDIR}deps/libvgio/include/ -c
 
-FLAGS_STATIC = ${SPIMAPDIR}src/treevis.o ${SPIMAPDIR}src/newick.o ${SPIMAPDIR}src/logging.o ${SPIMAPDIR}src/parsing.o assembly.o soibean.o soibean_functions.o haplocart_functions.o MCMC.o compute_init_vec.o gam2prof.o map_giraffe_Euka.o damage.o Euka.o vgan.o Clade.o update_likelihood.o HaploCart.o get_posterior.o \
-               process_mapping.o  fa2fq.o get_p_obs_base.o read_fasta.o map_giraffe.o rmdup.o load.o readPathHandleGraph.o NodeInfo.o \
-               AlignmentInfo.o ../lib/libgab/libgab.a ../lib/libgab/gzstream/gzstream.o ../dep/vg/obj/subcommand/subcommand.o \
-               ../dep/vg/obj/subcommand/giraffe_main.o ../dep/vg/obj/subcommand/gamsort_main.o ../dep/vg/obj/subcommand/gbwt_main.o \
-               ../dep/vg/obj/config/allocator_config_jemalloc.o ../dep/vg/obj/subcommand/filter_main.o ../dep/vg/lib/libjemalloc.a \
-               ../dep/vg//lib/libtabixpp.a ../dep/vg//lib/libdw.a ../dep/vg//lib/libdwfl.a ../dep/vg/lib/libvg.a ../dep/vg/lib/libxg.a \
-               ../dep/vg/lib/libvgio.a ../dep/vg/deps/elfutils/libdw/libdw.a ../dep/vg/deps/elfutils/libdwfl/libdwfl.a ../dep/vg//lib/libhts.a \
-               ../dep/vg//lib/libdeflate.a -static -static-libstdc++ -static-libgcc -ldl -L../dep/boost_1_61_0 -L../dep/vg/lib -fopenmp -lvg  -lstructures \
-               -ltabixpp -lvcflib -lgssw -lssw -lboost_unit_test_framework -lncurses -lgcsa2 -lgbwtgraph -lgbwt -ldivsufsort -ldivsufsort64 -lraptor2 \
-               -lpinchesandcacti -l3edgeconnected -lsonlib -lfml -lbdsg -lxg -lsdsl -lhandlegraph -lcairo -lgobject-2.0 -lffi -lglib-2.0 -lpcre -lpixman-1 \
-               -lfontconfig -luuid -lexpat -lfreetype -lpng16 -lxcb-shm -lxcb-render -lXext -lX11 -lxcb -lXau -lXdmcp -ljansson -latomic -lsublinearLS \
-               "-Wl,-rpath,"../dep/vg/"lib" -rdynamic -ldwfl -ldwelf -lelf -lebl "-lboost_program_options""" -ldl -lzstd -lbz2 -llzma -lprotobuf \
+# Fully-static build mirrors vg v1.75's static target: same libs as FLAGS_DYNAMIC plus
+# -static -static-libstdc++ -static-libgcc (no -Bstatic/-Bdynamic markers, no rpath/-rdynamic).
+# All needed static archives are present (vg provides libcairo.a/libpixman-1.a; system provides
+# the rest incl. libc.a, libbrotli*.a, libboost_program_options.a).
+FLAGS_STATIC = ${FLAGS_DYNAMIC_OBJS} \
+               -static -static-libstdc++ -static-libgcc -L../dep/vg/lib -fopenmp \
+               -L../dep/rpvg/lib -lrpvg \
+               ../dep/vg/lib/libvg.a \
+               -lvcflib -lwfa2 -ltabixpp -lgssw -lssw -lsublinearLS -lncurses -lgcsa2 -lgbwtgraph -lgbwt -lkff \
+               -ldivsufsort -ldivsufsort64 -lraptor2 -lpinchesandcacti -l3edgeconnected -lsonlib -lstructures -lbdsg \
+               -lxg -lsdsl -lhandlegraph -lzstd -lcrypto -ldl -ldw -lelf -latomic "-lboost_program_options" -llzma -lbz2 \
+               -lvgio -lhts -ldeflate -lz -lbz2 -llzma -lprotobuf -ljansson \
+               ../dep/vg/lib/libjemalloc.a \
+               -lcairo -lfontconfig -lbz2 -lbrotlicommon -lexpat -lfreetype -lpng16 -lbrotlidec -lpixman-1 \
                -pthread -lz -lpthread -lm
 
-FLAGS_DYNAMIC = ${SPIMAPDIR}src/treevis.o ${SPIMAPDIR}src/newick.o ${SPIMAPDIR}src/logging.o ${SPIMAPDIR}src/parsing.o haplocart_functions.o \
+# Object files (vgan + spimap + libgab + vg subcommand/config objects)
+FLAGS_DYNAMIC_OBJS = ${SPIMAPDIR}src/treevis.o ${SPIMAPDIR}src/newick.o ${SPIMAPDIR}src/logging.o ${SPIMAPDIR}src/parsing.o haplocart_functions.o \
                  map_giraffe_Euka.o rmdup.o damage.o Euka.o vgan.o Clade.o update_likelihood.o HaploCart.o get_posterior.o \
                  process_mapping.o fa2fq.o MCMC.o compute_init_vec.o gam2prof.o soibean.o soibean_functions.o assembly.o \
-                 get_p_obs_base.o read_fasta.o map_giraffe.o load.o readPathHandleGraph.o NodeInfo.o AlignmentInfo.o ../lib/libgab/libgab.a \
+                 get_p_obs_base.o read_fasta.o map_giraffe.o load.o readPathHandleGraph.o NodeInfo.o AlignmentInfo.o \
+                 TrailMix.o run_trailmix.o ../lib/libgab/libgab.a \
                 ../lib/libgab/gzstream/gzstream.o ../dep/vg/obj/subcommand/subcommand.o ../dep/vg/obj/subcommand/giraffe_main.o \
                 ../dep/vg/obj/subcommand/gamsort_main.o ../dep/vg/obj/subcommand/gbwt_main.o ../dep/vg/obj/config/allocator_config_jemalloc.o \
-                ../dep/vg/obj/subcommand/filter_main.o ../dep/vg/lib/libjemalloc.a ../dep/vg//lib/libtabixpp.a ../dep/vg//lib/libdw.a ../dep/vg//lib/libdwfl.a \
-                ../dep/vg/lib/libvg.a ../dep/vg/lib/libxg.a ../dep/vg/lib/libvgio.a ../dep/vg/deps/elfutils/libdw/libdw.a ../dep/vg/deps/elfutils/libdwfl/libdwfl.a \
-                ../dep/vg//lib/libhts.a ../dep/vg//lib/libdeflate.a -ldl -L../dep/vg/lib -fopenmp -Wl,-Bstatic -lvg -lstructures  -ltabixpp \
-                -lvcflib -lgssw -lssw -lboost_unit_test_framework -lncurses -lgcsa2 -lgbwtgraph -lgbwt -ldivsufsort -ldivsufsort64 -lraptor2 -lpinchesandcacti \
-                -l3edgeconnected -lsonlib -lfml -lbdsg -lxg -lsdsl -lhandlegraph -lcairo -lgobject-2.0 -lffi -lglib-2.0 -lpcre -lpixman-1 -lfontconfig -luuid -lexpat \
-                -lfreetype -lpng16 -lxcb-shm -lxcb-render -lXext -lX11 -lxcb -lXau -lXdmcp -ljansson -latomic -lsublinearLS "-Wl,-rpath,"../dep/vg/"lib" -rdynamic \
-                -ldwfl -ldwelf -lelf -lebl "-lboost_program_options""" -lzstd -lbz2 -llzma -lprotobuf -pthread -lz -Wl,-Bdynamic -lpthread -lm -lrpvg \
+                ../dep/vg/obj/subcommand/filter_main.o ../dep/vg/obj/subcommand/options.o
+
+# Library flags mirror vg v1.75's own link recipe (make -pn: LD_LIB_FLAGS / LD_STATIC_LIB_FLAGS /
+# LD_STATIC_LIB_DEPS / LD_EXE_LIB_FLAGS / LD_CAIRO_LIB_FLAGS). vg now uses system libdw (backward-cpp),
+# builds headless cairo (no X11/xcb), and no longer ships libfml/elfutils.
+FLAGS_DYNAMIC = ${FLAGS_DYNAMIC_OBJS} \
+                -L../dep/vg/lib -fopenmp -Wl,-rpath,$(abspath ../dep/vg/lib) -rdynamic \
+                -L../dep/rpvg/lib -lrpvg \
+                ../dep/vg/lib/libvg.a \
+                -lvcflib -lwfa2 -ltabixpp -lgssw -lssw -lsublinearLS -lncurses -lgcsa2 -lgbwtgraph -lgbwt -lkff \
+                -ldivsufsort -ldivsufsort64 -lraptor2 -lpinchesandcacti -l3edgeconnected -lsonlib -lstructures -lbdsg \
+                -lxg -lsdsl -lhandlegraph -lzstd -lcrypto -ldl -ldw -lelf -latomic "-lboost_program_options" -llzma -lbz2 \
+                -Wl,-Bstatic -lvgio -lhts -ldeflate -lz -lbz2 -llzma -lprotobuf -ljansson -Wl,-Bdynamic \
+                -lpthread -lm ../dep/vg/lib/libjemalloc.a \
+                -lcairo -lfontconfig -lbz2 -lbrotlicommon -lexpat -lfreetype -lpng16 -lbrotlidec -lpixman-1 \
+                -pthread -lz -lpthread -lm \
 
 FLAGS_TEST =    test.o $(filter-out vgan.o, ${FLAGS_DYNAMIC}) -lboost_unit_test_framework
 

@@ -7,7 +7,7 @@
 #include <vg.hpp>
 #include <handlegraph/handle_graph.hpp>
 #include "handlegraph/path_handle_graph.hpp"
-#include "bdsg/odgi.hpp"
+#include "bdsg/hash_graph.hpp"
 #include "algorithms/distance_to_head.hpp"
 #include "algorithms/distance_to_tail.hpp"
 #include "handle.hpp"
@@ -26,9 +26,9 @@ using namespace vg::algorithms;
 using namespace google::protobuf;
 
 
-tuple<vector<NodeInfo *>, int, bdsg::ODGI,vector<vector<bool>>, vector<string>> Euka::readPathHandleGraph (string & ogfilename, int n_threads, string &gbtwfilename, string &db_prefix,  vector<Clade *> * & clade_vec) {
+tuple<vector<NodeInfo *>, int, bdsg::HashGraph,vector<vector<bool>>, vector<string>> Euka::readPathHandleGraph (string & ogfilename, int n_threads, string &gbtwfilename, string &db_prefix,  vector<Clade *> * & clade_vec) {
 
-    bdsg::ODGI graph;
+    bdsg::HashGraph graph;
     graph.deserialize(ogfilename);
     const int minid = graph.min_node_id();
     const int maxid = graph.max_node_id();
@@ -97,8 +97,10 @@ tuple<vector<NodeInfo *>, int, bdsg::ODGI,vector<vector<bool>>, vector<string>> 
     for(int64 i=minid;i<=maxid;++i){
 
         NodeInfo * nodetoadd = new NodeInfo(i,nbpaths,cladeid);
-        const auto nodehandle = graph.get_handle(i);
-        nodetoadd->seq = graph.get_sequence(nodehandle);
+        if (graph.has_node(i)) {
+            const auto nodehandle = graph.get_handle(i);
+            nodetoadd->seq = graph.get_sequence(nodehandle);
+        }
         long unsigned int j;
         for (j = 0; j < nbpaths; ++j) {
             //nodetoadd->pathsgo[j] = node_path_matrix[i - 1][j];

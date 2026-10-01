@@ -1,0 +1,925 @@
+===============================================================================
+ vgan reference-data migration to vg v1.75  --  commands & notes
+===============================================================================
+
+WHY THIS IS NEEDED
+------------------
+vgan now builds against vg v1.75 (vg_newest). Two data formats changed vs the
+old vg (~v1.44) that the published reference databases were built with:
+
+  1. The in-memory graph file `*.og` is ODGI format. ODGI was REMOVED from
+     bdsg in v1.75, so new vg cannot read `*.og` at all.
+     FIX: convert `*.og` -> HashGraph using the OLD vg (it can still read ODGI).
+          `old_vg convert -a DB.og > DB.hg`   (HashGraph magic = 0x284d4f38)
+
+  2. The giraffe distance index `*.dist` is an old SnarlDistanceIndex (v1022;
+     new vg wants v5) -> giraffe maps 0 reads and aborts. The minimizer `*.min`
+     is also stale.
+     FIX: rebuild `*.dist` and `*.min` with NEW vg.
+
+STATUS (2026-08-19)
+--------------------
+  HaploCart : VERIFIED end-to-end (rCRS -> haplogroup H2a2a1).
+  euka      : VERIFIED end-to-end (both dynamic and static bin/vgan) on a
+              128-core / 1TB-RAM box. Test read set
+              test/input_files/euka/three_none_100.fq.gz correctly detects
+              Myotis (~24.5%, expected 20-30%) and Ursidae (~75.5%, expected
+              68-78%), matching src/test.cpp's expected ranges -- PROVIDED
+              the giraffe shortread-minimizer cache is fresh, see the
+              "CRITICAL GOTCHA" section below. This is a real, reproducible
+              vg bug independent of the migration itself and independent of
+              static vs dynamic linking (confirmed: both hit it identically).
+  soibean   : VERIFIED end-to-end on the same box (same caveat as euka).
+              Test read set test/input_files/soibean/k1.fq.gz with
+              --dbprefix Ursidae correctly identifies source
+              NC_003426.1_Ursus_americanus_mitochondrion__complete_genome
+              with proportion estimate 1.0.
+  trailmix  : NEWLY INTEGRATED (not a data migration -- an entirely new
+              subcommand ported into this vg-1.75 checkout from a separate,
+              older vgan tree). VERIFIED end-to-end: test/input_files/
+              trailmix/HV4b.fq.gz against share/vgan/publication_tmfiles/
+              (--dbprefix pub.graph) runs safari mapping, rpvg, and the MCMC
+              to completion and produces sensible resultBranchEstimate.txt
+              (Mean Pi ~0.71, 95% CI 0.50-0.95, ESS ~30) and
+              resultBaseProportionEstimates.txt. See section D) below.
+  tempeh    : NEWLY INTEGRATED (not a data migration or a vg-linked port at
+              all -- a separate standalone CMake project, github.com/
+              JolanBoucher/cdx, wrapped as a vgan subcommand via subprocess
+              dispatch). VERIFIED end-to-end: build mode on
+              share/vgan/publication_tmfiles/pub.graph.giraffe.gbz, inspect
+              mode on the resulting .cdx, and coverage mode against a real
+              GAM (2,326 reads, 100% mapped, 77.12% breadth of coverage,
+              valid coverage_graph.png) -- all three via both the dynamic
+              and static bin/vgan. See section E) below.
+
+The earlier UNVERIFIED status was purely a RAM/disk constraint (euka/soibean
+DBs are ~10 GB each, distance indexes ~6.6-21 GB) -- a small dev box couldn't
+hold them. On a big box the data migration works with the recipe below, BUT
+several additional non-obvious problems had to be solved (see "PROBLEMS
+FOUND AND FIXED" and "CRITICAL GOTCHA" below) that only show up once you
+actually run the tools repeatedly, not just once.
+
+
+-------------------------------------------------------------------------------
+ VG IS PINNED TO ONE EXACT COMMIT -- don't let it drift
+-------------------------------------------------------------------------------
+vg is actively developed (frequent upstream commits), and NOTHING about a
+plain `git clone` gets you the same vg twice -- it gets you whatever the
+default branch's HEAD is on the day you clone. Every fix in this file (the
+snarl_seed_clusterer/detailMap/precompute_GAM/etc. bugs, the exact
+src/Makefile link flags, the reference-database formats: HashGraph,
+SnarlDistanceIndex v5, the giraffe combined -Z/.giraffe.gbz style) was
+verified against ONE specific vg commit. A newer vg checked out next month
+is not guaranteed to build, link, or produce compatible index formats
+without re-doing some of this work.
+
+PINNED COMMIT: 6193310e3  (`git describe` -> v1.75.0-258-g6193310e3 "Spike")
+NOTE: this is v1.75.0 PLUS 258 later commits, not the v1.75.0 tag itself --
+whoever originally set this up checked out a specific point past the tag,
+not the tag.
+
+Both `vg_newest/` (the real clone) and `dep/vg/` (see the libdw/libelf note
+below for why these are sometimes two separate materialized directories
+rather than one being a symlink to the other -- check with `readlink
+dep/vg` on your box) are now kept in DETACHED HEAD state at this commit,
+NOT on a branch tracking origin/master:
+    cd vg_newest && git checkout 6193310e3
+    cd dep/vg     && git checkout 6193310e3   # only if dep/vg is its own
+                                               # real clone, not a symlink
+This means a `git pull` (or anything that assumes an attached branch) in
+either directory will refuse/fail instead of silently fast-forwarding to
+whatever vg looks like today -- that failure is the point, not a bug.
+`build_with_vg_newest.sh` now does this pin automatically (including a
+fresh `git clone` + `git submodule update --init --recursive` if
+vg_newest/ doesn't exist yet), so re-running it from scratch on a new box
+reproduces the same vg every time instead of grabbing latest.
+
+To verify you're still pinned (both should print "HEAD detached at
+6193310e3", never "On branch master"):
+    cd vg_newest && git status | head -1
+    cd dep/vg     && git status | head -1
+
+To deliberately move to a newer vg (only when you actually want to
+re-verify everything against it): update PINNED_VG_COMMIT in
+build_with_vg_newest.sh, re-run it, then re-run the euka/soibean/trailmix/
+tempeh end-to-end tests in this file before trusting the result -- expect
+to need to re-derive some of "CODE CHANGES REQUIRED" below, since that's
+exactly the kind of upstream-API drift this pin exists to avoid hitting
+unexpectedly.
+
+
+-------------------------------------------------------------------------------
+ CRITICAL GOTCHA: the giraffe shortread-minimizer cache is NOT safely
+ reusable across separate process invocations (real vg bug, not ours)
+-------------------------------------------------------------------------------
+On first use of a `-Z prefix.giraffe.gbz -d prefix.dist -m prefix.min`
+combination, giraffe (in this vg build, v1.75.0-258-g6193310e3 "Spike")
+builds and writes `prefix.shortread.withzip.min` + `prefix.shortread.zipcodes`
+next to the gbz -- even though `-m` was passed explicitly (see the other
+`.shortread.*` note further down). This is a one-time cache meant to speed up
+future runs.
+
+OBSERVED: reusing that cache in a LATER, SEPARATE invocation reliably
+reproduces this crash (confirmed on both the dynamic and static bin/vgan,
+7 total repeated runs after the cache existed -> 7 crashes; deleting the
+cache and letting the SAME invocation rebuild it fresh -> works every time,
+but the very next invocation that reuses that freshly-built cache crashes
+again):
+
+    vgan: bdsg/src/snarl_distance_index.cpp:512: handlegraph::net_handle_t
+    bdsg::SnarlDistanceIndex::get_node_from_sentinel(...) const:
+    Assertion `is_chain(parent_chain)' failed.
+
+Because this happens inside a multi-threaded `giraffe` call, the crash
+handler's backward-cpp stack traces from several threads print
+concurrently and interleave into unreadable garbage -- don't be misled into
+thinking it's several different bugs; grep the raw log for "Assertion" to
+find the real (single) trigger under the noise.
+
+This is NOT a data-migration bug (the underlying .dist/.giraffe.gbz/.min are
+fine -- a run that builds the cache fresh and uses it within that same
+process always succeeds) and NOT specific to static vs dynamic linking
+(both are equally affected). It looks like a genuine deserialization bug in
+this vg build's on-disk zipcode-annotated minimizer cache reload path.
+
+WORKAROUND (required before every run, not just after an interrupted one):
+    rm -f share/vgan/<dir>/*.shortread.withzip.min share/vgan/<dir>/*.shortread.zipcodes
+    # or, for soibean's per-taxon dirs:
+    rm -f share/vgan/soibean_dir/<Taxon>.shortread.withzip.min share/vgan/soibean_dir/<Taxon>.shortread.zipcodes
+before each vgan euka/soibean invocation. This costs a bit of one-time
+rebuild time per run (tens of seconds for euka's ~7M-node graph) but avoids
+the crash entirely. This checkout's share/vgan/euka_dir and
+share/vgan/soibean_dir have had their stale `.shortread.*` files deleted as
+of this writing, so the next run of either tool will do a safe fresh build.
+
+
+PREREQUISITES
+-------------
+  - OLD vg (~v1.44) that reads ODGI. Easiest source: the official static
+    release binary for the EXACT version the DBs were built with:
+        wget https://github.com/vgteam/vg/releases/download/v1.44.0/vg
+    (confirmed exact version from share/vgan/soibean_dir/make_graph_files.sh,
+    which downloads this same v1.44.0 release when no --vg-path is given).
+  - NEW vg v1.75 -- see "THE vgtool WORKAROUND" below; you very likely do NOT
+    need a full `bin/vg` and should not fight to build one.
+  - wget, xxd, plenty of disk (euka/soibean ~15-20 GB working space each;
+    soibean's distance index alone is ~21 GB).
+
+
+-------------------------------------------------------------------------------
+ THE vgtool WORKAROUND (full `bin/vg` is NOT required, and may not build)
+-------------------------------------------------------------------------------
+`make bin/vg` in vg_newest links EVERY subcommand, including ones that need
+`libcairo.a`/`libpixman-1.a` (built via meson+ninja from deps/cairo,
+deps/pixman). On this box that meson build failed outright with real cairo
+compile errors (CAIRO_MUTEX_IMPL_* not defined, cairo-wideint-type errors) --
+a meson/toolchain-version issue unrelated to vgan. Do not spend time fixing
+cairo: vgan's own link recipe proves it isn't needed for anything vgan uses.
+
+Instead, build a tiny standalone driver ("vgtool") that links libvg.a plus
+ONLY the specific vg subcommand objects you need, exactly the way vgan itself
+links giraffe/gamsort/gbwt/filter/view (src/Makefile FLAGS_DYNAMIC_OBJS).
+None of {index, minimizer, autoindex, chunk, mod, convert, view, gbwt} need
+cairo to compile OR link (cairo symbols only get pulled in by subcommands
+vgan/vgtool never call, like `vg view -d`/plotting).
+
+  1. meson/ninja are needed by cairo/pixman's build but NOT by vgtool. If you
+     hit the cairo failure, just neutralize the dependency instead of fixing
+     it (vgtool never calls cairo functions so an empty archive satisfies the
+     linker/Makefile without providing real functionality):
+         cd vg_newest && ar rc lib/libcairo.a && touch lib/libcairo.a
+     (leave any already-built lib/libpixman-1.* alone if present).
+
+  2. Compile whatever subcommand objects you need that aren't already built
+     (check vg_newest/obj/subcommand/*.o first -- a prior partial build may
+     already have most of them). This does NOT rebuild cairo because the
+     generic subcommand.o build rule only checks that libcairo.a EXISTS:
+         cd vg_newest
+         make -j16 obj/subcommand/autoindex_main.o \
+                    obj/subcommand/chunk_main.o \
+                    obj/subcommand/mod_main.o \
+                    obj/subcommand/convert_main.o
+     (index_main.o, minimizer_main.o, giraffe_main.o, gamsort_main.o,
+     gbwt_main.o, filter_main.o, view_main.o, options.o, subcommand.o,
+     config/allocator_config_jemalloc.o were already built for vgan itself.)
+
+  3. Minimal driver source (save as vgtool_main.cpp), modeled on vg's own
+     src/main.cpp -- the two initialization calls
+     (AllocatorConfig::configure / temp_file::set_system_dir) are NOT
+     optional: skipping temp_file::set_system_dir() makes autoindex try to
+     mkdir a temp dir under "/" and fail with "couldn't create temp
+     directory: /vg-XXXXXX".
+
+        #include <iostream>
+        #include "subcommand/subcommand.hpp"
+        #include "io/register_libvg_io.hpp"
+        #include "config/allocator_config.hpp"
+        #include "utility.hpp"
+        using namespace std; using namespace vg;
+        int main(int argc, char** argv) {
+            AllocatorConfig::configure();
+            temp_file::set_system_dir();
+            if (!vg::io::register_libvg_io()) { cerr << "register failed\n"; }
+            if (argc < 2) { cerr << "usage: " << argv[0] << " <subcommand> [options]\n"; return 1; }
+            auto* subcommand = vg::subcommand::Subcommand::get(argc, argv);
+            if (subcommand == nullptr) { cerr << "no such subcommand: " << argv[1] << "\n"; return 1; }
+            (*subcommand)(argc, argv);
+            return 0;
+        }
+
+  4. Compile and link (from vg_newest/), pulling in only the objects you need
+     (add chunk/mod/convert/gbwt/view as needed for the soibean per-taxon
+     step below). Same include/link flags family as src/Makefile's
+     FLAGS_DYNAMIC, minus everything cairo/pixman/fontconfig/freetype/etc
+     since we don't need them:
+
+        g++ -w -std=c++2a -fopenmp -O2 -g \
+          -Iinclude -Ideps/progress_bar -Isrc/io -Isrc/algorithms -Isrc \
+          -Ideps/libvgio/include -c -o vgtool_main.o vgtool_main.cpp
+
+        g++ -w -std=c++2a -fopenmp -o bin/vgtool vgtool_main.o \
+          obj/subcommand/subcommand.o obj/subcommand/options.o \
+          obj/subcommand/index_main.o obj/subcommand/minimizer_main.o \
+          obj/subcommand/autoindex_main.o obj/subcommand/giraffe_main.o \
+          obj/subcommand/gamsort_main.o obj/subcommand/gbwt_main.o \
+          obj/subcommand/filter_main.o obj/subcommand/view_main.o \
+          obj/subcommand/chunk_main.o obj/subcommand/mod_main.o \
+          obj/subcommand/convert_main.o obj/config/allocator_config_jemalloc.o \
+          -L lib -Wl,-rpath,$(pwd)/lib -rdynamic lib/libvg.a \
+          -lvcflib -lwfa2 -ltabixpp -lgssw -lssw -lsublinearLS -lncurses \
+          -lgcsa2 -lgbwtgraph -lgbwt -lkff -ldivsufsort -ldivsufsort64 \
+          -lraptor2 -lpinchesandcacti -l3edgeconnected -lsonlib -lstructures \
+          -lbdsg -lxg -lsdsl -lhandlegraph -lzstd -lcrypto -ldl \
+          /lib/x86_64-linux-gnu/libdw.so.1 /lib/x86_64-linux-gnu/libelf.so.1 \
+          -latomic -lboost_program_options -llzma -lbz2 \
+          -Wl,-Bstatic -lvgio -lhts -ldeflate -lz -lbz2 -llzma -lprotobuf \
+          -ljansson -Wl,-Bdynamic -lpthread -lm lib/libjemalloc.a \
+          -pthread -lz -lpthread -lm
+
+     (See "libdw/libelf" note below for why the direct .so.1 paths are used
+     instead of -ldw -lelf.)
+
+     Result: a ~300 MB `vgtool` binary that runs `index`, `minimizer`,
+     `autoindex`, `chunk`, `mod`, `convert`, `giraffe`, `gbwt`, `view`
+     exactly like a real `vg` for these purposes.
+
+
+-------------------------------------------------------------------------------
+ libdw/libelf link fix (affects vgan's own build too, not just vgtool)
+-------------------------------------------------------------------------------
+src/Makefile's FLAGS_DYNAMIC links `-ldw -lelf`. On a box with only the
+runtime packages installed (no libdw-dev/libelf-dev), `/usr/lib/.../libdw.so`
+(unversioned) doesn't exist, only `libdw.so.1`, so the linker fails with
+"cannot find -ldw". Fix without touching the Makefile or installing packages
+(no sudo needed): add unversioned symlinks next to vg's OTHER libs, since
+`-L../dep/vg/lib` is already on the search path:
+    ln -sf /lib/x86_64-linux-gnu/libdw.so.1  dep/vg/lib/libdw.so
+    ln -sf /lib/x86_64-linux-gnu/libelf.so.1 dep/vg/lib/libelf.so
+NOTE: dep/vg is NOT always a symlink to vg_newest despite what CLAUDE.md may
+say -- on this box it had become a materialized real directory copy (same
+file list, different inodes). Check with `readlink dep/vg` / compare inode
+numbers before assuming edits to one are visible in the other; add the
+symlinks in whichever one `../dep/vg/lib` in src/Makefile actually resolves
+to (run `realpath ../dep/vg/lib` from src/).
+
+
+-------------------------------------------------------------------------------
+ STATIC BUILD (`make static`) -- VERIFIED, needs real libdw.a/libelf.a
+-------------------------------------------------------------------------------
+The symlink trick above is enough for the DYNAMIC build (`make vgan`), but
+`make static` passes `-static`, which forces the linker to require actual
+`.a` archives for every `-l` -- a symlink to a `.so` doesn't satisfy it:
+    /usr/bin/ld: cannot find -ldw
+    /usr/bin/ld: cannot find -lelf
+`libdw-dev`/`libelf-dev` (which ship `libdw.a`/`libelf.a`) were not
+installed and there was no sudo access. Fix by building elfutils from
+source (no root needed) and dropping the resulting static libs where
+`-L../dep/vg/lib` will find them:
+
+    wget https://sourceware.org/elfutils/ftp/0.190/elfutils-0.190.tar.bz2
+    tar xjf elfutils-0.190.tar.bz2 && cd elfutils-0.190
+    ./configure --disable-debuginfod --disable-libdebuginfod --prefix=$PWD/install
+    make -j16
+    cp libdw/libdw.a libelf/libelf.a  /path/to/dep/vg/lib/
+
+    cd src && make static
+    file ../bin/vgan   # -> "statically linked" (not "dynamically linked")
+
+(Used version 0.190 to match the runtime libdw1t64/libelf1t64 already
+installed via `dpkg -l`, though for a static link the exact version mostly
+just needs to work, not match exactly.)
+
+VERIFIED: the static `bin/vgan` builds, links (only harmless glibc NSS/dlopen
+static-linking warnings, no errors), runs, and produces IDENTICAL euka/soibean
+results to the dynamic build once the shortread-cache gotcha above is
+accounted for -- the snarl_distance_index crash affects both builds equally
+and is unrelated to static vs dynamic linking (confirmed by repeated testing
+of both).
+
+NOTE: `make static` and `make vgan` both write to `../bin/vgan` -- building
+one overwrites the other, they cannot coexist. Check `file bin/vgan` to see
+which one is currently in place. This checkout currently has the DYNAMIC
+build in `bin/vgan` (it's the default `make` target and the one exercised
+most during this migration's testing).
+
+
+-------------------------------------------------------------------------------
+ QUICK START: pre-converted reference databases (recommended - skip A-D below)
+-------------------------------------------------------------------------------
+Everything in sections A) through D) below is the ORIGINAL migration recipe
+(download the old v1.44-format DB, convert .og -> HashGraph with OLD_VG,
+rebuild .dist/.min with NEW_VG) -- useful if you need to rebuild from
+scratch or understand how the data was produced, but NOT needed for normal
+use anymore. The already-converted, ready-to-run output of that whole
+process has been archived and uploaded to Google Drive, one .tar.gz per
+share/vgan/ subdirectory, containing exactly the minimal file set each tool
+needs (no .odgi.bak backups, no giraffe shortread-cache files, no unused
+soibean_db.gbwt/.gg/.gfa/.dist/.min/.giraffe.gbz -- see the "SPARSE FILES"
+note below before trusting `du` on these). Total ~11.5 GB apparent size
+across all five.
+
+    Archive                    -> extracts to                  Google Drive ID
+    hcfiles.tar.gz              share/vgan/hcfiles/              1gPue0IKdEz3UpY2KMbAHnXZXKvEcCdmQ
+    euka_dir.tar.gz              share/vgan/euka_dir/             1cHDZujMQaMiJxZHhSD56BqlziJWthhPk
+    soibean_dir.tar.gz          share/vgan/soibean_dir/          1Hzjs4Bc8V71OYp8vY7waI2Q2x4vi8fSP
+    tmfiles.tar.gz               share/vgan/tmfiles/              1jPs3artDM_tpKSo0WQgDrqnV9WIk3_Nh
+    publication_tmfiles.tar.gz  share/vgan/publication_tmfiles/  1VjAje9l7yDuSPMxx4WfRIooCJDfH4GFk
+
+Download (Google Drive's normal share link shows an HTML "can't scan this
+file for viruses" interstitial for files this size instead of the raw
+bytes if you just `wget`/`curl` the share URL directly -- use the
+`drive.usercontent.google.com` endpoint below instead, which bypasses it;
+confirmed working for all five IDs above):
+
+    for name_id in \
+        "hcfiles:1gPue0IKdEz3UpY2KMbAHnXZXKvEcCdmQ" \
+        "euka_dir:1cHDZujMQaMiJxZHhSD56BqlziJWthhPk" \
+        "soibean_dir:1Hzjs4Bc8V71OYp8vY7waI2Q2x4vi8fSP" \
+        "tmfiles:1jPs3artDM_tpKSo0WQgDrqnV9WIk3_Nh" \
+        "publication_tmfiles:1VjAje9l7yDuSPMxx4WfRIooCJDfH4GFk" ; do
+      name="${name_id%%:*}"; id="${name_id##*:}"
+      curl -L -o "${name}.tar.gz" \
+        "https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=t"
+    done
+
+Extract (each archive's top-level entry is the bare directory name, e.g.
+`publication_tmfiles/...` -- confirmed by inspection, so extracting
+straight into share/vgan/ lands files in the right place with no
+--strip-components needed; verify with `tar -tzf X.tar.gz | head` first if
+in doubt, especially before a multi-GB extract):
+
+    mkdir -p share/vgan
+    for f in hcfiles euka_dir soibean_dir tmfiles publication_tmfiles; do
+        tar -xzf "${f}.tar.gz" -C share/vgan/
+    done
+
+Then jump straight to each section's `vgan <tool> ...` test-invocation
+line below (A/B/C/D) to verify the download worked -- everything before
+that line in each section is the old from-scratch conversion recipe and
+can be skipped.
+
+NOTE ON GOOGLE DRIVE LINK LONGEVITY: these are personal-account share
+links, not a permanent release artifact -- they can be revoked, moved, or
+hit Google's daily download-quota cap on popular files (unlikely for a
+private share link, but possible). If a link stops working, fall back to
+the from-scratch conversion recipe in A)-D) below using the original FTP
+sources, or ask whoever uploaded these to re-share.
+
+SPARSE FILES: several of these files (euka_db.dist, euka_db.og,
+euka_db.min, euka_db.gbwt, euka_db.gg, euka_db.giraffe.gbz, soibean_db.og,
+graph.og, graph.xg, hcfiles/graph.og) are sparse on a filesystem that
+supports it. `du` on them will report a much smaller number than `ls -l` /
+`stat` -- that's expected, not corruption; see the "TOTAL SIZE" note in
+this repo's db_files_manifest.txt for the full explanation. tar
+extraction re-materializes them as normal (non-sparse, unless you pass
+--sparse to tar) files, so extracted files will show matching apparent
+AND disk-usage sizes -- that's fine and expected too.
+
+
+-------------------------------------------------------------------------------
+ A) HAPLOCART  (ships a combined graph.giraffe.gbz -- simplest; VERIFIED)
+-------------------------------------------------------------------------------
+  OLD_VG=/path/to/old/vg
+  NEW_VG=/path/to/vgtool   (or a working bin/vg)
+  cd share/vgan/hcfiles
+
+  BASE=ftp://ftp.healthtech.dtu.dk/public/haplocart/hcfiles
+  for f in graph.giraffe.gbz graph.dist graph.og k31_w11.min k17_w18.min \
+           path_supports parsed_pangenome_mapping parents.txt children.txt \
+           graph_paths mappability.tsv ; do wget -c "$BASE/$f" -O "$f" ; done
+
+  $OLD_VG convert -a graph.og > graph.og.hg
+  mv graph.og graph.og.odgi.bak && mv graph.og.hg graph.og
+
+  $NEW_VG index -j graph.dist graph.giraffe.gbz
+  $NEW_VG minimizer -k 31 -w 11 -d graph.dist -o k31_w11.min graph.giraffe.gbz
+  $NEW_VG minimizer -k 17 -w 18 -d graph.dist -o k17_w18.min graph.giraffe.gbz
+
+  vgan haplocart --hc-files share/vgan/hcfiles/ -f test/input_files/rCRS.fa -t 4
+  #   expected: predicted haplogroup H2a2a1
+
+
+-------------------------------------------------------------------------------
+ B) EUKA  (ships a pre-built euka_db.giraffe.gbz -- easy case; VERIFIED)
+-------------------------------------------------------------------------------
+Unlike what earlier notes assumed, the euka FTP dir DOES already contain a
+pre-built euka_db.giraffe.gbz (151 MB) -- no need for `vg autoindex` from the
+raw GFA/VG (which are much bigger: .gfa 916MB, .vg 1.3GB). Just rebuild the
+dist/min indexes from the shipped gbz, mirroring HaploCart.
+
+  OLD_VG=/path/to/old/vg ; NEW_VG=/path/to/vgtool
+  cd share/vgan/euka_dir
+  BASE=ftp://ftp.healthtech.dtu.dk/public/euka_files
+
+  for f in euka_db.og euka_db.gbwt euka_db.gg euka_db.giraffe.gbz ; do
+    wget -c "$BASE/$f" -O "$f" ; done
+  # euka_db.clade / euka_db.bins are small and already checked into git.
+
+  $OLD_VG convert -a euka_db.og > euka_db.og.hg
+  mv euka_db.og euka_db.og.odgi.bak && mv euka_db.og.hg euka_db.og
+
+  $NEW_VG index -j euka_db.dist -t $(nproc) euka_db.giraffe.gbz
+  $NEW_VG minimizer -d euka_db.dist -o euka_db.min -t $(nproc) euka_db.giraffe.gbz
+
+  vgan euka --euka_dir share/vgan/euka_dir/ -fq1 test/input_files/euka/three_none_100.fq.gz -t 8 -o /tmp/euka_test/three_none_100
+  #   expected: Myotis ~24%, Ursidae ~75% detected (see src/test.cpp)
+
+  Resulting sizes on this run: euka_db.dist ~6.9 GB, euka_db.min ~750 MB
+  (close to the original 6.5 GB / 649 MB, as expected).
+
+
+-------------------------------------------------------------------------------
+ C) SOIBEAN  (no pre-built gbz; per-taxon subgraph is the REAL workflow; VERIFIED)
+-------------------------------------------------------------------------------
+IMPORTANT: soibean_db.* is NOT used directly for read classification. The
+--dbprefix option is MANDATORY (soibean.cpp throws if not given) and must
+name a per-taxon subgraph (e.g. "Ursidae") that does not ship pre-built --
+it's generated on demand from soibean_db via share/vgan/soibean_dir/
+make_graph_files.sh. soibean_db.gfa/.vg/.og/.gbwt/.gg only exist to be
+CHUNKED into these small per-taxon graphs; you do not need to build a
+soibean_db.giraffe.gbz/.dist/.min for the normal workflow (only .og and
+.gbwt are read directly, by Euka::readPathHandleGraph, shared code with
+euka/assembly). If you already built them anyway (as an early sanity check
+here) they're harmless but a waste of ~21 GB of disk and about an hour of
+compute on this box -- skip that step next time.
+
+  --- C.1) One-time DB-level prep (only .og is actually needed for chunking) ---
+  OLD_VG=/path/to/old/vg ; NEW_VG=/path/to/vgtool
+  cd share/vgan/soibean_dir
+  BASE=ftp://ftp.healthtech.dtu.dk/public/soibean_files
+
+  for f in soibean_db.og soibean_db.gbwt soibean_db.gg soibean_db.gfa ; do
+    wget -c "$BASE/$f" -O "$f" ; done
+  # baseFreq/bins/clade already in git; tree_dir needs extracting:
+  wget -c -r -nH --cut-dirs=2 -np "$BASE/tree_dir/" -P .
+  cd tree_dir && unzip -o trees.zip && cd ..
+
+  $OLD_VG convert -a soibean_db.og > soibean_db.og.hg
+  mv soibean_db.og soibean_db.og.odgi.bak && mv soibean_db.og.hg soibean_db.og
+
+  --- C.2) Per-taxon subgraph (repeat for each taxon you want to classify
+             against, e.g. "Ursidae" -- this is fast, seconds not hours,
+             because taxon subgraphs are ~15k nodes not ~7M) ---
+  # get the taxon's node range from column 5:6 of soibean_db.clade:
+  grep -i "Ursidae" soibean_db.clade   # -> ... 6741214  6756721
+
+  $NEW_VG chunk -r 6741214:6756721 -x soibean_db.og > Ursidae_pre.vg
+  $NEW_VG mod -X 5 Ursidae_pre.vg > Ursidae.vg
+  $NEW_VG view Ursidae.vg > Ursidae.gfa
+
+  # NOTE: new vg's `gbwt` subcommand CHANGED FLAG SEMANTICS vs v1.44:
+  #   old: vg gbwt -o X.gbwt -g X.gg -G X.gfa      (-G took the GFA path)
+  #   new: -G is now a bare flag ("index paths in the GFA"); the GFA path is
+  #        a positional arg instead, and -g now means "build a GBZ" (not the
+  #        old .gg GBWTGraph format) -- so drop -g entirely, we don't need
+  #        a .gg file since map_giraffe_Euka.cpp uses -Z gbz, not -g/.gg.
+  $NEW_VG gbwt -o Ursidae.gbwt -G Ursidae.gfa
+  #   CHECK Ursidae.gbwt is NOT 0 bytes -- if it is, you used the old syntax.
+
+  $NEW_VG autoindex --workflow giraffe -g Ursidae.gfa -p Ursidae -t $(nproc)
+  #   -> Ursidae.giraffe.gbz, Ursidae.dist, and
+  #      Ursidae.shortread.withzip.min + Ursidae.shortread.zipcodes
+  #   (NOT a plain Ursidae.min -- autoindex's "giraffe" workflow builds the
+  #   newer zipcode-annotated minimizer by default. vgan's map_giraffe_Euka.cpp
+  #   still expects a plain `-m prefix.min`, so rebuild one explicitly and
+  #   delete the shortread.* files, which are otherwise unused:)
+  $NEW_VG minimizer -d Ursidae.dist -o Ursidae.min Ursidae.giraffe.gbz
+  rm -f Ursidae.shortread.withzip.min Ursidae.shortread.zipcodes Ursidae_pre.vg
+
+  $NEW_VG convert -g Ursidae.gfa -a > Ursidae.og   # HashGraph for classification
+
+  vgan soibean --soibean_dir share/vgan/soibean_dir/ -fq1 test/input_files/soibean/k1.fq.gz -t 8 -o /tmp/soibean_test/k1 --dbprefix Ursidae --iter 1000 --burnin 150 --chains 1
+  #   expected: source = NC_003426.1_Ursus_americanus_mitochondrion, proportion ~1.0
+  #   (matches src/test.cpp's run_k1, which uses the same --dbprefix Ursidae)
+
+
+-------------------------------------------------------------------------------
+ D) TRAILMIX  (new subcommand port, not a data migration; VERIFIED)
+-------------------------------------------------------------------------------
+TrailMix (ancient hominin mtDNA mixture deconvolution / phylogenetic
+placement) did not exist in this checkout at all -- it was ported in whole
+from a separate, older vgan source tree
+(/net/well/pool/projects2/gabriel/trailmix/hominin/vgan_dev, itself still on
+vg v1.44) that is otherwise unrelated to the euka/soibean/HaploCart migration
+above. Unlike euka/soibean, there was no previously-working vg-1.75 baseline
+to diff against -- every code path below had never been compiled or run
+against this vg version before this port.
+
+  --- D.1) rpvg dependency (haplotype-aware transcript abundance) ---
+  TrailMix's mapping step is followed by rpvg (a separate C++ project,
+  dep/rpvg/) for path/transcript posterior estimation. Rebuilt fresh from the
+  10 core rpvg .cpp files, compiled directly against vg_newest's own headers,
+  with ZERO source changes needed. rpvg's own copies of VPKG type
+  registration for gbwt/r_index/xg were skipped/superseded -- vg_newest's own
+  `vg::io::register_libvg_io()` (already linked into vgan) already covers
+  them, so rpvg only needed compiling+archiving, not its own registration
+  bootstrapping. Link order matters: `-lrpvg` must appear BEFORE
+  `../dep/vg/lib/libvg.a` in src/Makefile's FLAGS_STATIC/FLAGS_DYNAMIC so
+  libvg.a (later in link order) resolves rpvg's undefined gbwt/handlegraph
+  symbols.
+
+  --- D.2) The "safari" gap: SAFARI runs as a SUBPROCESS, not in-process ---
+  TrailMix's read-mapping step shells out to `vg safari`, a damage-aware
+  giraffe fork (github.com/grenaud/SAFARI, forked from vg v1.44 by the same
+  author/team as vgan) that does NOT exist in vg 1.75 -- and porting it would
+  mean re-applying ~900 lines of changes to vg's core mapper
+  (minimizer_mapper.cpp/hpp) plus index_registry.cpp/hpp plus gbwtgraph
+  submodule changes (minimizer.h/.cpp, decode_rymer()), all of which have
+  been substantially restructured between v1.44 and v1.75's zipcode-based
+  seed-clustering system. Given a working prebuilt safari-capable vg v1.44
+  binary already existed in vgan_dev's own tree, the chosen fix is a process
+  boundary instead of a deep in-process port:
+      dep/safari_vg/bin/vg   (788 MB, v1.0.0-6-g667d8f7, dynamically linked;
+                               copied as-is from vgan_dev/dep/vg/bin/vg)
+  TrailMix::map_giraffe() (src/trailmix_functions.h) forks, execv()s this
+  binary with the same -f/-Z/-d/-m/-q/--deam-3p/--deam-5p args safari always
+  took, and redirects its stdout (a GAM stream) into a named pipe that the
+  rest of the current-vg-1.75 vgan pipeline reads exactly as it already does
+  for euka/soibean's in-process mapping. GAM (protobuf) is stable enough
+  across vg v1.44->v1.75 that this just works -- vg.proto differs by exactly
+  one new field between the two versions.
+
+  --- D.3) Reference database: tmfiles / publication_tmfiles ---
+  Full database, sourced from vgan_dev's share/vgan/tmfiles/ into this
+  checkout's share/vgan/tmfiles/: graph.og (ODGI->HashGraph converted exactly
+  like euka/soibean, original kept as graph.og.odgi.bak), graph.xg,
+  graph.gbwt, graph.gg, graph.giraffe.gbz, graph.min, graph.dist, graph.ry,
+  mappability.tsv, parsed_pangenome_mapping, haps.treefile (271582 bytes,
+  the FULL tree).
+
+  A separate, smaller test/publication database was ALSO copied, from
+  vgan_dev's share/vgan/publication_tmfiles/ into this checkout's
+  share/vgan/publication_tmfiles/ (prefix "pub.graph"):
+  pub.graph.{dist,gbwt,gg,giraffe.gbz,min,og,ry,xg} (og converted the same
+  way, original kept as pub.graph.og.odgi.bak), plus pantranscriptome.txt,
+  parsed_pangenome_mapping, mappability.tsv, and -- CRITICALLY -- its OWN
+  haps.treefile (2614 bytes, a pruned tree matching only the pub.graph
+  subset of haplotypes).
+
+  IMPORTANT: this pub.graph set MUST live in its own separate directory
+  (publication_tmfiles/), used via `--tm-files /abs/path/to/
+  publication_tmfiles/ --dbprefix pub.graph`. Do NOT copy pub.graph.* files
+  into the same directory as the full tmfiles/ -- TrailMix.cpp always loads
+  a single `haps.treefile` from whatever --tm-files directory is given
+  (dta->treePath = dta->graph_dir + "haps.treefile"; not prefixed by
+  --dbprefix), so mixing the two silently pairs the small pub.graph GRAPH
+  with the FULL 271582-byte tree, which crashes mid-MCMC (see bug 6 below).
+  Also note --tm-files is resolved via getFullPath() relative to the
+  process's CWD, not relative to the binary/cwdProg -- pass an absolute path
+  unless you know exactly what directory `vgan` will be launched from.
+
+  --- D.4) Test invocation and result (VERIFIED) ---
+  vgan trailmix -fq1 test/input_files/trailmix/HV4b.fq.gz \
+    --tm-files /abs/path/to/share/vgan/publication_tmfiles/ \
+    --dbprefix pub.graph -k 1 -s testsample -t 8 -z /tmp/scratch/ \
+    --iter 2000 --burnin 200 -o /tmp/out/result -v
+  #   expected: safari subprocess correctly single-end-maps all reads (no
+  #   "Falling back on single-end mapping" warning), rpvg completes both its
+  #   haplotypes and haplotype-transcripts calls, MCMC runs to
+  #   ITERATION 2000 without error, and resultBranchEstimate.txt /
+  #   resultBaseProportionEstimates.txt are written with non-degenerate
+  #   values (observed: Mean Pi ~0.707, 95% CI [0.50, 0.95], Pi ESS ~29.6).
+
+  STATIC BUILD: also VERIFIED. `make static` (src/Makefile) links TrailMix.o/
+  run_trailmix.o and -lrpvg with only the same harmless glibc NSS/dlopen
+  static-linking warnings already seen for euka/soibean/HaploCart's static
+  build (dlopen/getaddrinfo/gethostbyname/getpwuid -- see the "STATIC BUILD"
+  section above), no errors. Same D.4 invocation against the statically
+  linked bin/vgan completed cleanly (exit 0, no crash/hang, MCMC to
+  ITERATION 2000) and produced closely matching results: Mean Pi ~0.708,
+  95% CI [0.49, 0.97], Pi ESS ~51 -- consistent with the dynamic build given
+  MCMC's inherent run-to-run stochasticity. The safari subprocess binary
+  (dep/safari_vg/bin/vg) itself stays dynamically linked regardless of
+  whether vgan's own binary is static or dynamic, since it's invoked via
+  execv() as a wholly separate process, not linked into vgan at all.
+
+  --- D.5) Bugs found and fixed in previously-uncompiled/untested code ---
+  All six of the following were latent bugs in code that had never
+  successfully compiled or run against this vg-1.75 checkout before now (the
+  first four are pre-existing vgan_dev bugs preserved verbatim during
+  porting until diagnosed; the last two are integration bugs introduced by
+  the process-boundary/database design of this port):
+    1. damageProfiles path: TrailMix.cpp hardcoded
+       "../share/damageProfiles/" (3 occurrences) instead of
+       "../share/vgan/damageProfiles/" (this checkout's actual layout).
+    2. dta->cwdProg (Trailmix_struct.h) was declared but NEVER assigned
+       anywhere -- needed by run_safari_subprocess() to locate
+       dep/safari_vg/bin/vg. Fixed by assigning it in TrailMix::run right
+       after `dta` construction.
+    3. run_trailmix.cpp never called mkfifo() on dta->fifo_A before forking
+       the mapping child, unlike every other tool (euka/soibean/HaploCart/
+       assembly/InSize all call mkfifo(fifo_A, 0666) explicitly). Safari's
+       open(fifo, O_WRONLY) failed with ENOENT until this was added.
+    4. Fifo deadlock: run_trailmix.cpp called waitpid() on the mapping
+       child BEFORE calling readGAM(dta). Since the child (safari subprocess)
+       blocks on open(fifo, O_WRONLY) until a reader opens the other end,
+       and the reader never runs until waitpid() returns, the two sides
+       waited on each other forever. Fixed by reordering to read first, then
+       waitpid (matching Euka::run's existing working pattern).
+    5. Paired-end detection (src/trailmix_functions.h): the branch condition
+       compared `dta->fastq1filename` to itself twice --
+       `if (fastq1filename != "" && fastq1filename != "")` -- instead of
+       checking `fastq2filename`, so single-end input always took the
+       "paired" code path AND passed fastq1filename as both -f arguments,
+       silently corrupting the safari invocation. The "single-end" else-if
+       branch had the same self-comparison bug and was consequently dead
+       code. Symptom: "mapped 0 reads single ended with N pairs of reads
+       left unmapped" / "Falling back on single-end mapping" despite
+       single-end input. Fixed both conditions to check fastq2filename and
+       fixed the paired branch's second -f argument to pass fastq2filename.
+    6. precompute_GAM_trailmix() (src/precompute.h) passed dta->fifo_A (the
+       SAME named pipe already fully drained by the earlier readGAM(dta)
+       call, with its writer long exited) to precompute_GAM(), which opens
+       it via `std::ifstream`. Opening a fifo for reading blocks until a
+       writer connects -- since none ever would, this hung indefinitely
+       (observed: 15+ minutes stuck at "Precomputing..."). Fixed to pass
+       dta->rpvg_gamfilename, the regular file readGAM(dta) already writes
+       the same alignments to for rpvg's consumption.
+    7. (Not a code bug, a database-layout bug -- see D.3) pub.graph.* files
+       were initially copied into the full tmfiles/ directory alongside the
+       full 271582-byte haps.treefile. Running MCMC against the small
+       pub.graph subgraph with the FULL tree caused the tree traversal to
+       visit internal/ancestor nodes with no corresponding entry in the
+       per-read detailMap (populated only for pub.graph's actual paths),
+       throwing `runtime_error("Missing key")` from inside an
+       `#pragma omp parallel for` region. An uncaught exception crossing an
+       OpenMP parallel region is undefined behavior in C++ -- multiple
+       threads threw simultaneously, producing cascading
+       "terminate called recursively" / SIGABRT crashes with interleaved,
+       unreadable backward-cpp stack traces from concurrent threads (same
+       interleaving phenomenon documented in the euka/soibean
+       "CRITICAL GOTCHA" section above, different root cause). Fixed by
+       giving pub.graph.* its own publication_tmfiles/ directory with its
+       own matching small haps.treefile (see D.3).
+
+
+-------------------------------------------------------------------------------
+ E) TEMPEH  (wraps the standalone `cdx` toolkit; VERIFIED)
+-------------------------------------------------------------------------------
+tempeh is a thin dispatcher around a completely separate, self-contained
+project -- github.com/JolanBoucher/cdx (a CDX pangenome coordinate-index
+builder + GAM coverage tool) -- cloned into dep/cdx/ and built with its OWN
+CMake system, entirely independent of vgan's own hand-rolled src/Makefile.
+Unlike every other subcommand in this checkout, tempeh does not link
+anything from cdx into the vgan binary at all: `Trailmix`/`Euka`/`soibean`/
+`HaploCart` all statically link vg internals, but cdx is architected from
+the start to be wrapped as a single flat command by a parent toolkit (see
+cdx's own src/main.cpp docstring: "the intended toolkit context is
+`<toolkit> cdx <file> [OPTIONS]` ... adding a third command level there
+would defeat the point") -- so tempeh's entire integration is a fork()+
+execv() subprocess call, forwarding argv unmodified, with cdx's own binary-
+signature sniffing picking build vs. inspect vs. coverage mode. No FIFO/pipe
+plumbing is needed (unlike the safari subprocess wrapper for trailmix): cdx
+reads/writes all its inputs/outputs as regular files directly, so stdio is
+just inherited from the parent process.
+
+  --- E.1) Building cdx (dep/cdx/), one-time, separate from `make vgan` ---
+  cd dep/cdx
+  export PKG_CONFIG_PATH="$(pwd)/../cdx_pkgconfig_hints:$PKG_CONFIG_PATH"
+  cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+  cmake --build build -j
+  #   -> produces dep/cdx/build/tempeh (the binary vgan's tempeh execv()s)
+
+  The merged dispatcher executable's CMake target/output name was renamed
+  from cdx's own upstream default (`cdx`) to `tempeh` in this checkout's
+  dep/cdx/CMakeLists.txt (`add_executable(tempeh ...)`, and the two
+  POST_BUILD steps / install() rule updated to match) -- vgan's own
+  subcommand is already called "tempeh", so wrapping a binary that still
+  presented itself as "cdx" (both in its filename and its own --help/usage
+  text) would have been a confusing double identity. All of the tool's
+  user-facing CLI text was rebranded to match (see E.6) -- only the on-disk
+  *index format* is still called "CDX" (file extension `.cdx`, "CDX index",
+  the `cdx_lib`/`CdxFormat` internals), which is a different, unrelated
+  concept from the executable's own name and was deliberately left alone.
+
+  cdx's CMake auto-fetches (FetchContent/ExternalProject, pinned commits)
+  its OWN copies of CLI11, libbdsg, GBWT, GBWTGraph, sdsl-lite, libvgio, and
+  (when no system package is found) Abseil -- these are SEPARATE from
+  vg_newest's own already-built copies of some of the same libraries, by
+  design, since cdx is a wholly separate process/binary, not linked into
+  vgan. This needs network access at configure time (GitHub clones) and
+  takes several minutes to build from scratch. System packages required
+  beyond what vgan itself already needs: a C++17 compiler (this box's g++ 13
+  comfortably exceeds cdx's own >=11 floor), CMake >=3.16 (3.28 here),
+  pkg-config, OpenMP, OpenSSL, zstd, Jansson, Boost, Protobuf, Cairo -- ALL
+  already present on this box via existing apt packages (libboost-all-dev,
+  libjansson-dev, libssl-dev, libcairo2-dev, protobuf-compiler/
+  libprotobuf-dev, zlib1g-dev all already installed for vg_newest's own
+  build). The one gap was HTSlib >=1.10 (needed by coverage/'s libvgio
+  dependency): no libhts-dev package was installed and there's no sudo
+  access on this box, but vg_newest ALREADY has htslib 1.19.1 fully built at
+  vg_newest/lib/libhts.a + vg_newest/include/htslib/ (vg needs it too) --
+  reused directly instead of building a second copy.
+
+  --- E.2) The cairo.pc gotcha: don't blindly add vg_newest/lib/pkgconfig ---
+  The obvious way to expose vg_newest's htslib.pc to cdx's `pkg_check_modules
+  (HTSLIB REQUIRED IMPORTED_TARGET htslib>=1.10)` call is to prepend
+  vg_newest/lib/pkgconfig to PKG_CONFIG_PATH. DON'T do this directly --
+  vg_newest/lib/pkgconfig/cairo.pc (left over from an earlier, unrelated
+  cairo build attempt on a different machine/checkout, per the vgtool
+  workaround section above) has HARDCODED, now-nonexistent absolute paths
+  baked in (`prefix=/home/garen18/projects/vgan/vgan/vg_newest`, not this
+  box's actual path), and pkg-config prefers whichever directory comes first
+  in PKG_CONFIG_PATH -- so cdx's own `pkg_check_modules(CAIRO REQUIRED
+  IMPORTED_TARGET cairo)` call would silently resolve to that broken .pc
+  and fail at CMake GENERATE time with "Imported target PkgConfig::CAIRO
+  includes non-existent path". FIX: created a small, ISOLATED directory
+  containing only a symlink to the one .pc file actually needed:
+      mkdir -p dep/cdx_pkgconfig_hints
+      ln -sf ../vg_newest/lib/pkgconfig/htslib.pc dep/cdx_pkgconfig_hints/htslib.pc
+  and pointed PKG_CONFIG_PATH at THAT directory instead of the whole
+  vg_newest/lib/pkgconfig -- htslib.pc itself has correct, box-local paths
+  (unlike cairo.pc), so this cleanly picks up vg_newest's htslib while
+  letting cdx's cairo lookup fall through to the correct system package.
+
+  --- E.3) Known-harmless build quirk: standalone `cdx_builder` link error ---
+  `cmake --build build` reports a nonzero overall exit and one link failure:
+      libbdsg.so: undefined reference to symbol '...step_handle_t...'
+      libhandlegraph.so: error adding symbols: DSO missing from command line
+  This is in builder/CMakeLists.txt's SEPARATE standalone `cdx_builder` test
+  executable (builder/'s own main(), used only when configuring builder/ in
+  total isolation outside this monorepo) -- a missing explicit
+  -lhandlegraph on that one target's link line, unrelated to and not
+  affecting the actual merged `tempeh` executable, which links fine
+  regardless (confirmed: `[100%] Linking CXX executable tempeh` completes
+  and both its POST_BUILD steps -- copying circular_plot.py and
+  provisioning the pyenv venv -- run successfully after it). Not worth
+  patching upstream for this integration; just expect `cmake --build build`
+  to exit nonzero and check for dep/cdx/build/tempeh specifically instead of
+  trusting the overall exit code.
+
+  --- E.4) tempeh dispatch (src/vgan.cpp) ---
+  `run_tempeh_subprocess()` locates dep/cdx/build/tempeh via
+  `getFullPath(cwdProg + "../dep/cdx/build/tempeh")` (same cwdProg-relative
+  pattern as trailmix's safari subprocess), fork()s, and execv()s it with
+  argv[2..] (everything after "vgan tempeh") forwarded as the child's
+  argv[1..] unchanged -- cdx's own CLI11-based parsers and mode dispatch
+  keep working exactly as before, just under the new name (see E.6). The
+  built binary has its shared-library rpaths baked in at link time
+  (libbdsg.so/libhandlegraph.so/libsdsl.so.3 under
+  dep/cdx/builder/deps/libbdsg/lib/, libvgio.so under
+  dep/cdx/build/coverage/deps/libvgio/) so it runs correctly via execv()
+  with no LD_LIBRARY_PATH setup needed, and this is unaffected by whether
+  vgan's OWN binary is built static or dynamic (verified both).
+
+  --- E.6) Full CLI rebrand: "cdx" -> "tempeh" in all user-facing text ---
+  Beyond just renaming the built binary (E.1), every string the tool prints
+  to a user was also updated from "cdx" to "tempeh", so `vgan tempeh --help`
+  and friends read as one consistent identity rather than a program called
+  "cdx" wearing a "tempeh" name tag. Patched in dep/cdx (all upstream
+  source, diverges from github.com/JolanBoucher/cdx -- worth checking on any
+  future `git pull` from upstream):
+    - src/main.cpp: the CHEAT_SHEET text (bare `tempeh`/`tempeh --help`
+      invocation), and print_full_help()'s three mode section headers
+      ("BUILD MODE - tempeh <input.gbz> [OPTIONS]", etc).
+    - builder/src/cli.cpp: `app->usage("tempeh <input.gbz> [OPTIONS]")`
+      (was "cdx_builder ...").
+    - coverage/src/cli.cpp: the three `app->usage(...)` calls for
+      Runtime/CoverageDisplay/InspectDisplay modes (were "cdx_coverage ...").
+    - coverage/src/python_circular_plot.cpp: the "install it next to the
+      running executable" error message (was "next to the cdx_coverage
+      executable", stale even before this rename since it also runs from
+      the merged binary).
+    - Various doc-comment-only references in sniff.h/cli.hpp for
+      consistency (not user-facing, but cheap to fix alongside the rest).
+  Deliberately LEFT UNCHANGED: the CDX *file format* name itself (the
+  `.cdx` extension, "CDX index"/"CDX graph index" wording, the internal
+  `cdx_lib`/`CdxFormat`/`cdx_builder_core`/`cdx_coverage_core`/
+  `cdx_builder`/`cdx_coverage` C++ identifiers and namespaces, and the
+  standalone per-branch `cdx_builder`/`cdx_coverage` test executables) --
+  none of that is the "a cdx command" identity the rename was about; it's
+  either the data format's own name (like "GAM" or "GBZ" are format names,
+  unrelated to any one program) or internal implementation detail never
+  shown to a vgan user.
+
+  --- E.5) Test invocation and results (VERIFIED, both static and dynamic) ---
+  # Build mode: index a real GBZ already in this checkout
+  vgan tempeh share/vgan/publication_tmfiles/pub.graph.giraffe.gbz \
+      -o /tmp/out/pub.graph.cdx -t 0.01 -i 100
+  #   -> converges in 4 relaxation iterations, "[SUCCESS]" in ~0.26s.
+
+  # Inspect mode
+  vgan tempeh /tmp/out/pub.graph.cdx
+  #   -> lists 1 component (A5b1c1, 22,408 bp, 6,355 nodes) -- matches
+  #      pub.graph's known single-mtDNA-haplotype-tree structure.
+
+  # Coverage mode, against a real GAM (mapped with dep/safari_vg/bin/vg
+  # safari, the same v1.44-era mapper trailmix uses for this same pub.graph
+  # database and its stale v1022 .dist index -- see section D)
+  vgan tempeh /tmp/out/pub.graph.cdx /tmp/out/pub.gam -o /tmp/out/coverage/
+  #   -> 2,326 / 2,326 reads mapped (100%), 77.12% breadth of coverage,
+  #      mean 10.38x, valid 1650x1050 coverage_graph.png produced.
+
+
+-------------------------------------------------------------------------------
+ CODE CHANGES REQUIRED (already applied in this checkout)
+-------------------------------------------------------------------------------
+1. src/map_giraffe_Euka.cpp (used by BOTH euka and soibean -- soibean.cpp
+   calls it via an internal Euka instance, `ek.map_giraffe(...)`):
+   REPLACED the old multi-file giraffe args:
+       -g <prefix>.gg  -d <prefix>.dist  -m <minimizer>  -H <prefix>.gbwt  -x <prefix>.og
+   WITH the combined-gbz style (matches HaploCart's map_giraffe.cpp):
+       -Z <prefix>.giraffe.gbz  -d <prefix>.dist  -m <minimizer>
+   Applies to both the paired-end and single-end branches.
+
+2. src/readOG_Euka.h, Euka::readPathHandleGraph(): the node-iteration loop
+       for (int64 i = minid; i <= maxid; ++i) {
+           const auto nodehandle = graph.get_handle(i);
+           nodetoadd->seq = graph.get_sequence(nodehandle);
+           ...
+       }
+   ASSUMES every id in [minid, maxid] exists in the graph. This is FALSE for
+   euka_db.og: `vg stats -zr` shows 6,914,183 nodes but a node-id range of
+   2:6926126 (6,926,125 possible ids) -- about 12,000 ids are missing
+   (likely from upstream graph construction/pruning, nothing to do with this
+   migration). Old bdsg's HashGraph::get_sequence apparently tolerated a
+   missing id silently; new bdsg's (v1.75) sparsepp-backed hash map throws
+   `std::out_of_range: key not present`, crashing euka/soibean/assembly
+   ~40% through graph loading every time. This is shared code (Euka.cpp,
+   soibean.cpp, and assembly.cpp all call this same function), so ONE fix
+   covers all three tools:
+       NodeInfo * nodetoadd = new NodeInfo(i,nbpaths,cladeid);
+       if (graph.has_node(i)) {
+           const auto nodehandle = graph.get_handle(i);
+           nodetoadd->seq = graph.get_sequence(nodehandle);
+       }
+   This preserves nodevector's size/indexing (downstream code indexes it by
+   `id - minid`) and just leaves an empty sequence for the ~12k gap ids.
+   REMEMBER: src/Makefile has NO header-dependency tracking (no -MMD/.d
+   files) -- editing readOG_Euka.h does NOT force Euka.o to rebuild. You
+   must `rm src/Euka.o` (or touch Euka.cpp) before `make vgan` or the fix
+   silently doesn't take effect and you'll see the exact same crash.
+
+
+-------------------------------------------------------------------------------
+ SCRIPT
+-------------------------------------------------------------------------------
+`migrate_refs.sh` automates download+convert+reindex for HaploCart/euka in
+the old (autoindex-from-GFA) style; it predates the vgtool workaround and the
+euka_db.giraffe.gbz shortcut above, and does not cover soibean's per-taxon
+step. Treat it as a rough starting point, not gospel -- the recipes above
+supersede it for euka/soibean.
+
+    OLD_VG=/path/to/old/vg NEW_VG=/path/to/vgtool ./migrate_refs.sh haplocart
+
+
+-------------------------------------------------------------------------------
+ NOTES / GOTCHAS
+-------------------------------------------------------------------------------
+  * RAM/disk: euka needs ~7 GB dist index; soibean_db's (if you build it,
+    which you shouldn't need to) needs ~21 GB. Per-taxon soibean subgraphs
+    (Ursidae etc.) are tiny (~1 MB dist index) and fast (seconds).
+
+  * giraffe ALWAYS builds/caches `<prefix>.shortread.withzip.min` +
+    `.shortread.zipcodes` next to the gbz on first use, even when an explicit
+    plain `-m <prefix>.min` is passed (confirmed: euka and soibean both
+    produced these after their first successful run, logging "[vg giraffe]
+    Rebuilding minimizer index to include zipcodes"). Giraffe also logs
+    "Guessing that X.gbwt is Giraffe GBWT" / "X.gg is GBWTGraph" when it
+    finds companion files next to the -Z gbz by naming convention; this is
+    optional auto-detection for haplotype-aware scoring, not a sign your -Z
+    args were ignored.
+    IMPORTANT (revised from an earlier, wrong assumption in this file): this
+    cache is NOT safely reusable by a later invocation -- see the "CRITICAL
+    GOTCHA" section near the top of this file. Delete `*.shortread.*` before
+    EVERY run, not just after an interrupted one.
+
+  * Known unrelated vg bug: `bdsg .../snarl_distance_index.cpp: Assertion
+    is_chain(parent_chain) failed`. Originally thought (before this session)
+    to only affect HaploCart's `-f` consensus mode with long reads. NOW
+    CONFIRMED to also affect euka/soibean short-read (`-fq1`) mapping, and
+    the trigger is reusing the on-disk shortread-minimizer cache across
+    process invocations (see "CRITICAL GOTCHA" above) -- reproduced 7/7 times
+    across both static and dynamic builds. Fires in BOTH static and dynamic
+    builds identically (confirmed, not a linking issue). This is upstream vg,
+    not the migration; the practical fix is deleting the shortread cache
+    before each run.
+
+  * Keep the *.odgi.bak backups until you've confirmed the tool runs; then they
+    can be deleted to reclaim space.
+
+  * Placeholder lib/libcairo.a: if you neutralized cairo per the vgtool
+    workaround above, `vg_newest/lib/libcairo.a` is an EMPTY archive, not a
+    real cairo build. Fine for vgtool/vgan (neither needs it), but don't
+    expect `make bin/vg` (the full vg CLI) to actually work or to have
+    plotting subcommands functional until cairo is properly rebuilt.

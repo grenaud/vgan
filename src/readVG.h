@@ -9,7 +9,7 @@
 #include "vg/io/alignment_io.hpp"
 #include "vg/io/json2pb.h"
 #include "vg/io/stream.hpp"
-#include "bdsg/odgi.hpp"
+#include "bdsg/hash_graph.hpp"
 #include "handlegraph/path_handle_graph.hpp"
 
 //VG src/

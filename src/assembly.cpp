@@ -98,7 +98,7 @@ string assembly::usage() const {
 void assemblySetup() {
 
  preflight_check();
-  configure_memory_allocator();
+  vg::AllocatorConfig::configure();
   enable_crash_handling();
   temp_file::set_system_dir();
 
@@ -120,7 +120,7 @@ void assemblySetup() {
 
 ////////////// Assembly function storage - temporary ///////////////////////////
 
-void assembly::reindex_odgi_graph(bdsg::ODGI& graph, GraphData& new_graph_data, int startNode, int endNode) {
+void assembly::reindex_odgi_graph(bdsg::HashGraph& graph, GraphData& new_graph_data, int startNode, int endNode) {
     std::queue<std::pair<bdsg::handle_t, uint64_t>> bfs_queue;  // Queue of pairs of handle and current depth
     std::unordered_map<bdsg::handle_t, uint64_t> visited_depths;  // Maps handles to their max depth encountered
 

@@ -1,6 +1,8 @@
 #include "HaploCart.h"
 #include "Euka.h"
 #include "gam2prof.h" // Mikkel code
+#include "TrailMix.h"
+#include <zlib.h>
 
 
 const vector<double> Haplocart::load_mappabilities(const string &hcfiledir) {
@@ -50,7 +52,7 @@ string line;
 while (getline(myfile, line))
   {
      const vector<string> tokens= allTokensWhiteSpaces(line);
-     string path = tokens[0].substr(0, path.find("."));
+     string path = tokens[0].substr(0, tokens[0].find("."));
      path_names.emplace_back(path);
   }
 
@@ -343,3 +345,193 @@ while (getline(myfile, line)) {
 
 return children;
 }
+
+
+// =============================================================================
+// TrailMix-specific additions below (ported from vgan_dev). These are new
+// free functions and Trailmix:: methods; nothing above this point was touched.
+// =============================================================================
+
+vector<string> split_string(const string &input, char delimiter) {
+    stringstream ss(input);
+    string item;
+    vector<string> tokens;
+    while (getline(ss, item, delimiter)) {
+        tokens.emplace_back(item);
+    }
+    return tokens;
+}
+
+string decompress_gz_file(const string &filepath) {
+    gzFile file = gzopen(filepath.c_str(), "rb");
+    if (!file) {
+        throw runtime_error("Failed to open the file for decompression.");
+    }
+
+    stringstream decompressed_data;
+    char buffer[4096];
+    int bytes_read;
+    while ((bytes_read = gzread(file, buffer, sizeof(buffer))) > 0) {
+        decompressed_data.write(buffer, bytes_read);
+    }
+
+    gzclose(file);
+    return decompressed_data.str();
+}
+
+void Trailmix::load_tpms(shared_ptr<Trailmix_struct> &dta) {
+    if (!std::filesystem::exists(dta->tmpdir+"rpvg_ht.txt")){
+        throw runtime_error("[TrailMix] Error, no RPVG output was produced.");
+                                                            }
+    // Open the file for reading
+    std::ifstream file(dta->tmpdir + "rpvg_ht.txt");
+    // Check if the file was successfully opened
+    if (!file.is_open()) {
+        throw std::runtime_error("[TrailMix] Error opening RPVG file");
+    }
+    // Read the file line by line
+    std::string line;
+    getline(file, line);
+    while (std::getline(file, line)) {
+    // Split the line into tokens
+    std::vector<std::string> tokens;
+    std::stringstream ss(line);
+    std::string token;
+    while (std::getline(ss, token, '\t')) {
+        tokens.emplace_back(token);
+    }
+    if (tokens[0] == "Unknown"){break;}
+    // Parse the tokens and add them to dta->tpms
+    if (tokens.size() == 7) {
+        std::string name = tokens[0].substr(10).substr(0, tokens[0].substr(10).find("_0_0")).substr(0, tokens[0].substr(10).find('.'));
+        modifyPathNameInPlace(dta, name);
+        const double tpm = std::stod(tokens[6]);
+        dta->tpms.emplace_back(std::make_pair(name, tpm));
+    }
+     }
+    // Close the file
+    file.close();
+    return;
+                                                                        }
+
+
+
+void Trailmix::load_hap_combos(shared_ptr<Trailmix_struct> &dta) {
+
+if (!std::filesystem::exists(dta->tmpdir+"rpvg_hap.txt")){
+    throw runtime_error("[TrailMix] Error, no RPVG output was produced. This is probably due to very low confidence in placing the data. It may be worthwhile to consider alternative values for the number of contributing sources k.\n");
+                                                         }
+
+    dta->hap_combos.clear();
+    const string hap_combo_path = getFullPath(dta->tmpdir + "rpvg_hap.txt");
+    igzstream myfile;
+    myfile.open(hap_combo_path.c_str(), ios::in);
+    string line;
+    getline(myfile, line);
+    while (getline(myfile, line)) {
+        vector<string> tokens = allTokensWhiteSpaces(line);
+        vector<string> newtokens;
+        for (const auto &token : tokens) {
+            // Handling specific token formats
+            if (token.starts_with("_gbwt_ref_")) {
+                // Ensure that this manipulation doesn't alter formats like "MT576650.1"
+                // Modify the logic here based on the expected format of your tokens
+                // Example: Extract substring but preserve specific formats
+                string modifiedToken = token.substr(10);
+                size_t pos = modifiedToken.find("_0_0");
+                if (pos != string::npos) {
+                    modifiedToken = modifiedToken.substr(0, pos);
+                }
+                newtokens.emplace_back(modifiedToken);
+            } else if (token != tokens.back()) {
+                // Check and preserve specific formats like "MT576650.1"
+                size_t dotPos = token.find('.');
+                if (dotPos != string::npos) {
+                    newtokens.emplace_back(token.substr(0, dotPos + 2)); // Preserving the format up to ".1"
+                } else {
+                    newtokens.emplace_back(token);
+                }
+            } else {
+                newtokens.emplace_back(token);
+            }
+        }
+        dta->hap_combos.emplace_back(newtokens);
+    }
+
+    return;
+}
+
+bool is_number(const std::string& s) {
+    return !s.empty() && std::find_if(s.begin(),
+        s.end(), [](unsigned char c) { return !std::isdigit(c); }) == s.end();
+}
+
+void Trailmix::load_read_probs(std::shared_ptr<Trailmix_struct>& dta) {
+    std::string read_prob_file = dta->tmpdir + "rpvg_ht_probs.txt.gz";
+    
+    if (!filesystem::exists(read_prob_file)) {
+        throw std::runtime_error("[TrailMix] Error: RPVG read-level output file not found.");
+    }
+
+    std::vector<double> probs;
+    std::vector<std::vector<unsigned int>> idxs;
+
+    std::string line;
+    std::string decompressed_data = decompress_gz_file(read_prob_file);
+    std::stringstream ss(decompressed_data);
+    
+    if (!std::getline(ss, line)) {
+        throw std::runtime_error("[TrailMix] Error: Failed to read header from RPVG file.");
+    }
+    
+    if (!std::getline(ss, line)) {
+        throw std::runtime_error("[TrailMix] Error: Failed to read data from RPVG file.");
+    }
+
+    dta->RPVG_hap_names = split_string(line, ' ');
+    
+    for (auto& hn : dta->RPVG_hap_names) {
+        size_t pos = hn.find('_');
+        if (pos != std::string::npos) {
+            hn = hn.substr(0, pos);
+        }
+    }
+
+    int counter = 0;
+    while (std::getline(ss, line)) {
+        ++counter;
+        std::vector<unsigned int> inner_idxs;
+        std::vector<std::string> tokens = split_string(line, ' ');
+
+        if (tokens.size() < 3 || !is_number(tokens[0])) {
+            continue;
+        }
+
+        try {
+            unsigned int multiplicity = std::stoul(tokens[0]);
+            for (size_t i = 2; i < tokens.size(); ++i) {
+                size_t colon_pos = tokens[i].find(':');
+                if (colon_pos == std::string::npos) {
+                    continue;
+                }
+
+                double prob = std::stod(tokens[i].substr(0, colon_pos)) * multiplicity;
+                std::vector<std::string> inner_tokens = split_string(tokens[i].substr(colon_pos + 1), ',');
+                for (const std::string& token : inner_tokens) {
+                    inner_idxs.emplace_back(std::stoul(token));
+                }
+                probs.emplace_back(prob);
+            }
+            idxs.emplace_back(inner_idxs);
+        } catch (const std::invalid_argument& ia) {
+            throw std::runtime_error("[TrailMix] Error: Invalid argument - " + std::string(ia.what()));
+        } catch (const std::out_of_range& oor) {
+            throw std::runtime_error("[TrailMix] Error: Out of range - " + std::string(oor.what()));
+        } catch (...) {
+            throw std::runtime_error("[TrailMix] Error: Unknown exception occurred.");
+        }
+    }
+
+    dta->read_probs = std::make_pair(probs, idxs);
+}
+

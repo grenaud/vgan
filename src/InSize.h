@@ -1,7 +1,7 @@
 #pragma once
 
 #include "insertsize_GAM.h"
-#include "bdsg/odgi.hpp"
+#include "bdsg/hash_graph.hpp"
 #include "subcommand/subcommand.hpp"
 
 #include <iostream>

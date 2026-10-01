@@ -4,6 +4,7 @@
 #include "libgab.h"
 #include <algorithm>
 #include <gzstream.h>
+#include "MCMC_functions.h"
 //#define DEBUGGENERATEVEC
 //#define VERBOSE_MCMC
 //#define DEBUGMCMCDig
@@ -519,7 +520,7 @@ std::vector<double> MCMC::sample_normal(std::vector<double>& x, double alpha) {
 
 
 
-std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams params, std::vector<MCMCiteration> state_t_vec, const bdsg::ODGI& graph, vector<vector<string>> nodepaths, string num, int n_threads, int numPaths, int chainindex, double con) {
+std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams params, std::vector<MCMCiteration> state_t_vec, const bdsg::HashGraph& graph, vector<vector<string>> nodepaths, string num, int n_threads, int numPaths, int chainindex, double con) {
 
     const unsigned int n_sources = params.sources.size();
     cerr << "number of sources " << n_sources << endl;
@@ -847,7 +848,7 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams par
 
 
                             cerr << std::setprecision(14)<< "readLogLike " << readLogLike << " readLogLikeP " << readLogLikeP << endl;
-                            cerr << "path " << pathNames << " parent " << parentpathNames << endl;
+                            {cerr << "path "; for (const auto& pn : pathNames) {cerr << pn << " ";} cerr << " parent "; for (const auto& pn : parentpathNames) {cerr << pn << " ";} cerr << endl;}
                             cerr << std::setprecision(14)<< "t " << t << " t1 " << t1 << " t2 " << t2 << endl;
                             cerr << std::setprecision(14)<< "pre calc log like " << read->detailMap[pathNames[0]][basevec][base].logLikelihood << endl;
                             cerr << std::setprecision(14)<< "parent pre calc log like " << read->detailMap[parentpathNames[0]][basevec][base].logLikelihood << endl;
@@ -948,7 +949,7 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams par
                             //if (parentpathNames[y] == "NC_062361.1_Hippotragus_niger_roosevelti_voucher_ZMUC_H.R.Siegismund_1646_haplogroup_Eastern_1_mitocho" || pathNames[y] == "NC_062361.1_Hippotragus_niger_roosevelti_voucher_ZMUC_H.R.Siegismund_1646_haplogroup_Eastern_1_mitocho"){
                                 cerr << std::setprecision(14)<<"state_t_1.proportions[y]" << state_t_1.proportions[y] << endl;
                                 cerr << std::setprecision(14)<< "readLogLike " << readLogLike << " readLogLikeP " << readLogLikeP << endl;
-                                cerr << "path " << pathNames << " parent " << parentpathNames << endl;
+                                {cerr << "path "; for (const auto& pn : pathNames) {cerr << pn << " ";} cerr << " parent "; for (const auto& pn : parentpathNames) {cerr << pn << " ";} cerr << endl;}
                                 cerr << std::setprecision(14)<< "t " << t << " t1 " << t1 << " t2 " << t2 << endl;
                                 cerr << std::setprecision(14)<< "pre calc log like " << read->detailMap[pathNames[y]][basevec][base].logLikelihood << endl;
                                 cerr << std::setprecision(14)<< "parent pre calc log like " << read->detailMap[parentpathNames[y]][basevec][base].logLikelihood << endl;
@@ -1362,5 +1363,597 @@ vector<long double > MCMC::run(int iter, int burnin, double tol, const vector<lo
 	
 	cerr<<".. done"<<endl;
 	return posterior_estimate;
+
+}
+
+// =============================================================================
+// TrailMix-specific additions below (ported from vgan_dev, adapted to this
+// codebase's helper signatures). These are new methods/overloads; nothing
+// above this point was touched.
+// =============================================================================
+
+bool getRandomBool() {
+    std::random_device rd; // Obtain a random number from hardware
+    std::mt19937 gen(rd()); // Seed the generator
+    std::uniform_int_distribution<> distr(0, 1); // Define the range
+    return distr(gen) != 0;
+}
+
+
+bool MCMC::is_in_pruned_set(spidir::Node* p, shared_ptr<Trailmix_struct> &dta) {
+
+if (dta->in_pruned_set.find(p->longname) != dta->in_pruned_set.end()) {
+    return true;
+}
+
+return false;
+
+}
+
+
+void MCMC::add_nodes_at_depth(spidir::Node* p, const int depth, shared_ptr<Trailmix_struct> &dta) {
+    #ifdef DEBUG
+    static std::ofstream debugFile("prune_debug.txt", std::ios::app);
+    #endif
+
+    // Base case: add the current node if the depth is less than or equal to the target depth
+    if (depth >= 0) {
+        dta->in_pruned_set.insert(p->longname);
+        if (p->parent){dta->in_pruned_set.insert(p->parent->longname);}
+        #ifdef DEBUG
+        debugFile << "Added node: " << p->longname
+                  << " at depth: " << depth
+                  << " (reason: base case)" << std::endl;
+                  if (p->parent){debugFile << " also adding parent: " << p->parent->longname << endl;}
+        #endif
+    }
+
+    // Continue exploring if depth is greater than 0
+    if (depth > 0) {
+        // Explore the parent node if it exists
+        if (p->parent) {
+            #ifdef DEBUG
+            debugFile << "Exploring parent of node: " << p->longname
+                      << " at depth: " << depth << std::endl;
+            #endif
+
+            add_nodes_at_depth(p->parent, depth - 1, dta);
+        }
+
+        // Explore children nodes if it's not a leaf
+        if (!p->isLeaf()) {
+            for (int i = 0; i < p->nchildren; ++i) {
+                spidir::Node* child = p->children[i];
+                if (child) {
+                    #ifdef DEBUG
+                    debugFile << "Exploring child " << i
+                              << " of node: " << p->longname
+                              << " at depth: " << depth << std::endl;
+                    #endif
+
+                    add_nodes_at_depth(child, depth - 1, dta);
+                } else {
+                    #ifdef DEBUG
+                    debugFile << "Child " << i
+                              << " of node: " << p->longname
+                              << " is null, skipping." << std::endl;
+                    #endif
+                }
+            }
+        } else {
+            #ifdef DEBUG
+            debugFile << "Node: " << p->longname
+                      << " is a leaf, not exploring children." << std::endl;
+            #endif
+        }
+    } else {
+        #ifdef DEBUG
+        debugFile << "Depth is 0 or less for node: " << p->longname
+                  << ", no further exploration." << std::endl;
+        #endif
+    }
+}
+
+std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams &params, std::vector<MCMCiteration> &state_t_vec, const bdsg::HashGraph& graph, \
+                               const vector<vector<string>> &nodepaths, string num, shared_ptr<Trailmix_struct> &dta, bool running_trailmix, int chain) {
+
+
+    const unsigned int n_sources = params.sources.size();
+    cerr << "number of sources " << n_sources << endl;
+    if (n_sources > 10){throw runtime_error("We cannot handle this many sources");}
+
+    unsigned int total_proposals = 0;
+    unsigned int n_accept = 0;
+    double acceptance_rate = 0.5;
+    MCMCiteration state_t_1;
+    double likelihood_t_1;
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<> dis(0.0, 1.0);
+    std::vector<PosTree> current_positions(n_sources);
+    std::vector<double> random_numbers(n_sources);
+    MCMCiteration state_t = initializeState(params, dta->seed);
+    auto initial_state = state_t;
+    state_t_vec.emplace_back(initial_state);
+
+    ofstream mcmcout(num+"Result"+to_string(n_sources)+"_chain"+to_string(chain)+".mcmc");
+    std::ios_base::sync_with_stdio(false);
+    mcmcout.tie(nullptr);
+
+    for (int sou = 1; sou< n_sources + 1; ++sou){
+        mcmcout << "Source_" << sou << '\t' << "Node_" << sou << '\t' << "Loglikelihood" << '\t' << "proportion_" << sou << '\t' << "branch_position_derived_" << sou;
+        if (sou != n_sources){mcmcout << '\t';}
+    }
+    mcmcout << endl;
+
+    ofstream mcmcdetail(num+"Trace"+to_string(n_sources)+".detail.mcmc");
+    for (int sou = 1; sou< n_sources + 1; ++sou){
+        mcmcdetail << "Source_" << sou << '\t' << "Node_" << sou << '\t' << "Likelihood" << '\t' << "proportion_" << sou << '\t' << \
+                      "branch_position_derived_" << sou << '\t' << "Acceptance_prob" << '\t' << "Move";
+        if (sou != n_sources){mcmcdetail << '\t';}
+    }
+    mcmcdetail << endl;
+
+    for (unsigned int iteration = 0; iteration <= params.maxIter; iteration++) {
+
+//{
+//#pragma omp critical
+        if (iteration % 1000 == 0){
+            cerr << "ITERATION: " << iteration << endl;
+                                  }
+//}
+
+        state_t_1 = state_t;
+
+ get_proposal_sd(proposal_sd, acceptance_rate, iteration, params.maxIter, params.burn);
+
+ srand(time(0)); // Initialize random seed
+
+// Choose a random component index
+unsigned int componentIndex = std::rand() % state_t_1.n_components;
+
+float randomFloat = 0.01 + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX/(0.99 - 0.01)));
+
+            if (state_t_1.positions_tree[componentIndex].pos->longname == "Node1"){
+                int num_children = state_t_1.positions_tree[componentIndex].pos->nchildren;
+                int random_index = rand() % num_children;
+                state_t_1.positions_tree[componentIndex].pos = state_t_1.positions_tree[componentIndex].pos->children[random_index];
+                                                                                  }
+
+            // Determine the mean based on the iteration
+            double proposal_mean = state_t_1.positions_tree[componentIndex].pos_branch;
+            std::normal_distribution<double> distribution_bl(proposal_mean, proposal_sd);
+            double proposed_position = distribution_bl(gen);
+            if (proposed_position < 0.0) {
+                if (state_t_1.positions_tree[componentIndex].pos->parent == nullptr) {
+
+                    const auto rootChildren = state_t_1.positions_tree[componentIndex].pos->children;
+                    std::uniform_int_distribution<int> distribution(0.0, state_t_1.positions_tree[componentIndex].pos->nchildren);
+                    const unsigned int selectedChildIndex = distribution(gen);
+                    state_t_1.positions_tree[componentIndex].pos = rootChildren[selectedChildIndex];
+                    double proposed_position_abs = abs(proposed_position);
+                    state_t_1.positions_tree[componentIndex].pos_branch = proposed_position_abs;
+                } else {
+                        updatePosition(state_t_1.positions_tree[componentIndex], -proposed_position, false);
+                }
+            } else {
+                if (proposed_position > state_t_1.positions_tree[componentIndex].pos_branch) {
+                    if (state_t_1.positions_tree[componentIndex].pos->isLeaf() && state_t_1.positions_tree[componentIndex].pos_branch == 0.9999999) {
+                        continue;
+                    } else {
+                        updatePosition(state_t_1.positions_tree[componentIndex], proposed_position, true);
+                    }
+                } else {
+                    state_t_1.positions_tree[componentIndex].pos_branch = proposed_position;
+                       }
+            }
+
+        std::vector<double> tmp_theta;
+        for (auto& p : state_t_1.positions_tree) {
+            tmp_theta.emplace_back(p.theta);
+        }
+
+        tmp_theta = sample_normal(tmp_theta, 0.1);
+        for (int idx = 0; idx < current_positions.size(); ++idx) {
+            state_t_1.positions_tree[idx].theta = tmp_theta[idx];
+        }
+
+
+        state_t_1.proportions = tmp_theta;
+        vector<string> pathNames;
+        vector<string> parentpathNames;
+
+        if (state_t_1.positions_tree.empty()){throw runtime_error("TREE POSITIONS ARE EMPTY");}
+
+const int max_prune_iterations = 100000;
+bool pruned = false; // Initially, we do not know if it's pruned, so set to false
+unsigned int iteration_counter = 0; // Ensure iteration_counter is defined outside the loop
+set<int> depths_used;
+
+if (dta->depth != -1){
+
+while (!pruned && iteration_counter < max_prune_iterations) {
+
+ pruned = true;
+
+    // Check if all positions are pruned
+    for (auto &p : state_t_1.positions_tree) {
+        if (!is_in_pruned_set(p.pos, dta)) {
+            pruned = false; // Found an unpruned position
+        }
+    }
+
+     // Check if all positions are pruned
+    for (auto &p : state_t_1.positions_tree) {
+        if (p.pos->parent){
+           if (!is_in_pruned_set(p.pos->parent, dta)) {
+               pruned = false; // Found an unpruned position
+           }
+                          }
+    }
+
+    // Exit the while loop if all positions are pruned
+    if (pruned) {
+        break;
+    }
+
+    // If not all positions are pruned, modify them
+    for (auto &p : state_t_1.positions_tree) {
+        bool random_bool = getRandomBool();
+        double proposal_mean = p.pos_branch;
+        std::normal_distribution<double> distribution_bl(proposal_mean, proposal_sd);
+        double proposed_position = distribution_bl(gen);
+
+        if (proposed_position < 0.0) {
+            proposed_position *= -1;
+            //std::cerr << "Negative position adjusted: " << proposed_position << std::endl;
+        }
+
+        updatePosition(p, proposed_position, random_bool);
+        //std::cerr << "Position updated: " << proposed_position << std::endl;
+    }
+
+    iteration_counter++; // Increment at the end of each iteration
+
+    if (iteration_counter == max_prune_iterations) {
+        //std::cerr << "MAX PRUNE ITERATIONS REACHED. Proceeding with current positions." << std::endl;
+    }
+}
+
+    // Check if all positions are pruned
+    for (auto &p : state_t_1.positions_tree) {
+        //if (!is_in_pruned(p.pos, dta->depth, dta, depths_used_placeholder)) {
+         if (!is_in_pruned_set(p.pos, dta)) {
+            pruned = false; // Found an unpruned position
+          }
+
+         if (p.pos->parent){
+             if(!is_in_pruned_set(p.pos->parent, dta)){
+                 pruned = false;
+             }
+         }
+    }
+
+}
+
+         for (auto & p : state_t_1.positions_tree){
+                pathNames.emplace_back(p.pos->longname);
+
+            if (p.pos->parent != nullptr) {
+                parentpathNames.emplace_back(p.pos->parent->longname);
+
+            }else{
+                //cerr << "placing back parent: " << p.pos->longname << endl;
+                 if (p.pos->longname == ""){
+                cerr << "Node number: " << p.pos->name << endl;
+                throw runtime_error("Longname is empty 2");
+                                           }
+                parentpathNames.emplace_back(p.pos->longname);
+            }
+        }
+
+        unsigned int read_counter=0;
+        double logLike = 0.0;
+
+        #pragma omp parallel for num_threads(dta->n_threads) reduction(+:logLike)
+        for (auto read : *(params.align))
+        {
+            read_counter++;
+            bool safe=true;
+
+            double readLogLike =  0.0;
+            double readLogLikeP = 0.0;
+
+////////////////////////////////////////////////////////////// SINGLE SOURCE //////////////////////////////////////////////////////////
+
+// Apply bounds to readLogLikeP
+const double minLogValue = log(0.0000001); // Lower bound to prevent extremely small values
+const double maxLogValue = log(0.9999999); // Upper bound
+
+            if (pathNames.size() == 1)
+            {
+                const double t = state_t_1.positions_tree[0].pos->dist;
+                const double t1 = state_t_1.positions_tree[0].pos_branch * t;
+                const double t2 = t - t1;
+
+                bool loopentered=false;
+
+if (read->detailMap.find(pathNames[0]) == read->detailMap.end()) {
+    cerr << "Missing key in detailMap for path: " << pathNames[0] << endl;
+    throw runtime_error("Missing key");
+} else {
+    int lc = 0;
+    for (unsigned int basevec = 0; basevec < read->detailMap[pathNames[0]].size(); ++basevec) {
+        for (int base = 0; base < read->detailMap[pathNames[0]][basevec].size(); ++base) {
+            loopentered = true;
+            ++lc;
+            if (read->detailMap[pathNames[0]][basevec][base].pathSupport) {
+                double mutationLogLikelihood = computeBaseLogLike(dta, read, params, basevec, base, pathNames[0], t2, t, dta->cont_mode);
+                 readLogLike += read->detailMap[pathNames[0]][basevec][base].logLikelihood + mutationLogLikelihood;
+            } else {
+                 readLogLike += read->detailMap[pathNames[0]][basevec][base].logLikelihood;
+            }
+        }
+    }
+}
+
+
+
+if (readLogLike > maxLogValue) {
+    readLogLike = maxLogValue;
+} else if (readLogLike < minLogValue) {
+    readLogLike = minLogValue;
+}
+
+if (read->detailMap.find(parentpathNames[0]) == read->detailMap.end()) {
+    cerr << "Missing key in detailMap for parent path: " << parentpathNames[0] << endl;
+    throw runtime_error("Missing key");
+} else {
+    int plc = 0;
+    for (unsigned int basevec = 0; basevec < read->detailMap[parentpathNames[0]].size(); ++basevec) {
+        for (int base = 0; base < read->detailMap[parentpathNames[0]][basevec].size(); ++base) {
+            ++plc;
+            if (read->detailMap[parentpathNames[0]][basevec][base].pathSupport) {
+                double mutationLogLikelihood = computeBaseLogLike(dta, read, params, basevec, base, parentpathNames[0], t1, t, dta->cont_mode);
+                readLogLikeP += read->detailMap[parentpathNames[0]][basevec][base].logLikelihood + mutationLogLikelihood;
+            } else {
+                readLogLikeP += read->detailMap[parentpathNames[0]][basevec][base].logLikelihood;
+            }
+        }
+    }
+}
+
+if (readLogLikeP > maxLogValue) {
+    readLogLikeP = maxLogValue;
+} else if (readLogLikeP < minLogValue) {
+    readLogLikeP = minLogValue;
+}
+
+        // Compute intermediate values as before
+        double interc2 = log(state_t_1.positions_tree[0].pos_branch) + readLogLike;
+        double interp2 = log(1 - state_t_1.positions_tree[0].pos_branch) + readLogLikeP;
+        double max_val = std::max(interc2, interp2);
+        double inter = max_val + log(exp(interc2 - max_val) + exp(interp2 - max_val));
+
+        logLike += inter;
+
+if (!pruned && dta->depth != -1){logLike = -std::numeric_limits<double>::max();}
+
+//cerr << "LL: " << logLike << "  p: " << exp(logLike) << endl;
+
+            }
+
+/////////////////////////////////////////////////////////////// END SINGLE SOURCE //////////////////////////////////////////////////////
+
+            else
+            {
+////////////////////////////////////////////////////////////// BEGIN MULTI SOURCE ///////////////////////////////////////////////////////
+
+                double inter = -std::numeric_limits<double>::infinity();
+
+//////////////////////////////////////////////// CONT MODE ///////////////////////////////////////
+
+if (pathNames.size() == 2) {
+
+    // Handling the specific case when there are exactly two sources and cont_mode is true
+    for (unsigned int y = 0; y < pathNames.size(); ++y) {
+        double readLogLike = 0.0;
+        double readLogLikeP = 0.0;
+        double t = state_t_1.positions_tree[y].pos->dist;
+        // Handle special cases for t
+        if (t == 0.0) { t = 0.00000001; }
+        double t1 = state_t_1.positions_tree[y].pos_branch * t;
+        double t2 = t - t1;
+        if (state_t_1.positions_tree[y].pos_branch == 1.0) {
+            state_t_1.positions_tree[y].pos_branch = 0.999999;
+        }
+
+auto itPath = read->detailMap.find(pathNames[y]);
+
+
+int lc = 0;
+for (unsigned int basevec = 0; basevec < read->detailMap[pathNames[y]].size(); ++basevec) {
+    // Pre-check to ensure the key exists before accessing its value
+
+    if (itPath == read->detailMap.end()) {
+        cerr << "Missing key in detailMap: " << pathNames[y] << endl;
+        break; // Exit the loop if the key is missing
+    }
+
+        for (unsigned int base = 0; base < itPath->second[basevec].size(); ++base) {
+    ++lc;
+
+    double logLikelihoodValue = (dta->is_ancient_vec[y] && dta->cont_mode) ?
+                                itPath->second[basevec][base].logLikelihood :
+                                itPath->second[basevec][base].logLikelihoodNoDamage;
+
+    if (itPath->second[basevec][base].pathSupport) {
+        // When path support is true, use the Markov logic (mutation -> damage)
+        double mutationLogLikelihood = computeBaseLogLike(dta, read, params, basevec, base, pathNames[y], t2, t, dta->cont_mode);
+
+        // Combine mutation and damage (if ancient)
+        readLogLike += mutationLogLikelihood + logLikelihoodValue;
+    } else {
+        // When path support is not true, just use the precomputed log likelihood
+        readLogLike += logLikelihoodValue;
+    }
+  }
+}
+
+// Apply bounds to readLogLikeP
+const double minLogValue = log(0.0000000001); // Lower bound to prevent extremely small values
+const double maxLogValue = log(0.9999999999); // Upper bound
+
+if (readLogLike > maxLogValue) {
+    readLogLike = maxLogValue;
+} else if (readLogLike < minLogValue) {
+    readLogLike = minLogValue;
+}
+
+auto itParentPath = read->detailMap.find(parentpathNames[y]);
+
+
+if (itParentPath == read->detailMap.end()) {
+    cerr << "Missing key in detailMap: " << parentpathNames[y] << endl;
+} else {
+    for (unsigned int basevec = 0; basevec < itParentPath->second.size(); ++basevec) {
+        for (unsigned int base = 0; base < itParentPath->second[basevec].size(); ++base) {
+
+            double parentLogLikelihoodValue = (dta->is_ancient_vec[y] && dta->cont_mode) ?
+                                              itParentPath->second[basevec][base].logLikelihood :
+                                              itParentPath->second[basevec][base].logLikelihoodNoDamage;
+
+            if (itParentPath->second[basevec][base].pathSupport) {
+                // When path support is true, use the Markov logic (mutation -> damage)
+                double mutationLogLikelihood = computeBaseLogLike(dta, read, params, basevec, base, parentpathNames[y], t1, t, dta->cont_mode);
+
+                // Combine mutation and damage (if ancient)
+                readLogLikeP += mutationLogLikelihood + parentLogLikelihoodValue;
+            } else {
+                // When path support is not true, just use the precomputed log likelihood
+                readLogLikeP += parentLogLikelihoodValue;
+            }
+        }
+    }
+}
+
+
+if (readLogLikeP > maxLogValue) {
+    readLogLikeP = maxLogValue;
+} else if (readLogLikeP < minLogValue) {
+    readLogLikeP = minLogValue;
+}
+
+        // Compute intermediate values as before
+        double interc2 = log(state_t_1.positions_tree[y].pos_branch) + readLogLike;
+        double interp2 = log(1 - state_t_1.positions_tree[y].pos_branch) + readLogLikeP;
+        double inter2 = oplusnatl(interc2, interp2);
+        auto intersum = inter2 + log(state_t_1.proportions[y]);
+        inter = oplusInitnatl(inter, intersum);
+
+if (!pruned && dta->depth != -1){logLike = -std::numeric_limits<double>::max();}
+
+    }
+    logLike += inter;
+
+}
+                 //////////////////////////////////////// END CONT MODE /////////////////////////////////////////////////////////
+}
+//////////////////////////////////////////////////////////  END MULTI SOURCE ///////////////////////////////////////////////////////////////////////
+
+            }
+//////////////////////////////////////////////////////////  END LOOP OVER READS ///////////////////////////////////////////////////////////////////////
+
+#ifdef VERBOSE_MCMC
+         //if (logLike >= 0.0){throw runtime_error("SINGLE SOURCE SHOULDNT HAPPEN");}
+         if (iteration % 100 == 1){
+            cerr << endl;
+            cerr << setprecision(16) << "proposal SD: " << proposal_sd << "  acceptance rate: " << acceptance_rate << endl;
+            cerr << "proposed log lik: " << setprecision(16) << logLike << "      current:  " << state_t_1.logLike << endl;
+            for (auto & p : state_t_1.positions_tree){
+                cerr << "BEST SOURCE: " << dta->originalPathNames[p.pos->longname] << " proportion: " << p.theta << "  pos on branch: " << p.pos_branch << endl;
+                                                   }
+                                  }
+#endif
+
+        likelihood_t_1 = logLike;
+        state_t_1.logLike = likelihood_t_1;
+        //double acceptance_prob = (state_t_1.logLike - state_t.logLike > 0) ? 1.0 : exp((state_t_1.logLike - state_t.logLike));
+double acceptance_prob = (std::isinf(state_t_1.logLike) && state_t_1.logLike < 0) || (std::isinf(state_t.logLike) && state_t.logLike < 0)
+    ? 0.0
+    : (state_t_1.logLike - state_t.logLike > 0) ? 1.0 : exp(state_t_1.logLike - state_t.logLike);
+
+        acceptance_prob = max(acceptance_prob, 0.00001);
+        acceptance_prob = min(acceptance_prob, 0.99999);
+        const double u = dis(gen);
+
+        if (u <= acceptance_prob || iteration == 0) {
+
+            if (iteration > params.burn){
+                int source_counter=0;
+                for (auto & p : state_t_1.positions_tree){
+
+                    mcmcout << setprecision(14) << dta->originalPathNames[p.pos->longname] << '\t' << p.pos->name  << '\t' << state_t.logLike << '\t' << p.theta << '\t' << p.pos_branch;
+                    mcmcdetail << std::setprecision(14) << dta->originalPathNames[p.pos->longname]  << '\t' << p.pos->name  << '\t' << state_t_1.logLike << '\t' << p.theta << \
+                                                   '\t' <<  p.pos_branch << '\t' << acceptance_prob << '\t' << "accepted";
+
+                    source_counter++;
+
+                    if (source_counter < state_t.positions_tree.size()){mcmcdetail << '\t'; mcmcout << '\t';}
+
+                }
+                mcmcout << endl;
+                mcmcdetail << endl;
+            }
+
+            n_accept++;
+            total_proposals++;
+            state_t = state_t_1;
+            if (iteration >= params.burn) {
+            state_t_vec.emplace_back(state_t_1);
+                                          }
+        } else {
+
+            if (iteration > params.burn) {
+    int total_positions = state_t.positions_tree.size();
+
+    // Output for current state's positions
+    for (auto &p : state_t.positions_tree) {
+        mcmcout << std::setprecision(14) << dta->originalPathNames[p.pos->longname] << '\t' << p.pos->name << '\t'
+                << state_t.logLike << '\t' << p.theta << '\t' << p.pos_branch;
+
+        if (&p != &state_t.positions_tree.back()) mcmcout << '\t'; // No tab after last element
+    }
+    mcmcout << std::endl;
+
+    // Output for previous state's positions
+    for (auto &p : state_t_1.positions_tree) {
+        mcmcdetail << std::setprecision(14) << dta->originalPathNames[p.pos->longname] << '\t'
+                   << p.pos->name << '\t' << state_t_1.logLike << '\t'
+                   << p.theta << '\t' << p.pos_branch << '\t' << acceptance_prob << '\t' << "rejected";
+
+        if (&p != &state_t_1.positions_tree.back()) mcmcdetail << '\t'; // No tab after last element
+    }
+    mcmcdetail << std::endl;
+}
+
+            total_proposals++;
+        }
+
+        acceptance_rate = static_cast<double>(n_accept) / total_proposals;
+    }
+
+//for (auto & p : state_t.positions_tree){
+//    if (p.pos->longname != ""){
+//        dta->paths_to_surject.emplace_back(p.pos->longname);
+//                              }
+//}
+
+if (state_t_vec.empty()){
+cerr << "State_t_vec is empty!" << endl;
+//throw runtime_error("State_t_vec is empty!");
+}
+
+return state_t_vec;
 
 }

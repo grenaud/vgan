@@ -7,6 +7,71 @@
 #define MIN2(a,b) (((a)<(b))?(a):(b))
 #define MAX2(a,b) (((a)>(b))?(a):(b))
 #define probably_true(x) __builtin_expect(!!(x), 1)
+#define PRINTVEC(v) for (int i=0; i<v.size(); ++i){cerr << setprecision(10) << v[i] << '\t';}cerr << endl << endl;
+
+// double-typed overloads of mean/variance/autocorrelation/effectiveSampleSize, added for
+// TrailMix's MCMC_functions.h (which operates on vector<double>, not vector<long double>).
+// Kept alongside (not replacing) the long-double versions below, which damage.cpp/Euka.h/
+// readGAM_Euka.h/getLCAfromGAM.h rely on via diNucleotideProb/substitutionRates/probSubstition.
+inline double mean(const std::vector<double>& v) {
+    return std::accumulate(v.begin(), v.end(), 0.0) / v.size();
+}
+
+inline double variance(const std::vector<double>& v, double mean) {
+    double sum = 0.0;
+    for (const auto& i : v) {
+        double diff = i - mean;
+         sum += diff * diff;
+    }
+    return sum / (v.size() - 1);
+}
+
+inline double autocorrelation(const std::vector<double>& v, int k, double m, double var) {
+    double numer = 0.0;
+    const size_t n = v.size();
+    for (size_t i = 0; i < n - k; ++i) {
+        numer += ((v[i] - m) * (v[i + k] - m));
+    }
+    return numer / ((n - k) * var);
+}
+
+inline double autocorrelation(const std::vector<double>& v, int k) {
+    const size_t n = v.size();
+    const double m = mean(v);
+    const double var = variance(v, m);
+
+    double numer = 0.0;
+    for (size_t i = 0; i < n - k; ++i) {
+        numer += ((v[i] - m) * (v[i + k] - m));
+    }
+    return numer / ((n - k) * var);
+}
+
+inline double effectiveSampleSize(const std::vector<double>& v) {
+    const size_t n = v.size();
+    const int max_lag = std::min(static_cast<size_t>(100), n / 2);
+    const double m = mean(v);
+    const double var = variance(v, m);
+
+    double rho_prev = 1.0;
+    double rho_current = autocorrelation(v, 1, m, var);
+    double rho_hat_tot = 2.0 * rho_current;
+
+    for (int t = 2; t <= max_lag; ++t) {
+        double rho_next = autocorrelation(v, t, m, var);
+
+        if (rho_next + rho_current <= 0) break;
+
+        rho_hat_tot += 2.0 * rho_next;
+
+        if (std::abs(rho_next) < 0.01) break;
+
+        rho_prev = rho_current;
+        rho_current = rho_next;
+    }
+
+    return n / (1 + rho_hat_tot);
+}
 
 // Compute the mean of a sequence
 inline long double mean(const std::vector<long double>& v) {

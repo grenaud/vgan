@@ -58,7 +58,7 @@ const string Haplocart::usage() const{
 const int Haplocart::run(int argc, char *argv[], const string &cwdProg){
 
     preflight_check();
-    configure_memory_allocator();
+    vg::AllocatorConfig::configure();
     enable_crash_handling();
     temp_file::set_system_dir();
 
@@ -277,7 +277,7 @@ const int Haplocart::run(int argc, char *argv[], const string &cwdProg){
 
     // Load a bunch of stuff
     const map<const string, int> pangenome_map = load_pangenome_map(hcfiledir);
-    const tuple<vector<NodeInfo *>, const int, bdsg::ODGI> pathhandlegraphtuple = Haplocart::readPathHandleGraph(graphfilename, min(n_threads, 7), hcfiledir);
+    const tuple<vector<NodeInfo *>, const int, bdsg::HashGraph> pathhandlegraphtuple = Haplocart::readPathHandleGraph(graphfilename, min(n_threads, 7), hcfiledir);
     const auto [nodevector, minid, graph] = pathhandlegraphtuple;
     const vector<double> incorrect_mapping_vec = Haplocart::precompute_incorrect_mapping_probs();
     const vector<string> path_names = Haplocart::load_paths(hcfiledir);

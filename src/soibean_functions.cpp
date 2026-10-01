@@ -5,7 +5,7 @@
 using namespace std;
 
 // Function to find the paths that go through a given node
-vector<string> soibean::paths_through_node(const bdsg::ODGI& graph, const bdsg::handle_t& node) {
+vector<string> soibean::paths_through_node(const bdsg::HashGraph& graph, const bdsg::handle_t& node) {
     vector<string> paths;
     graph.for_each_step_on_handle(node, [&](const bdsg::step_handle_t& step) {
         // Get the path associated with this step

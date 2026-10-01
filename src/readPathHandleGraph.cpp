@@ -1,5 +1,5 @@
 #include "handlegraph/path_handle_graph.hpp"
-#include "bdsg/odgi.hpp"
+#include "bdsg/hash_graph.hpp"
 #include "algorithms/distance_to_head.hpp"
 #include "algorithms/distance_to_tail.hpp"
 #include "handle.hpp"
@@ -11,8 +11,8 @@ using namespace vg;
 using namespace vg::algorithms;
 using namespace google::protobuf;
 
-const tuple<vector<NodeInfo *>, const int, const bdsg::ODGI> Haplocart::readPathHandleGraph (const string & ogfilename, const int n_threads, const string &hcfiledir) {
-    bdsg::ODGI graph;
+const tuple<vector<NodeInfo *>, const int, const bdsg::HashGraph> Haplocart::readPathHandleGraph (const string & ogfilename, const int n_threads, const string &hcfiledir) {
+    bdsg::HashGraph graph;
     graph.deserialize(ogfilename);
     const int minid = graph.min_node_id();
     const int maxid = graph.max_node_id();

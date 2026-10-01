@@ -13,7 +13,7 @@
 #include "config/allocator_config.hpp"
 #include "io/register_libvg_io.hpp"
 #include "vgan_utils.h"
-#include "bdsg/odgi.hpp"
+#include "bdsg/hash_graph.hpp"
 #define PRINTVEC(v) for (int i=0; i<20; ++i){cerr << v[i] << '\t';}cerr << endl << endl;
 using namespace vg;
 
@@ -633,7 +633,7 @@ BOOST_AUTO_TEST_CASE(check_graph)
 {
  Haplocart hc;
  const vector<string> paths = hc.load_paths(getCWD(".")+"/share/vgan/hcfiles/");
- bdsg::ODGI graph;
+ bdsg::HashGraph graph;
  const string cwdProg = getFullPath(getCWD(".")+"bin/");
  graph.deserialize(cwdProg+"../share/vgan/hcfiles/graph.og");
  const int minid = graph.min_node_id();

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "bdsg/odgi.hpp"
+#include "bdsg/hash_graph.hpp"
 #include <iostream>
 #include <vector>
 #include <fstream>
@@ -38,7 +38,7 @@ namespace fs = std::filesystem;
 
 
 
-static pair <vector<AlignmentInfo *>*, vector<int>> readGAM3(const bdsg::ODGI &graph, const string &gamfilename, const bool populatevector,vector<Clade *> * clade_vec, \
+static pair <vector<AlignmentInfo *>*, vector<int>> readGAM3(const bdsg::HashGraph &graph, const string &gamfilename, const bool populatevector,vector<Clade *> * clade_vec, \
  const vector<NodeInfo *> &nodevector, const vector<double> &qscore_vec, \
  const double * base_freq, const double t_T_ratio['T' + 1]['T' +1 ], \
  const bool * rare_bases, vector<vector<tuple<int, int, double, double >>> &chunks, \

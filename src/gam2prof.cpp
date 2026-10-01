@@ -1,5 +1,5 @@
 #include "gam2prof.h"
-#include "bdsg/odgi.hpp"
+#include "bdsg/hash_graph.hpp"
 #include "Trailmix_struct.h"
 
 static shared_ptr<Trailmix_struct> NULLPTR_TRAILMIX_STRUCT = make_unique<Trailmix_struct>();
@@ -69,7 +69,7 @@ const int Gam2prof::run(int argc, char *argv[], const string &cwdProg){
                       
 
     // Deserialize handlegraph
-    bdsg::ODGI graph;
+    bdsg::HashGraph graph;
 
 
     graph.deserialize(ogfilename);

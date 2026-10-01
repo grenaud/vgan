@@ -18,7 +18,7 @@
 
 //#include "miscfunc.h"
 #include "subcommand/subcommand.hpp"
-#include "bdsg/odgi.hpp"
+#include "bdsg/hash_graph.hpp"
 #include "MCMC.h"
 
 using namespace std;
@@ -73,7 +73,7 @@ public:
                             const char * fifo_A, const vg::subcommand::Subcommand* sc,
                             const string & tmpdir, const string & cwdProg, const string &prefix, const string &minprefix);
     
-    tuple<vector<NodeInfo *>, int, bdsg::ODGI, vector<vector<bool>>, vector<string>> readPathHandleGraph(string &ogfilename, int n_threads, string &gbtwfilename, string &db_prefix,  vector<Clade *> *&  clade_vec);
+    tuple<vector<NodeInfo *>, int, bdsg::HashGraph, vector<vector<bool>>, vector<string>> readPathHandleGraph(string &ogfilename, int n_threads, string &gbtwfilename, string &db_prefix,  vector<Clade *> *&  clade_vec);
     // get the average damage profile of all clades for 2.round euka input
 
     Euka();

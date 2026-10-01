@@ -10,7 +10,7 @@
 #include "readVG.h"
 #include "readGAM.h"
 #include "subcommand/subcommand.hpp"
-#include "bdsg/odgi.hpp"
+#include "bdsg/hash_graph.hpp"
 
 using namespace std;
 
@@ -23,7 +23,7 @@ public:
  *  Deserialize the graph, which is in ODGI format.
  */
 
-const tuple<vector<NodeInfo *>, const int, const bdsg::ODGI> readPathHandleGraph (const string &ogfilename, const int n_threads, const string &hcfiledir);
+const tuple<vector<NodeInfo *>, const int, const bdsg::HashGraph> readPathHandleGraph (const string &ogfilename, const int n_threads, const string &hcfiledir);
 
 /** @brief Update likelihood_vec for a given read.
  *
@@ -36,7 +36,7 @@ inline const vector<long double> update_likelihood(const map<const string, int> 
                                  const vector<double> &mappabilities, const int nbpaths, const bool quiet, bool use_background_error_prob,
                                  const double &background_error_prob, const vector<double> &incorrect_mapping_vec,
                                  const int minid,
-                                 const bool is_consensus_fasta, const int n_threads, const bdsg::ODGI &graph) noexcept;
+                                 const bool is_consensus_fasta, const int n_threads, const bdsg::HashGraph &graph) noexcept;
 
 /** @brief Update log likelihood vector for each thread.
  *
@@ -47,7 +47,7 @@ const vector<long double> update(const int i, const map<const string, int> &pang
                            const AlignmentInfo* read_info, vector<long double> log_likelihood_vec, const vector<double> &qscore_vec,
                            const vector<double> &mappabilities, const int nbpaths, const bool quiet, bool use_background_error_prob,
                            double background_error_prob, const vector<double> &incorrect_mapping_vec, int n_reads,
-                           const int minid, const bool is_consensus_fasta, const int n_threads, const bdsg::ODGI &graph) noexcept;
+                           const int minid, const bool is_consensus_fasta, const int n_threads, const bdsg::HashGraph &graph) noexcept;
 
 // Process mapping
 

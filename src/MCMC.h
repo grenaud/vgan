@@ -84,7 +84,12 @@ public:
     
     long double get_proposal_likelihood(const vector <long double> &proposal_vec, vector<Clade *> * clade_vec, vector<int> &clade_list_id);
 
-    std::vector<MCMCiteration> run_tree_proportion(RunTreeProportionParams params, std::vector<MCMCiteration> state_t_vec, const bdsg::ODGI& graph, vector<vector<string>> nodepaths, string num, int n_threads, int numPaths, int chainindex, double con);
+    std::vector<MCMCiteration> run_tree_proportion(RunTreeProportionParams params, std::vector<MCMCiteration> state_t_vec, const bdsg::HashGraph& graph, vector<vector<string>> nodepaths, string num, int n_threads, int numPaths, int chainindex, double con);
+
+    // TrailMix-specific overload of run_tree_proportion (Trailmix_struct-driven, used by run_trailmix.cpp).
+    // Kept alongside (not replacing) the soibean-facing overload above.
+    std::vector<MCMCiteration> run_tree_proportion(RunTreeProportionParams &params, std::vector<MCMCiteration> &state_t_vec, const bdsg::HashGraph& graph, \
+                             const vector<vector<string>> &nodepaths, string num, shared_ptr<Trailmix_struct> &dta, bool running_trailmix, int chain);
 
     void updatePosition(PosTree &current_position, double move_distance, bool move_forward);
     //double moveBackward(PosTree &current_position, double move_distance_abs);
@@ -94,6 +99,22 @@ public:
     //const std::vector<double> getPatristicDistances(const spidir::Tree* tr, const spidir::Node* node);
     //double calculateDistanceToLeaf(const spidir::Tree* tr, const spidir::Node* current, const spidir::Node* leaf, double currentDistance, std::unordered_set<const spidir::Node*>& visited);
     pair<unordered_map<string, vector<vector<double>>>, double> processMCMCiterations(const std::vector<MCMCiteration> MCMCiterationsVec, int k, string num, int chain, const spidir::Tree* tr, int numofleafs);
+
+    // TrailMix-specific overload of processMCMCiterations (Trailmix_struct-driven).
+    pair<unordered_map<string, vector<vector<double>>>, double> processMCMCiterations(shared_ptr<Trailmix_struct>& dta, const std::vector<MCMCiteration> &MCMCiterations, int k, const string &num, int chain, \
+                                                                                        spidir::Tree* tr, int numofleafs);
+
+    // TrailMix-specific helpers (used by run_tree_proportion's Trailmix_struct overload).
+    bool is_in_pruned_set(spidir::Node* p, shared_ptr<Trailmix_struct> &dta);
+    void add_nodes_at_depth(spidir::Node* p, const int depth, shared_ptr<Trailmix_struct> &dta);
+    // NOTE: findLCA/calculateDistanceToAncestor/calculateEuclideanDistance/getQuantile2(double)/
+    // isNodeInTree are NOT re-declared here -- equivalents already exist as in-class inline
+    // definitions further down in this file and are reused as-is by the TrailMix additions.
+    double calculateRhat(const std::vector<double>& means, const std::vector<double>& variances, int chainLength, int numChains);
+    inline const double calculateDistanceToLeaf(const std::shared_ptr<spidir::Tree> &tr, const spidir::Node* current, const spidir::Node* leaf, double currentDistance, \
+                               std::unordered_set<const spidir::Node*>& visited);
+    // New overload (non-const spidir::Tree*) of getPatristicDistances, used by TrailMix's processMCMCiterations.
+    inline const std::vector<double> getPatristicDistances(spidir::Tree* tr, spidir::Node* node, int numofLeafs, double posonbranch);
     double log_diff_exp(double logA, double logB) {
         if (logB >= logA) {
             throw std::runtime_error("logB must be less than logA");
@@ -295,6 +316,205 @@ public:
         return log_lik_marg;
     }
 
+    // TrailMix-specific overload of computeBaseLogLike (Trailmix_struct-driven).
+  inline const double computeBaseLogLike(shared_ptr<Trailmix_struct>& dta, const AlignmentInfo* read, RunTreeProportionParams &params, const int basevec, \
+                                   const int base, const string &pathName, const double t, double branch_len, bool cont_mode)
+    {
+
+        const auto &detail = read->detailMap.at(pathName).at(basevec).at(base);
+
+        const double purinfreq = params.freqs['R'];
+        const double pyrinfreq = params.freqs['Y'];
+        const double mu = params.freqs['M'];
+        const double obaseFreq = params.freqs[detail.readBase];
+        const char refb = detail.referenceBase;
+        const char readb = detail.readBase;
+
+        if (readb == 'S' || refb == 'S' || readb == 'N' || refb == 'N' || readb == '-' || refb == '-'){return 1e-9;}
+
+#ifdef DEBUGPAIN3  // Debugging block start
+        cerr << "Debugging Information START" << endl;
+
+        cerr << "Input Variables:" << endl;
+        cerr << "basevec: " << basevec << endl;
+        cerr << "base: " << base << endl;
+        cerr << "pathName: " << pathName << endl;
+        cerr << setprecision(14)<< "t: " << t << endl;
+        cerr << setprecision(14)<< "branch_len: " << branch_len << endl;
+
+        cerr << "Intermediate Variables:" << endl;
+        cerr<< setprecision(14) << "purinfreq: " << purinfreq << endl;
+        cerr<< setprecision(14) << "pyrinfreq: " << pyrinfreq << endl;
+        cerr<< setprecision(14) << "mu: " << mu << endl;
+        cerr << setprecision(14)<< "obaseFreq: " << obaseFreq << endl;
+        cerr << setprecision(14)<< "refb: " << refb << endl;
+        cerr << setprecision(14)<< "readb: " << readb << endl;
+
+#endif
+        
+
+        double probBaseHKY[4];
+        for (int bpd = 0; bpd < 4; bpd++) {
+            probBaseHKY[bpd] = 0.0;
+        }
+
+        for (int bpo = 0; bpo < 4; bpo++) {
+            char rb = "ACGT"[bpo];
+            //cerr << "base " << rb << " iteration " << bpo << endl;
+            if (rb == refb) {
+                // no mutation
+                if (rb == 'A' || rb == 'G') {
+                    const double A = 1 + purinfreq * (kappa - 1);
+                    //cerr << "A "  << A << endl;
+                    const double jut1 = params.freqs[rb] + params.freqs[rb] * ((1 / purinfreq) - 1) * exp(-(mu * t));
+                    //cerr << "jut1 " << jut1 << endl;
+                    const double jut11 = ((purinfreq - params.freqs[rb]) / purinfreq) * exp(-(mu * t * A));
+                    //cerr << "jut11 " << jut11 << endl;
+                    probBaseHKY[bpo] = jut1 + jut11;
+                    if(probBaseHKY[bpo] < 1e-8){
+                        probBaseHKY[bpo] = 1e-8;
+                    }
+                    if (isnan(probBaseHKY[bpo]) || isinf(probBaseHKY[bpo])|| probBaseHKY[bpo] < 1e-8){
+                        cerr << "log like A & G match " << probBaseHKY[bpo] << " for base " << refb << endl;
+                        throw runtime_error("HKY is invalid for log like A & G match");
+                    }
+
+                    
+
+                }
+                // case 2: we have a match but the base is a Pyrimidine
+                else if (rb == 'C' || rb == 'T') {
+                    const double A = 1 + pyrinfreq * (kappa - 1);
+                    //cerr << "A "  << A << endl;
+                    const double jut1 = params.freqs[rb] + params.freqs[rb] * ((1 / pyrinfreq) - 1) * exp(-(mu * t));
+                    //cerr << "jut1 " << jut1 << endl;
+                    const double jut11 = ((pyrinfreq - params.freqs[rb]) / pyrinfreq) * exp(-(mu * t * A));
+                    //cerr << "jut11 " << jut11 << endl;
+                    probBaseHKY[bpo] = jut1 + jut11;
+                    if(probBaseHKY[bpo] < 1e-8){
+                        probBaseHKY[bpo] = 1e-8;
+                    }
+                    if (isnan(probBaseHKY[bpo]) || isinf(probBaseHKY[bpo])|| probBaseHKY[bpo] < 1e-8){
+                        cerr << "log like C & T match " << probBaseHKY[bpo] << " for base " << refb << endl;
+                        throw runtime_error("HKY is invalid for log like C & T match");
+                    }
+                    
+
+                }
+            } else {
+                // case 1: we have a mismatch and the base is a Purine
+                if ((rb == 'A' && refb == 'G') || (rb == 'G' && refb == 'A')) {
+                    const double A = 1 + purinfreq * (kappa - 1);
+                    //cerr << "A "  << A << endl;
+                    const double jut1 = params.freqs[rb] + params.freqs[rb] * ((1 / purinfreq) - 1) * exp(-(mu * t));
+                    //cerr << "jut1 " << jut1 << endl;
+                    const double jut11 = (params.freqs[rb] / purinfreq) * exp(-(mu * t * A));
+                    //cerr << "jut11 " << jut11 << endl;
+                    if(jut1 > jut11){
+                        probBaseHKY[bpo] = jut1 - jut11;
+                    }else{
+                        probBaseHKY[bpo] = jut11 - jut1;
+                    }
+                    if(probBaseHKY[bpo] < 1e-8){
+                        probBaseHKY[bpo] = 1e-8;
+                    }
+                    
+                    if (isnan(probBaseHKY[bpo]) || isinf(probBaseHKY[bpo])|| probBaseHKY[bpo] < 1e-8){
+                        cerr << "log like C & T match " << probBaseHKY[bpo] << " for base " << refb << endl;
+                        throw runtime_error("HKY is invalid for log like C & T match.");
+                    }
+
+
+                    
+
+                }
+                // case 2: we have a mismatch and the base is a Pyrimidine
+                else if ((rb == 'C' && refb == 'T') || (rb == 'T' && refb == 'C')) {
+                    const double A = 1 + pyrinfreq * (kappa - 1);
+                    //cerr << "A "  << A << endl;
+                    const double jut1 = params.freqs[rb] + params.freqs[rb] * ((1 / pyrinfreq) - 1) * exp(-(mu * t));
+                    //cerr << "jut1 " << jut1 << endl;
+                    const double jut11 = (params.freqs[rb] / pyrinfreq) * exp(-(mu * t * A));
+                    //cerr << "jut11 " << jut11 << endl;
+                    if(jut1 > jut11){
+                        probBaseHKY[bpo] = jut1-jut11;
+                    }else{
+                        probBaseHKY[bpo] = jut11-jut1;
+                    }
+                    
+                    if(probBaseHKY[bpo] < 1e-8){
+                        probBaseHKY[bpo] = 1e-8;
+                    }
+                    if (isnan(probBaseHKY[bpo]) || isinf(probBaseHKY[bpo])|| probBaseHKY[bpo] < 1e-8){
+                        cerr << "log like C & T mismatch " << probBaseHKY[bpo] << " for base " << refb << endl;
+                        throw runtime_error("HKY is invalid for log like C & T mismatch.");
+                    }
+                    
+
+                } else {
+                    probBaseHKY[bpo] = params.freqs[rb] * (1 - exp(-(mu * t)));
+                    if(probBaseHKY[bpo] < 1e-8){
+                        probBaseHKY[bpo] = 1e-8;
+                    }
+
+                    if (isnan(probBaseHKY[bpo]) || isinf(probBaseHKY[bpo]) || probBaseHKY[bpo] < 1e-8){
+                        cerr << "log like the trash " << probBaseHKY[bpo] << " for base " << refb << endl;
+                        throw runtime_error("HKY loglikemarg is invalid.");
+                    }
+
+                }
+            }
+        } // end filling probability matrix.
+
+        double log_lik_marg = -std::numeric_limits<double>::infinity();
+        for (int bpd = 0; bpd < 4; bpd++) {
+            if ("ACGT"[bpd] == readb) {
+                log_lik_marg = oplusInitnatl(log_lik_marg, (log(probBaseHKY[bpd])));
+                
+            } else {
+                log_lik_marg = oplusInitnatl(log_lik_marg, (log(probBaseHKY[bpd])));
+                
+            }
+        }
+        if (log_lik_marg > 1e-8){
+            log_lik_marg = log(0.999999999);
+        }
+
+
+        if (isnan(log_lik_marg) || isinf(log_lik_marg) || log_lik_marg > 1e-8){
+            cerr << "post HKY:" << endl;
+            for (int bpd = 0; bpd < 4; bpd++) {
+                cerr << setprecision(15) << bpd << "\t" << probBaseHKY[bpd] << endl;
+            }
+            cerr << setprecision(15) << "log_lik_marg:" << log_lik_marg << " p=" << exp(log_lik_marg) << endl;
+            cerr << setprecision(15) << "detail map log like " << detail.logLikelihood << endl;
+            cerr << "UNUSUAL HKY" << endl;
+            throw runtime_error("HKY loglikemarg is invalid.");
+                                                                              }
+
+#ifdef DEBUGHKY
+        cerr << "post HKY:" << endl;
+        for (int bpd = 0; bpd < 4; bpd++) {
+            cerr << setprecision(15) << bpd << "\t" << probBaseHKY[bpd] << endl;
+        }
+        cerr << setprecision(15) << "log_lik_marg:" << log_lik_marg << " p=" << exp(log_lik_marg) << endl;
+        cerr << setprecision(15) << "detail map log like " << detail.logLikelihood << endl;
+        //if (readb != refb){throw std::runtime_error("Mismatch ");}
+#endif
+
+        if (isnan(log_lik_marg) || isinf(log_lik_marg) || log_lik_marg > 1e-8){
+            cerr << "cont mode? " << cont_mode << endl;
+            cerr << setprecision(15) << "log_lik_marg:" << log_lik_marg << " p=" << exp(log_lik_marg) << endl;
+            cerr << setprecision(15) << "detail map log like " << detail.logLikelihood << endl;
+            cerr << setprecision(15) << "detail map log like no damage " << detail.logLikelihoodNoDamage << endl;
+
+            throw runtime_error("HKY loglikemarg is invalid.");}
+
+//cerr << setprecision(15) << "log_lik_marg:" << log_lik_marg << " p=" << exp(log_lik_marg) << endl;
+
+        return log_lik_marg;
+    }
+
 
     double calculateLogWeightedAverage(double logValueChild, double weightChild, double logValueParent, double weightParent) {
 
@@ -331,21 +551,12 @@ public:
     }
                              };
 
+    // NOTE: vestigial/unused (references a "branch_combos" field that doesn't exist on
+    // Trailmix_struct in either this codebase or upstream vgan_dev, and isn't called
+    // anywhere); left as a type-correct stub rather than guessing at long-gone intent.
     int getBCIndex(const std::shared_ptr<Trailmix_struct>& dta, const std::vector<unsigned int>& combo) {
-    // convert input vector to a multiset for order-agnostic comparison
-    std::multiset<unsigned int> comboSet(combo.begin(), combo.end());
-
-    for (size_t i = 0; i < dta->branch_combos.size(); i++) {
-        // convert each combo in branch_combos to a multiset
-        std::multiset<unsigned int> existingComboSet(dta->branch_combos[i].begin(), dta->branch_combos[i].end());
-
-        // compare sets
-        if (existingComboSet == comboSet) {
-            return static_cast<int>(i);
-        }
+        return -1;
     }
-    return -1;
-}
 
     unsigned long long nChooseK(int n, int k) {
     if (k > n) {
@@ -402,6 +613,36 @@ void get_proposal_sd(double acceptanceRate, int currentIteration, int totalItera
         } else if (acceptanceRate < targetAcceptanceRate) {
             proposal_sd = std::min(maxSD, proposal_sd * (1.0 + adaptationRate));
         }
+    }
+}
+
+// TrailMix-specific overload of get_proposal_sd (takes proposal_sd/acceptance_rate as
+// explicit ref params rather than using the class member directly).
+inline void get_proposal_sd(double& proposal_sd_ref, double& acceptance_rate, int current_iteration, int total_iterations, int burn_in) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+
+    std::uniform_int_distribution<> range_choice(0,5);
+    int choice = range_choice(gen);
+
+    if (choice == 0) {
+        std::uniform_real_distribution<> range(1e-4, 1e-3);
+        proposal_sd_ref = range(gen);
+    } else if (choice == 1) {
+        std::uniform_real_distribution<> range(1e-2, 1e-1);
+        proposal_sd_ref = range(gen);
+    } else if (choice == 2) {
+        std::uniform_real_distribution<> range(1e-1, 1.0);
+        proposal_sd_ref = range(gen);
+    } else if (choice == 3) {
+        std::uniform_real_distribution<> range(1.0, 10.0);
+        proposal_sd_ref = range(gen);
+    } else if (choice == 4) {
+        std::uniform_real_distribution<> range(10.0, 100.0);
+        proposal_sd_ref = range(gen);
+    } else if (choice == 5) {
+        std::uniform_real_distribution<> range(300.0, 800.0);
+        proposal_sd_ref = range(gen);
     }
 }
 
@@ -502,6 +743,48 @@ std::vector<PosTree> initializePositions(const std::vector<double>& random_numbe
     }
 
     return current_positions;
+}
+
+// TrailMix-specific overloads of initializeState/initializePositions, which take an
+// optional MCMC seed vector (dta->seed). Kept alongside (not replacing) the soibean-facing
+// overloads above.
+inline std::vector<PosTree> initializePositions(const std::vector<double>& random_numbers, RunTreeProportionParams& params, vector<double> &seed) {
+    std::vector<PosTree> current_positions(random_numbers.size());
+    int index = 0;
+
+    for (auto& p : current_positions) {
+        p.pos = params.tr->nodes[params.sources[index]];
+        p.pos_branch = 0.0001;
+        double seed_sum = std::accumulate(seed.begin(), seed.end(), 0.0);
+        if (seed_sum == 1.0) {
+            p.theta = seed[index];
+        } else {
+            p.theta = random_numbers[index];
+        }
+        p.branch_place_anc = 0.5;
+        p.branch_place_der = 0.5;
+        index++;
+    }
+
+    return current_positions;
+}
+
+inline MCMCiteration initializeState(RunTreeProportionParams& params, vector<double> &seed) {
+    MCMCiteration state;
+    state.n_components = params.sources.size();
+
+    std::vector<double> random_numbers = generateRandomNumbers(state.n_components);
+    state.positions_tree = initializePositions(random_numbers, params, seed);
+
+    auto [thetaVec, max_branch_lens] = generateThetaVecAndMaxBranchLens(state.positions_tree);
+
+    state.proportions = thetaVec;
+    state.max_branch_lens = max_branch_lens;
+
+    double likelihood_t = params.logLike;
+    state.logLike = likelihood_t;
+
+    return state;
 }
 
 double getQuantile2(const std::vector<double>& sortedData, double q) {

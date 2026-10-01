@@ -1,0 +1,236 @@
+===============================================================================
+ Building vg_newest (vg v1.75) from scratch for vgan
+===============================================================================
+
+WHAT THIS IS
+------------
+vgan statically links vg's `libvg.a` plus several of vg's compiled
+subcommand objects and calls them in-process (see CLAUDE.md). This file
+covers building that vg dependency ("vg_newest") from a clean checkout,
+including the system packages it needs and the gotchas hit building it on
+a box without sudo. It does NOT cover building vgan itself (see CLAUDE.md's
+"Build" section and src/Makefile) or the reference-database migration
+(see MIGRATION.txt) -- do this first, then those.
+
+Exact version built and verified in this repo: vg v1.75.0-258-g6193310e3
+"Spike" (github.com/vgteam/vg, commit 6193310e3, `origin/master` a bit past
+the v1.75.0 tag). Built and tested on Ubuntu 24.04.4 LTS, g++ 13.3.0.
+
+
+-------------------------------------------------------------------------------
+ 0) GET THE SOURCE
+-------------------------------------------------------------------------------
+vg has ~40 git submodules (vcflib, gssw, sdsl-lite, gbwt, gcsa2, libbdsg,
+xg, htslib, jemalloc, pixman, cairo, ...) -- clone with --recurse-submodules
+or `git submodule update --init --recursive` after a plain clone, or it
+will fail to build with confusing "file not found" errors deep in deps/.
+
+    git clone --recurse-submodules https://github.com/vgteam/vg.git vg_newest
+    cd vg_newest
+    git checkout <desired commit/tag>   # this repo used 6193310e3
+    git submodule update --init --recursive   # if submodules weren't pulled
+
+Expect ~2.4 GB on disk once built (source + all deps + built objects).
+
+
+-------------------------------------------------------------------------------
+ 1) SYSTEM PACKAGES
+-------------------------------------------------------------------------------
+vg_newest/Makefile's `get-deps` target installs everything the Dockerfile
+lists, via sudo apt-get:
+
+    sudo make -C vg_newest get-deps
+
+This installs (from vg_newest/Dockerfile's ###DEPS_BEGIN###/###DEPS_END###
+block): make git build-essential protobuf-compiler libprotoc-dev
+libjansson-dev libbz2-dev libncurses5-dev automake gettext autopoint
+libtool jq bsdmainutils bc rs parallel npm samtools curl unzip
+redland-utils librdf-dev cmake pkg-config wget gtk-doc-tools raptor2-utils
+rasqal-utils bison flex gawk libgoogle-perftools-dev liblz4-dev
+liblzma-dev libffi-dev libfontconfig-dev libfreetype-dev libglib2.0-dev
+libpcre2-dev libpng-dev libprotobuf-dev libboost-all-dev tabix bcftools
+libzstd-dev pybind11-dev python3-pybind11 pandoc libssl-dev
+libjitterentropy3-dev kmc **libdw-dev** meson.
+
+IMPORTANT: this list already includes `libdw-dev` (which pulls in
+`libelf-dev` as a dependency) and `meson`. If you have sudo and run
+`get-deps` successfully, you should NOT hit either of the two gotchas
+below (missing libdw.a/libelf.a for static linking, and missing
+meson/ninja for cairo/pixman) -- those workarounds exist specifically
+for the no-sudo case.
+
+IF YOU DON'T HAVE SUDO (this box's situation): you cannot run `get-deps`.
+Check first what's already present at the OS level (this box already had
+protobuf/boost/etc. installed system-wide, just not libdw-dev/meson) --
+`dpkg -l | grep -iE "protobuf|boost|jansson"` etc. For the two packages
+that actually blocked the build here, no-sudo workarounds are below in
+step 3 (meson/ninja) and step 5 (libdw/libelf for static linking).
+
+
+-------------------------------------------------------------------------------
+ 2) THE MEMORY-SAFE PATH: build only what vgan needs (RECOMMENDED)
+-------------------------------------------------------------------------------
+vgan does its own final link (see src/Makefile), so you only need:
+  - `lib/libvg.a`
+  - a handful of `obj/subcommand/*.o` files (giraffe_main, gamsort_main,
+    gbwt_main, filter_main, view_main, options, subcommand)
+  - `obj/config/allocator_config_jemalloc.o`
+NOT the full `bin/vg` executable. Building `bin/vg` links every subcommand
+including cairo/pixman-dependent ones (see step 4), which is unnecessary
+extra risk/time/memory for vgan's purposes.
+
+    cd vg_newest
+    make -j$(nproc) lib/libvg.a
+    make -j$(nproc) \
+        obj/subcommand/subcommand.o \
+        obj/subcommand/giraffe_main.o \
+        obj/subcommand/gamsort_main.o \
+        obj/subcommand/gbwt_main.o \
+        obj/subcommand/filter_main.o \
+        obj/subcommand/view_main.o \
+        obj/subcommand/options.o \
+        obj/config/allocator_config_jemalloc.o
+
+`build_with_vg_newest.sh` in the repo root automates this (originally
+written for a 7 GB dev box, hence `-j2`; bump the -j on a bigger machine).
+This step alone does NOT need meson/ninja/cairo/pixman -- none of the
+listed objects reference cairo. It took roughly 20-40 minutes on a
+128-core / 1TB-RAM box, dominated by libvg.a's own translation units and
+its submodule dependencies (gcsa2, gbwt, libbdsg, xg, htslib, sdsl-lite,
+jemalloc, vcflib, ...).
+
+At this point you can build vgan itself (see CLAUDE.md). Skip straight to
+step 6 unless you also need `vg`'s CLI subcommands (index/minimizer/
+autoindex/chunk/mod/convert/etc.) to migrate reference databases (see
+MIGRATION.txt) -- in which case continue to step 3.
+
+
+-------------------------------------------------------------------------------
+ 3) BUILDING MORE vg SUBCOMMANDS WITHOUT A FULL `bin/vg`
+     (needed for reference-database work, e.g. MIGRATION.txt)
+-------------------------------------------------------------------------------
+Individual subcommand objects (`obj/subcommand/<name>_main.o`) compile
+independently and do NOT need cairo -- e.g. to add `index`, `minimizer`,
+`autoindex`, `chunk`, `mod`, `convert`:
+
+    cd vg_newest
+    make -j$(nproc) \
+        obj/subcommand/index_main.o \
+        obj/subcommand/minimizer_main.o \
+        obj/subcommand/autoindex_main.o \
+        obj/subcommand/chunk_main.o \
+        obj/subcommand/mod_main.o \
+        obj/subcommand/convert_main.o
+
+HOWEVER: the generic build rule for obj/subcommand/%.o lists `$(DEPS)` as
+a prerequisite, and `$(DEPS)` includes `$(LIB_DIR)/libcairo.a` and
+`$(LIB_DIR)/libpixman-1.a` (Makefile ~line 404) even though these specific
+subcommands never call cairo. If those two files don't exist yet at all,
+`make` will try to build them (via meson+ninja, see step 4) even for an
+unrelated subcommand object. Two ways around this if you don't want real
+cairo:
+  (a) build cairo/pixman properly (step 4), or
+  (b) neutralize the dependency with an empty placeholder archive (fine
+      because none of index/minimizer/autoindex/chunk/mod/convert/giraffe/
+      gamsort/gbwt/filter/view actually reference cairo symbols):
+          cd vg_newest && ar rc lib/libcairo.a && touch lib/libcairo.a
+      (leave lib/libpixman-1.a alone if it already built successfully --
+      pixman built fine standalone in this session, only cairo itself hit
+      real compile errors, see step 4).
+
+Then link your own minimal driver against `lib/libvg.a` + whichever
+`obj/subcommand/*.o` you built, mirroring vgan's own link recipe -- see
+MIGRATION.txt's "THE vgtool WORKAROUND" section for the full driver source
+and link command (a ~15-line main.cpp calling
+`vg::subcommand::Subcommand::get(argc, argv)`).
+
+
+-------------------------------------------------------------------------------
+ 4) FULL `bin/vg` (all subcommands, needs meson/ninja + real cairo/pixman)
+-------------------------------------------------------------------------------
+`make bin/vg` (or plain `make`) links EVERY subcommand, including
+plotting/rendering ones that need `libcairo.a`/`libpixman-1.a`, built via
+meson+ninja from the `deps/cairo`/`deps/pixman` submodules.
+
+  4a) meson/ninja, no-sudo path: `get-deps` would install `meson` via apt
+      or pipx; without sudo, use a venv (no root, no system changes):
+          python3 -m venv /path/to/buildvenv
+          /path/to/buildvenv/bin/pip install meson ninja
+          export PATH="/path/to/buildvenv/bin:$PATH"
+
+  4b) KNOWN ISSUE hit on this box: pixman built fine, but cairo's meson
+      build failed with real compile errors unrelated to vgan:
+          error: #error "CAIRO_MUTEX_IMPL_LOCK not defined..."
+          error: invalid operands to binary + (cairo_int64_t ...)
+          error: #error Cannot find definitions for fixed-width integral types
+      This looks like a meson-version/toolchain mismatch with the specific
+      cairo submodule version pinned by this vg commit, not anything wrong
+      with the vg source or this migration. Did not find a quick fix; if
+      you hit this and don't actually need `bin/vg`'s plotting subcommands,
+      use the placeholder-archive trick in step 3(b) instead of chasing it,
+      and build a minimal driver ("vgtool") for the specific subcommands
+      you need -- see MIGRATION.txt.
+
+  4c) If cairo DOES build successfully for you (e.g. via a proper
+      `get-deps` with sudo, or a meson/toolchain combination that doesn't
+      hit the above), finish with:
+          make -j$(nproc) bin/vg
+      then also see step 5 for `-ldw -lelf` before it will actually link.
+
+  4d) A prior partial build attempt on this box left a stale
+      lib/libpixman-1.so.0 (not a symlink) that made a LATER `ninja
+      install` fail with "Destination ... already exists and is not a
+      symlink". If you rerun after an interrupted attempt, `rm -rf
+      deps/pixman/build deps/cairo/build` and clear stray `lib/libpixman*`/
+      `lib/libcairo*` files before retrying, or you'll get confusing
+      errors that look like a fresh problem but are just leftover state.
+
+
+-------------------------------------------------------------------------------
+ 5) `-ldw -lelf` LINK FAILURES (affects `bin/vg` AND vgan's own build)
+-------------------------------------------------------------------------------
+vg's own link (and vgan's src/Makefile, which mirrors it) links
+`-ldw -lelf` (backward-cpp crash-handler stack traces via elfutils).
+`get-deps`'s `libdw-dev` package provides these; without sudo and without
+that package, you'll only have the runtime `libdw.so.1`/`libelf.so.1`
+(no unversioned `.so`, no `.a` at all), and linking fails:
+    /usr/bin/ld: cannot find -ldw
+    /usr/bin/ld: cannot find -lelf
+
+  DYNAMIC build fix (symlink is enough -- ld will accept a .so):
+      ln -sf /lib/x86_64-linux-gnu/libdw.so.1  <libdir>/libdw.so
+      ln -sf /lib/x86_64-linux-gnu/libelf.so.1 <libdir>/libelf.so
+  where <libdir> is whatever directory your link command's `-L` points at
+  (for vgan specifically, that's `dep/vg/lib` -- see note below).
+
+  STATIC build fix (a symlink to a .so does NOT satisfy `-static` -- you
+  need a real `.a`). Build elfutils from source (no root needed):
+      wget https://sourceware.org/elfutils/ftp/0.190/elfutils-0.190.tar.bz2
+      tar xjf elfutils-0.190.tar.bz2 && cd elfutils-0.190
+      ./configure --disable-debuginfod --disable-libdebuginfod --prefix=$PWD/install
+      make -j$(nproc)
+      cp libdw/libdw.a libelf/libelf.a <libdir>/
+  (version 0.190 was picked to match this box's installed libdw1t64/
+  libelf1t64 runtime package version; exact version match isn't critical
+  for a static link, just "works").
+
+  NOTE ON `dep/vg`: vgan's src/Makefile links against `../dep/vg/lib`, not
+  `vg_newest/lib` directly. `dep/vg` is SUPPOSED to be a symlink to
+  `vg_newest` (per CLAUDE.md) but can end up as a separate materialized
+  directory copy (same files, different inodes) depending on how it was
+  set up. Check with `readlink dep/vg` / `stat` before assuming a fix in
+  one is visible in the other -- run `realpath ../dep/vg/lib` from `src/`
+  to see exactly which directory your build will actually use, and put
+  these libdw/libelf fixes there.
+
+
+-------------------------------------------------------------------------------
+ 6) VERIFY
+-------------------------------------------------------------------------------
+    ls -la vg_newest/lib/libvg.a                     # should exist, ~700 MB
+    ls -la vg_newest/obj/subcommand/giraffe_main.o   # etc for whichever you built
+    # if you built a vgtool driver or bin/vg:
+    ./vgtool index --help   # or ./bin/vg version
+
+Then proceed to building vgan itself (CLAUDE.md's "Build" section) and, if
+you're regenerating reference databases, MIGRATION.txt.

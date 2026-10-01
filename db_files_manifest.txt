@@ -1,0 +1,108 @@
+# Minimal set of converted reference-database files needed to run vgan
+# (haplocart / euka / soibean / trailmix) against vg v1.75.
+#
+# All paths are relative to the vgan repo root.
+#
+# TOTAL SIZE: ~11.5 GB (apparent/logical size - this is what Google Drive will
+# actually store/transfer). Several of these files (euka_db.dist, euka_db.og,
+# euka_db.min, euka_db.gbwt, euka_db.gg, euka_db.giraffe.gbz, soibean_db.og,
+# graph.og, graph.xg, hcfiles/graph.og) are SPARSE on this filesystem -
+# `du` reports a much smaller number (~2.7 GB combined) because it only
+# counts disk blocks actually allocated, but that's not what matters here:
+# a normal file read (which is what any cloud upload/sync client does)
+# returns the full logical content including the zero-filled holes, so the
+# real upload size is the apparent size (`ls -l` / `stat`), not `du`. If
+# staging these locally before uploading, use `cp --sparse=always` or
+# `rsync -S` to keep them sparse and save local disk/time - that has no
+# effect on how much the actual Google Drive upload consumes, though.
+#
+# Excluded on purpose (do NOT need to upload these):
+#   - *.odgi.bak / *.old.bak / *.v1022.bak   (pre-conversion backups)
+#   - *.shortread.withzip.min / *.shortread.zipcodes
+#       (giraffe's own runtime-rebuilt minimizer cache - unsafe to reuse
+#       across machines/process invocations, must regenerate fresh on
+#       whatever machine actually runs vgan; see MIGRATION.txt)
+#   - soibean_db.gbwt / .gg / .gfa / .dist / .min / .giraffe.gbz
+#       (~23 GB, built as an early sanity check but never actually read by
+#       make_graph_files.sh or soibean's classification workflow)
+#   - share/vgan/tmfiles/pub.graph.*
+#       (stale leftovers; the real pub.graph set lives in its own
+#       publication_tmfiles/ directory with its own matching haps.treefile -
+#       mixing them back into tmfiles/ caused a real MCMC crash, see
+#       MIGRATION.txt section D.5, bug #7)
+#
+# Lines starting with '#' and blank lines are comments/separators - strip
+# them if feeding this into `tar -T` / `rsync --files-from=`, e.g.:
+#   grep -v '^#' db_files_manifest.txt | grep -v '^$' > db_files_manifest.clean.txt
+
+# --- HaploCart (share/vgan/hcfiles/) ---
+share/vgan/hcfiles/graph.og
+share/vgan/hcfiles/graph.giraffe.gbz
+share/vgan/hcfiles/graph.dist
+share/vgan/hcfiles/k31_w11.min
+share/vgan/hcfiles/k17_w18.min
+share/vgan/hcfiles/path_supports
+share/vgan/hcfiles/parsed_pangenome_mapping
+share/vgan/hcfiles/parents.txt
+share/vgan/hcfiles/children.txt
+share/vgan/hcfiles/graph_paths
+share/vgan/hcfiles/mappability.tsv
+
+# --- euka (share/vgan/euka_dir/) ---
+share/vgan/euka_dir/euka_db.og
+share/vgan/euka_dir/euka_db.giraffe.gbz
+share/vgan/euka_dir/euka_db.dist
+share/vgan/euka_dir/euka_db.min
+share/vgan/euka_dir/euka_db.gbwt
+share/vgan/euka_dir/euka_db.gg
+share/vgan/euka_dir/euka_db.clade
+share/vgan/euka_dir/euka_db.bins
+
+# --- soibean (share/vgan/soibean_dir/) ---
+# Core (needed to chunk any NEW taxon in the future):
+share/vgan/soibean_dir/soibean_db.og
+share/vgan/soibean_dir/soibean_db.clade
+share/vgan/soibean_dir/soibean_db.bins
+share/vgan/soibean_dir/soibean_db.baseFreq
+share/vgan/soibean_dir/tree_dir/
+# Per-taxon subgraph, currently only Ursidae is built - repeat this block
+# per taxon if more get built later:
+share/vgan/soibean_dir/Ursidae.og
+share/vgan/soibean_dir/Ursidae.giraffe.gbz
+share/vgan/soibean_dir/Ursidae.dist
+share/vgan/soibean_dir/Ursidae.min
+share/vgan/soibean_dir/Ursidae.gbwt
+share/vgan/soibean_dir/Ursidae.gg
+share/vgan/soibean_dir/Ursidae.vg
+share/vgan/soibean_dir/Ursidae.gfa
+
+# --- trailmix, full DB (share/vgan/tmfiles/) ---
+share/vgan/tmfiles/graph.og
+share/vgan/tmfiles/graph.xg
+share/vgan/tmfiles/graph.gbwt
+share/vgan/tmfiles/graph.gg
+share/vgan/tmfiles/graph.giraffe.gbz
+share/vgan/tmfiles/graph.min
+share/vgan/tmfiles/graph.dist
+share/vgan/tmfiles/graph.ry
+share/vgan/tmfiles/mappability.tsv
+share/vgan/tmfiles/parsed_pangenome_mapping
+share/vgan/tmfiles/haps.treefile
+share/vgan/tmfiles/pantranscriptome.txt
+
+# --- trailmix, small publication/test DB (share/vgan/publication_tmfiles/) ---
+# NOTE: this haps.treefile is its own small file (2.6 KB), NOT the same
+# file as share/vgan/tmfiles/haps.treefile (271 KB) - do not substitute one
+# for the other.
+share/vgan/publication_tmfiles/pub.graph.og
+share/vgan/publication_tmfiles/pub.graph.xg
+share/vgan/publication_tmfiles/pub.graph.gbwt
+share/vgan/publication_tmfiles/pub.graph.gg
+share/vgan/publication_tmfiles/pub.graph.giraffe.gbz
+share/vgan/publication_tmfiles/pub.graph.min
+share/vgan/publication_tmfiles/pub.graph.dist
+share/vgan/publication_tmfiles/pub.graph.ry
+share/vgan/publication_tmfiles/mappability.tsv
+share/vgan/publication_tmfiles/parsed_pangenome_mapping
+share/vgan/publication_tmfiles/pantranscriptome.txt
+share/vgan/publication_tmfiles/haps.treefile

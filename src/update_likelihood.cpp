@@ -7,7 +7,7 @@ const vector<long double> Haplocart::update(const int i, const map<const string,
                                        const vector<double> &qscore_vec, const vector<double> &mappabilities, const int nbpaths, const bool quiet,
                                        bool use_background_error_prob, double background_error_prob, const vector<double> &incorrect_mapping_vec,
                                        int n_reads, const int minid, const bool is_consensus_fasta, const int n_threads,
-                                       const bdsg::ODGI &graph) noexcept {
+                                       const bdsg::HashGraph &graph) noexcept {
 
 const vector<long double> ret = Haplocart::update_likelihood(pangenome_map, read_info, nodevector, log_likelihood_vec, qscore_vec, mappabilities,
                                                        nbpaths, quiet, use_background_error_prob, background_error_prob,
@@ -22,7 +22,7 @@ inline const vector<long double> Haplocart::update_likelihood(const map<const st
                                  const vector<double> &mappabilities, const int nbpaths, const bool verbose, bool use_background_error_prob,
                                  const double &background_error_prob, const vector<double> &incorrect_mapping_vec,
                                  const int minid,
-                                 const bool is_consensus_fasta, const int n_threads, const bdsg::ODGI &graph) noexcept
+                                 const bool is_consensus_fasta, const int n_threads, const bdsg::HashGraph &graph) noexcept
 {
 
 const auto path = read_info->path;

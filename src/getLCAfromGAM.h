@@ -1,7 +1,7 @@
 #pragma once
 
 #include "soibean.h"
-#include "bdsg/odgi.hpp"
+#include "bdsg/hash_graph.hpp"
 #include "vg/vg.pb.h"
 #include "vg/io/basic_stream.hpp"
 #include "vg/io/alignment_emitter.hpp"
@@ -29,7 +29,7 @@ using namespace google::protobuf;
 namespace fs = std::filesystem;
 
 static vector<AlignmentInfo*>* analyse_GAM(
-    const bdsg::ODGI& graph,
+    const bdsg::HashGraph& graph,
     string gamfilename,
     vector<Clade*>* clade_vec,
     const vector<NodeInfo*> nodevector,

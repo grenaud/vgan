@@ -37,16 +37,12 @@ void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n
 	    arguments.emplace_back(fastq1filename);
 	    arguments.emplace_back("-f");
 	    arguments.emplace_back(fastq2filename);
-	    arguments.emplace_back("-g");
-	    arguments.emplace_back(prefix + ".gg");
+	    arguments.emplace_back("-Z");
+	    arguments.emplace_back(prefix + ".giraffe.gbz");
 	    arguments.emplace_back("-d");
 	    arguments.emplace_back(prefix + ".dist");
 	    arguments.emplace_back("-m");
 	    arguments.emplace_back(minimizer_to_use);
-	    arguments.emplace_back("-H");
-	    arguments.emplace_back(prefix + ".gbwt");
-	    arguments.emplace_back("-x");
-	    arguments.emplace_back(prefix + ".og");
 	    char** argvtopass = new char*[arguments.size()];
 	    for (int i=0;i<arguments.size();i++) {
 		argvtopass[i] = const_cast<char*>(arguments[i].c_str());
@@ -64,16 +60,12 @@ void Euka::map_giraffe(string fastq1filename, string fastq2filename, const int n
 	{
 	    arguments.emplace_back("-f");
 	    arguments.emplace_back(fastq1filename);
-	    arguments.emplace_back("-g");
-	    arguments.emplace_back(prefix + ".gg");
+	    arguments.emplace_back("-Z");
+	    arguments.emplace_back(prefix + ".giraffe.gbz");
 	    arguments.emplace_back("-d");
 	    arguments.emplace_back(prefix + ".dist");
 	    arguments.emplace_back("-m");
 	    arguments.emplace_back(minimizer_to_use);
-	    arguments.emplace_back("-H");
-	    arguments.emplace_back(prefix + ".gbwt");
-	    arguments.emplace_back("-x");
-	    arguments.emplace_back(prefix + ".og");
 
 	    if (interleaved) {
 		arguments.emplace_back("-i");

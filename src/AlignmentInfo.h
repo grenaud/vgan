@@ -21,9 +21,12 @@ public:
     struct BaseInfo {
       char readBase;
       char referenceBase;
-      bool pathSupport;
-      double logLikelihood;
+      bool pathSupport = true;
+      double logLikelihood = log(0.00000000001);
+      double logLikelihoodNoDamage = log(0.00000000001);
+      BaseInfo() : pathSupport(false) {}  // Default constructor
     };
+
 
     string seq;
     string name;

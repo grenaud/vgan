@@ -3,7 +3,7 @@
 #include "path_string.hpp"
 #include <boost/range/adaptor/reversed.hpp>
 
-inline const tuple<string, string, vector<int>> reconstruct_graph_sequence(const bdsg::ODGI &graph, const auto &path, const string &algnseq)
+inline const tuple<string, string, vector<int>> reconstruct_graph_sequence(const bdsg::HashGraph &graph, const auto &path, const string &algnseq)
 
 {
     string graph_seq = "";

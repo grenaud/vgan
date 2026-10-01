@@ -1,6 +1,6 @@
 #pragma once
 
-#include "bdsg/odgi.hpp"
+#include "bdsg/hash_graph.hpp"
 #include "vg/vg.pb.h"
 #include "vg/io/basic_stream.hpp"
 #include "vg/io/alignment_emitter.hpp"
@@ -23,7 +23,7 @@ using namespace google::protobuf;
 namespace fs = std::filesystem;
 
 long double calcPathLogLike(
-    const bdsg::ODGI& graph,
+    const bdsg::HashGraph& graph,
     const vector<AlignmentInfo*>* align,
     vector<vector<string>>& nodepaths,
     vector<string> pathNames,

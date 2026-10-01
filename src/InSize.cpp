@@ -37,7 +37,7 @@ const string InSize::usage() const
 const int InSize::run(int argc, char *argv[], const string& cwdProg)
 {
     preflight_check();
-    configure_memory_allocator();
+    vg::AllocatorConfig::configure();
     enable_crash_handling();
     temp_file::set_system_dir();
 
