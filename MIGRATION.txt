@@ -17,23 +17,40 @@ old vg (~v1.44) that the published reference databases were built with:
      is also stale.
      FIX: rebuild `*.dist` and `*.min` with NEW vg.
 
-STATUS (2026-08-19)
+STATUS (2026-10-03)
 --------------------
   HaploCart : VERIFIED end-to-end (rCRS -> haplogroup H2a2a1).
   euka      : VERIFIED end-to-end (both dynamic and static bin/vgan) on a
-              128-core / 1TB-RAM box. Test read set
-              test/input_files/euka/three_none_100.fq.gz correctly detects
-              Myotis (~24.5%, expected 20-30%) and Ursidae (~75.5%, expected
-              68-78%), matching src/test.cpp's expected ranges -- PROVIDED
-              the giraffe shortread-minimizer cache is fresh, see the
-              "CRITICAL GOTCHA" section below. This is a real, reproducible
-              vg bug independent of the migration itself and independent of
-              static vs dynamic linking (confirmed: both hit it identically).
-  soibean   : VERIFIED end-to-end on the same box (same caveat as euka).
-              Test read set test/input_files/soibean/k1.fq.gz with
-              --dbprefix Ursidae correctly identifies source
+              128-core / 1TB-RAM box, AFTER fixing a real correctness bug
+              (see "CORRECTNESS BUG: wrong minimizer k/w..." section below)
+              that silently dropped a whole minority taxon. Test read set
+              test/input_files/euka/three_none_100.fq.gz now correctly
+              detects all THREE taxa src/test.cpp actually asserts --
+              Bovidae (~2.4%, expected 1-5%), Myotis (~24.3%, expected
+              20-30%), Ursidae (~73.3%, expected 68-78%) -- confirmed on
+              both three_none_100.fq.gz and three_dmid_100.fq.gz (damaged).
+              PROVIDED the giraffe shortread-minimizer cache is fresh, see
+              the "CRITICAL GOTCHA" section below (a separate, real,
+              reproducible vg bug, independent of the migration itself and
+              of static vs dynamic linking).
+              CORRECTION: earlier STATUS entries in this file (and this
+              checkout's own earlier test runs) reported "VERIFIED
+              end-to-end" against only Myotis/Ursidae (~24.5%/~75.5%)
+              WITHOUT checking that Bovidae was also detected -- it never
+              was, silently, because of the bug described below. That
+              earlier verification was incomplete, not a true pass against
+              src/test.cpp's actual assertions.
+  soibean   : VERIFIED end-to-end on the same box (same giraffe-cache
+              caveat as euka; was also silently affected by the same
+              minimizer k/w bug, now fixed since the bug and fix both live
+              in code shared by euka and soibean -- see below). Test read
+              set test/input_files/soibean/k1.fq.gz with --dbprefix
+              Ursidae correctly identifies source
               NC_003426.1_Ursus_americanus_mitochondrion__complete_genome
-              with proportion estimate 1.0.
+              with proportion estimate 1.0 (unchanged by the fix in this
+              particular single-source test case, but soibean's real-world
+              sensitivity to short/degraded fragments was equally
+              compromised before it and is equally restored by it).
   trailmix  : NEWLY INTEGRATED (not a data migration -- an entirely new
               subcommand ported into this vg-1.75 checkout from a separate,
               older vgan tree). VERIFIED end-to-end: test/input_files/
@@ -151,6 +168,104 @@ rebuild time per run (tens of seconds for euka's ~7M-node graph) but avoids
 the crash entirely. This checkout's share/vgan/euka_dir and
 share/vgan/soibean_dir have had their stale `.shortread.*` files deleted as
 of this writing, so the next run of either tool will do a safe fresh build.
+
+
+-------------------------------------------------------------------------------
+ CORRECTNESS BUG: wrong minimizer k/w silently dropped short reads (and a
+ whole minority taxon) -- found, root-caused, and FIXED in code, not data
+-------------------------------------------------------------------------------
+A second, independent investigation (not this session's original migration
+work) flagged that euka's raw giraffe mapping rate was ~30 points lower
+than the pre-migration "main" branch on the same input (768/999 reads
+mapped on main vs. 443/999 here), traced it to a hard ~39bp length cutoff
+below which reads got zero minimizer hits, and correctly diagnosed a
+minimizer-index k/w mismatch (k=29,w=11 here vs. presumably something
+smaller on main). Its recommendation was to rebuild euka_db.min with
+smaller k/w and re-validate. That diagnosis was right, but the fix needed
+to go one step further -- rebuilding the .min file alone does NOT change
+runtime behavior in this vg version, for a reason worth understanding:
+
+  1. CONFIRMED EXACT ORIGINAL PARAMETERS: downloaded the untouched
+     production euka_db.min from ftp://ftp.healthtech.dtu.dk/public/
+     euka_files/euka_db.min and read its on-disk MinimizerHeader struct
+     directly (gbwtgraph/include/gbwtgraph/minimizer.h: tag, version,
+     then uint64 k, then uint64 w_or_s). Hex: `51 31 51 31` (tag "Q1Q1")
+     `08 00 00 00` (version 8, an old/incompatible format) `14 00 00 00
+     00 00 00 00` (k=0x14=20) `0a 00 00 00 00 00 00 00` (w=0x0a=10). So
+     main's real index was k=20/w=10, not a guess -- and matches this
+     project's own convention exactly: tools/soibeanHarvest.sh and
+     share/vgan/soibean_dir/make_graph_files.sh both explicitly build
+     their short-read indexes with `-k 20 -w 10` too. 20/10 needs only
+     k+w-1=29bp to find one minimizer; 29/11 needs 39bp -- explains the
+     observed cutoff exactly (confirmed independently: the shortest
+     successfully-mapped read in main's own raw output is 34bp, which
+     29/11 could never seed at all).
+
+  2. REBUILDING euka_db.min WITH -k 20 -w 10 IS NOT SUFFICIENT. Giraffe's
+     zipcode-based seed clustering (new in this vg version) always needs
+     a zipcode-annotated minimizer index. Whenever the plain `-m
+     prefix.min` file given on the command line has no matching
+     `prefix.shortread.zipcodes` next to it -- true for EVERY index built
+     the old way, including a freshly-rebuilt k=20/w=10 one -- giraffe
+     logs "Rebuilding minimizer index to include zipcodes" and silently
+     DISCARDS the provided file, reconstructing a fresh minimizer+zipcode
+     pair from the raw graph instead (src/index_registry.cpp:
+     construct_minimizers_impl(), called with
+     `IndexingParameters::short_read_minimizer_k/w`, hardcoded to 29/11 --
+     src/index_registry.cpp lines 118-119 -- with NO command-line flag
+     anywhere in giraffe_main.cpp or autoindex_main.cpp to override it).
+     Verified directly: even after rebuilding euka_db.min with -k 20 -w
+     10 (still sitting in share/vgan/euka_dir/, kept for consistency with
+     the real on-disk format even though it turned out not to matter by
+     itself -- original 29/11-built version backed up as
+     euka_db.min.k29w11.bak), running giraffe still logged "using
+     parameters -k 29 -w 11" for the actual rebuild that determines real
+     seeding behavior.
+
+  3. THE REAL FIX (applied, in code): `IndexingParameters` is a plain
+     `struct` (vg_newest/src/index_registry.hpp) with public, mutable
+     static members -- safely settable from any code that links vg
+     in-process, which is exactly what vgan already does. Added to
+     src/map_giraffe_Euka.cpp (Euka::map_giraffe, shared by BOTH euka and
+     soibean -- soibean.cpp calls `ek.map_giraffe(...)` via its own Euka
+     instance), right before building the giraffe argv:
+         IndexingParameters::short_read_minimizer_k = 20;
+         IndexingParameters::short_read_minimizer_w = 10;
+     (requires `#include "index_registry.hpp"`, added alongside). This
+     makes giraffe's own internal rebuild use 20/10 instead of its 29/11
+     default, regardless of what's actually in the on-disk .min file --
+     confirmed by the log line changing to "using parameters -k 20 -w 10"
+     after rebuilding vgan.
+
+  4. VALIDATED against src/test.cpp's ACTUAL assertions (not just this
+     file's own earlier, incomplete STATUS claims -- see the STATUS
+     correction above). detect_correct_taxa_no_damage /
+     detect_correct_taxa_mid_damage assert THREE taxa (Bovidae, Myotis,
+     Ursidae) with specific ranges, which this checkout's prior testing
+     never actually checked for Bovidae:
+         three_none_100.fq.gz: Bovidae 0.0243 [want 0.01-0.05] PASS
+                                Myotis  0.2430 [want 0.20-0.30] PASS
+                                Ursidae 0.7326 [want 0.68-0.78] PASS
+         three_dmid_100.fq.gz: Bovidae 0.0243 [want 0.01-0.05] PASS
+                                Myotis  0.2413 [want 0.20-0.30] PASS
+                                Ursidae 0.7343 [want 0.68-0.78] PASS
+     Before this fix, Bovidae -- a ~2-3% minority taxon, disproportionately
+     made of exactly the short/degraded fragments 29/11 can't seed -- was
+     not detected at all (0 reads). This is the practically important
+     part: euka/soibean exist specifically to call ancient/degraded DNA,
+     so a seeding bias against short fragments isn't a cosmetic accuracy
+     loss, it directly suppresses the signal these tools are for. soibean
+     was re-verified afterward too (test/input_files/soibean/k1.fq.gz,
+     correct source, proportion 1.0 -- unchanged in this single-source
+     case, but equally exposed to the same sensitivity loss in general
+     since it shares this exact code path).
+
+  CORRECTED BOTTOM LINE (supersedes an earlier, second-opinion
+  investigation's conclusion that this was "both data/infrastructure, not
+  code"): it IS a code fix, specifically, and ONLY, the two-line
+  IndexingParameters override in map_giraffe_Euka.cpp above -- rebuilding
+  the on-disk .min file with different flags, by itself, changes nothing
+  observable at runtime in this vg version.
 
 
 PREREQUISITES
@@ -439,10 +554,18 @@ dist/min indexes from the shipped gbz, mirroring HaploCart.
   mv euka_db.og euka_db.og.odgi.bak && mv euka_db.og.hg euka_db.og
 
   $NEW_VG index -j euka_db.dist -t $(nproc) euka_db.giraffe.gbz
-  $NEW_VG minimizer -d euka_db.dist -o euka_db.min -t $(nproc) euka_db.giraffe.gbz
+  $NEW_VG minimizer -k 20 -w 10 -d euka_db.dist -o euka_db.min -t $(nproc) euka_db.giraffe.gbz
+  #   -k 20 -w 10 matches the ORIGINAL production index (confirmed by
+  #   reading its on-disk header, see "CORRECTNESS BUG" section above) --
+  #   plain `vg minimizer` defaults (29/11) silently drop short/degraded
+  #   reads. NOTE: this on-disk file's own k/w barely matters at runtime
+  #   by itself -- see that section for why the REAL fix is in
+  #   src/map_giraffe_Euka.cpp, not here. Still worth building it this way
+  #   for consistency with what the original index actually was.
 
   vgan euka --euka_dir share/vgan/euka_dir/ -fq1 test/input_files/euka/three_none_100.fq.gz -t 8 -o /tmp/euka_test/three_none_100
-  #   expected: Myotis ~24%, Ursidae ~75% detected (see src/test.cpp)
+  #   expected (matches src/test.cpp's actual assertions -- all THREE,
+  #   not just two): Bovidae ~2-3%, Myotis ~24%, Ursidae ~73-75% detected
 
   Resulting sizes on this run: euka_db.dist ~6.9 GB, euka_db.min ~750 MB
   (close to the original 6.5 GB / 649 MB, as expected).
