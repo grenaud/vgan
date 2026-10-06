@@ -165,6 +165,22 @@ void Trailmix::run_mcmc(shared_ptr<Trailmix_struct>& dta) {
     }
 
 #ifdef RPVG
+    // RPVG's own raw results (rpvg_hap.txt / rpvg_ht.txt) otherwise only
+    // ever live in the per-run tmpdir and are lost once it's cleaned up --
+    // preserve a copy next to TrailMix's own result files, using the same
+    // -o prefix convention (prefix + descriptive name + .txt).
+    {
+        namespace fs = std::filesystem;
+        const string rpvg_hap_src = dta->tmpdir + "rpvg_hap.txt";
+        const string rpvg_ht_src  = dta->tmpdir + "rpvg_ht.txt";
+        if (fs::exists(rpvg_hap_src)) {
+            fs::copy_file(rpvg_hap_src, prefix + "RPVGHaplotypes.txt", fs::copy_options::overwrite_existing);
+        }
+        if (fs::exists(rpvg_ht_src)) {
+            fs::copy_file(rpvg_ht_src, prefix + "RPVGHaplotypeTranscripts.txt", fs::copy_options::overwrite_existing);
+        }
+    }
+
     load_hap_combos(dta);
     load_tpms(dta);
     assert(!dta->tpms.empty());

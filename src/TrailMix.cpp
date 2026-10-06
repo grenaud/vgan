@@ -448,7 +448,13 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     string gamfilename, samplename, fastafilename, fastq1filename, fastq2filename, posteriorfilename;
     string TM_outputfilename = "TM_out";
     string tmpdir = "/tmp/";
-    string graph_dir = getFullPath(cwdProg+"../share/vgan/tmfiles/");
+    // NOT resolved via getFullPath() here on purpose: getFullPath() exit(1)s
+    // if the path doesn't exist, and this default is only ever actually
+    // used when --tm-files is NOT given (see the deferred resolution right
+    // after argument parsing below) -- resolving it eagerly here would
+    // crash on this default even when the user passed --tm-files pointing
+    // somewhere else entirely.
+    string graph_dir = cwdProg+"../share/vgan/tmfiles/";
     string graph_prefix="graph";
     unsigned int n_threads = 1;
     bool graphdirspecified = false;
@@ -537,6 +543,13 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
                                  }
 
         if(string(argv[i]) == "-z"){
+            // getFullPath() calls realpath() and exit(1)s if the path
+            // doesn't already exist -- create it first (mkdir -p style) so
+            // a not-yet-existing -z directory is set up instead of being a
+            // hard failure.
+            if (!fs::exists(argv[i+1])) {
+                fs::create_directories(argv[i+1]);
+            }
             tmpdir = getFullPath(argv[i+1]);
             //if (tmpdir.back() != '/') {tmpdir += '/';}
             continue;
@@ -596,6 +609,7 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
 
     if(string(argv[i]) == "--tm-files"){
             graph_dir=getFullPath(argv[i+1]);
+            graphdirspecified = true;
             //if (graph_dir.back() != '/'){graph_dir += '/';}
             continue;
                                       }
@@ -617,6 +631,13 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
         continue;
     }
 
+    }
+
+    // Only resolve/validate the default tmfiles path now, once we know for
+    // sure --tm-files was NOT given -- see the comment at graph_dir's
+    // declaration above for why this can't happen eagerly.
+    if (!graphdirspecified) {
+        graph_dir = getFullPath(graph_dir);
     }
 
     if (fastafilename != "" && k != 1){throw runtime_error("[TrailMix] For consensus FASTA input, k must equal 1 (single-source)");}
