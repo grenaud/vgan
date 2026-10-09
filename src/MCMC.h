@@ -317,8 +317,15 @@ public:
     }
 
     // TrailMix-specific overload of computeBaseLogLike (Trailmix_struct-driven).
+    // Implements the full 3-stage Markov chain of Figure 2 in the TrailMix
+    // manuscript: mutation (HKY, function of branch time t) -> deamination
+    // -> sequencing error, with the final per-base probability obtained by
+    // marginalizing over the hidden post-mutation state b_s, i.e.
+    //   P(readBase | refBase, t) = sum_bs P_HKY(bs | refBase, t) * P(readBase | bs)
+    // where P(readBase | bs) (deamination chained with sequencing error) is
+    // precomputed once per alignment in precompute.h, independent of t.
   inline const double computeBaseLogLike(shared_ptr<Trailmix_struct>& dta, const AlignmentInfo* read, RunTreeProportionParams &params, const int basevec, \
-                                   const int base, const string &pathName, const double t, double branch_len, bool cont_mode)
+                                   const int base, const string &pathName, const double t, double branch_len, bool cont_mode, bool is_ancient)
     {
 
         const auto &detail = read->detailMap.at(pathName).at(basevec).at(base);
@@ -330,7 +337,7 @@ public:
         const char refb = detail.referenceBase;
         const char readb = detail.readBase;
 
-        if (readb == 'S' || refb == 'S' || readb == 'N' || refb == 'N' || readb == '-' || refb == '-'){return 1e-9;}
+        if (readb == 'S' || refb == 'S' || readb == 'N' || refb == 'N' || readb == '-' || refb == '-'){return log(1e-9);}
 
 #ifdef DEBUGPAIN3  // Debugging block start
         cerr << "Debugging Information START" << endl;
@@ -466,16 +473,18 @@ public:
             }
         } // end filling probability matrix.
 
-        double log_lik_marg = -std::numeric_limits<double>::infinity();
-        for (int bpd = 0; bpd < 4; bpd++) {
-            if ("ACGT"[bpd] == readb) {
-                log_lik_marg = oplusInitnatl(log_lik_marg, (log(probBaseHKY[bpd])));
-                
-            } else {
-                log_lik_marg = oplusInitnatl(log_lik_marg, (log(probBaseHKY[bpd])));
-                
-            }
+        // Marginalize over the hidden post-mutation state b_s: weight each
+        // HKY transition probability P(bs | refb, t) (probBaseHKY[bs], just
+        // computed above) by the precomputed P(readb | bs) that already
+        // chains deamination then sequencing error, and sum. This replaces
+        // (not adds to) the precomputed per-base marginal -- it IS the full
+        // chain, not an alternative to it.
+        const double* damageSeqErr = is_ancient ? detail.damageSeqErrProb : detail.damageSeqErrProbNoDamage;
+        double prob_total = 0.0;
+        for (int bs = 0; bs < 4; bs++) {
+            prob_total += probBaseHKY[bs] * damageSeqErr[bs];
         }
+        double log_lik_marg = log(prob_total);
         if (log_lik_marg > 1e-8){
             log_lik_marg = log(0.999999999);
         }

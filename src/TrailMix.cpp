@@ -458,7 +458,13 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     string graph_prefix="graph";
     unsigned int n_threads = 1;
     bool graphdirspecified = false;
-    std::vector<bool> isAncient = {true, false};
+    // Default: both sources ancient (overridable with --is-ancient). The old
+    // default {true, false} assumed a "modern contaminant" second source,
+    // which only makes sense for the ancient-target + modern-contamination
+    // scenario -- the more common multi-source case (e.g. environmental/
+    // sedaDNA mixtures of two ancient individuals, both carrying the same
+    // blended deamination profile) needs both sources damage-aware.
+    std::vector<bool> isAncient = {true, true};
     string deam5pfreqE  = getFullPath(cwdProg+"../share/vgan/damageProfiles/none.prof");
     string deam3pfreqE  =  getFullPath(cwdProg+"../share/vgan/damageProfiles/none.prof");
     string none_prof = getFullPath(cwdProg+"../share/vgan/damageProfiles/none.prof");

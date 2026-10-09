@@ -1476,7 +1476,16 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams &pa
     auto initial_state = state_t;
     state_t_vec.emplace_back(initial_state);
 
-    ofstream mcmcout(num+"Result"+to_string(n_sources)+"_chain"+to_string(chain)+".mcmc");
+    // Written gzip-compressed (ogzstream, from libgab/gzstream) -- matches
+    // the convention the older soibean-facing MCMC writer already uses
+    // further up in this file, and what share/vgan/plottingScripts/
+    // plot_trailmix_trees.py already checks for first (Result*_chain*.mcmc.gz)
+    // before falling back to an uncompressed .mcmc. These files are one row
+    // per MCMC iteration and can get large for long runs, so compressing
+    // them is a meaningful size win with no downstream cost: nothing in
+    // vgan itself reads them back, only external plotting/analysis tools do.
+    ogzstream mcmcout;
+    mcmcout.open((num+"Result"+to_string(n_sources)+"_chain"+to_string(chain)+".mcmc.gz").c_str(), ios::out);
     std::ios_base::sync_with_stdio(false);
     mcmcout.tie(nullptr);
 
@@ -1486,7 +1495,8 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams &pa
     }
     mcmcout << endl;
 
-    ofstream mcmcdetail(num+"Trace"+to_string(n_sources)+".detail.mcmc");
+    ogzstream mcmcdetail;
+    mcmcdetail.open((num+"Trace"+to_string(n_sources)+".detail.mcmc.gz").c_str(), ios::out);
     for (int sou = 1; sou< n_sources + 1; ++sou){
         mcmcdetail << "Source_" << sou << '\t' << "Node_" << sou << '\t' << "Likelihood" << '\t' << "proportion_" << sou << '\t' << \
                       "branch_position_derived_" << sou << '\t' << "Acceptance_prob" << '\t' << "Move";
@@ -1499,7 +1509,7 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams &pa
 //{
 //#pragma omp critical
         if (iteration % 1000 == 0){
-            cerr << "ITERATION: " << iteration << endl;
+            cerr << "Chain " << (chain + 1) << " of " << params.chains << ", iteration " << iteration << " of " << params.maxIter << endl;
                                   }
 //}
 
@@ -1687,9 +1697,14 @@ if (read->detailMap.find(pathNames[0]) == read->detailMap.end()) {
         for (int base = 0; base < read->detailMap[pathNames[0]][basevec].size(); ++base) {
             loopentered = true;
             ++lc;
+            // computeBaseLogLike now returns the complete, correctly
+            // marginalized per-base likelihood (HKY mutation chained with
+            // deamination and sequencing error, Figure 2 of the TrailMix
+            // manuscript) -- see the multi-source branch's comment further
+            // down in this function for the full explanation.
             if (read->detailMap[pathNames[0]][basevec][base].pathSupport) {
-                double mutationLogLikelihood = computeBaseLogLike(dta, read, params, basevec, base, pathNames[0], t2, t, dta->cont_mode);
-                 readLogLike += read->detailMap[pathNames[0]][basevec][base].logLikelihood + mutationLogLikelihood;
+                double mutationLogLikelihood = computeBaseLogLike(dta, read, params, basevec, base, pathNames[0], t2, t, dta->cont_mode, dta->is_ancient_vec[0]);
+                 readLogLike += mutationLogLikelihood;
             } else {
                  readLogLike += read->detailMap[pathNames[0]][basevec][base].logLikelihood;
             }
@@ -1714,8 +1729,8 @@ if (read->detailMap.find(parentpathNames[0]) == read->detailMap.end()) {
         for (int base = 0; base < read->detailMap[parentpathNames[0]][basevec].size(); ++base) {
             ++plc;
             if (read->detailMap[parentpathNames[0]][basevec][base].pathSupport) {
-                double mutationLogLikelihood = computeBaseLogLike(dta, read, params, basevec, base, parentpathNames[0], t1, t, dta->cont_mode);
-                readLogLikeP += read->detailMap[parentpathNames[0]][basevec][base].logLikelihood + mutationLogLikelihood;
+                double mutationLogLikelihood = computeBaseLogLike(dta, read, params, basevec, base, parentpathNames[0], t1, t, dta->cont_mode, dta->is_ancient_vec[0]);
+                readLogLikeP += mutationLogLikelihood;
             } else {
                 readLogLikeP += read->detailMap[parentpathNames[0]][basevec][base].logLikelihood;
             }
@@ -1783,18 +1798,32 @@ for (unsigned int basevec = 0; basevec < read->detailMap[pathNames[y]].size(); +
         for (unsigned int base = 0; base < itPath->second[basevec].size(); ++base) {
     ++lc;
 
-    double logLikelihoodValue = (dta->is_ancient_vec[y] && dta->cont_mode) ?
-                                itPath->second[basevec][base].logLikelihood :
-                                itPath->second[basevec][base].logLikelihoodNoDamage;
-
+    // mutationLogLikelihood (computeBaseLogLike) implements the full 3-stage
+    // Markov chain of Figure 2 in the TrailMix manuscript: mutation (HKY,
+    // function of branch time t) -> deamination -> sequencing error, with
+    // the final probability obtained by marginalizing over the hidden
+    // post-mutation state (weighting each HKY transition probability by the
+    // precomputed deamination+sequencing-error vector and summing). This
+    // single term IS the complete per-base likelihood; it must not be added
+    // to logLikelihood/logLikelihoodNoDamage (precompute.h's precomputed
+    // scalar marginal), since that would double-count the deamination and
+    // sequencing-error evidence already folded into this term. An earlier,
+    // simpler version of this fix just dropped the damage/error marginal
+    // entirely when path support existed -- that was an intermediate,
+    // incomplete fix (see git history); it empirically improved placement
+    // over the original double-counting bug but lost damage-awareness in
+    // the dominant code path. This is the mathematically complete version.
     if (itPath->second[basevec][base].pathSupport) {
-        // When path support is true, use the Markov logic (mutation -> damage)
-        double mutationLogLikelihood = computeBaseLogLike(dta, read, params, basevec, base, pathNames[y], t2, t, dta->cont_mode);
-
-        // Combine mutation and damage (if ancient)
-        readLogLike += mutationLogLikelihood + logLikelihoodValue;
+        double mutationLogLikelihood = computeBaseLogLike(dta, read, params, basevec, base, pathNames[y], t2, t, dta->cont_mode, dta->is_ancient_vec[y]);
+        readLogLike += mutationLogLikelihood;
     } else {
-        // When path support is not true, just use the precomputed log likelihood
+        // No path support: no HKY term is computable here (no candidate
+        // reference base to diverge from), so fall back to the precomputed
+        // damage-aware/non-damage-aware marginal as the best available
+        // per-source signal, exactly as before.
+        double logLikelihoodValue = dta->is_ancient_vec[y] ?
+                                    itPath->second[basevec][base].logLikelihood :
+                                    itPath->second[basevec][base].logLikelihoodNoDamage;
         readLogLike += logLikelihoodValue;
     }
   }
@@ -1819,18 +1848,16 @@ if (itParentPath == read->detailMap.end()) {
     for (unsigned int basevec = 0; basevec < itParentPath->second.size(); ++basevec) {
         for (unsigned int base = 0; base < itParentPath->second[basevec].size(); ++base) {
 
-            double parentLogLikelihoodValue = (dta->is_ancient_vec[y] && dta->cont_mode) ?
-                                              itParentPath->second[basevec][base].logLikelihood :
-                                              itParentPath->second[basevec][base].logLikelihoodNoDamage;
-
+            // See the matching comment above (child side) for why the HKY
+            // mutation term alone, not summed with the damage/error
+            // marginal, is the correct per-base likelihood here.
             if (itParentPath->second[basevec][base].pathSupport) {
-                // When path support is true, use the Markov logic (mutation -> damage)
-                double mutationLogLikelihood = computeBaseLogLike(dta, read, params, basevec, base, parentpathNames[y], t1, t, dta->cont_mode);
-
-                // Combine mutation and damage (if ancient)
-                readLogLikeP += mutationLogLikelihood + parentLogLikelihoodValue;
+                double mutationLogLikelihood = computeBaseLogLike(dta, read, params, basevec, base, parentpathNames[y], t1, t, dta->cont_mode, dta->is_ancient_vec[y]);
+                readLogLikeP += mutationLogLikelihood;
             } else {
-                // When path support is not true, just use the precomputed log likelihood
+                double parentLogLikelihoodValue = dta->is_ancient_vec[y] ?
+                                                  itParentPath->second[basevec][base].logLikelihood :
+                                                  itParentPath->second[basevec][base].logLikelihoodNoDamage;
                 readLogLikeP += parentLogLikelihoodValue;
             }
         }

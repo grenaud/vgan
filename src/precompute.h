@@ -336,6 +336,31 @@ static vector<AlignmentInfo*>* precompute_GAM(
                                    probBasePostDamage[bpd] = min(1.0, probBasePostDamage[bpd]);
                                 }
 
+                                // Stages 2+3 of the TrailMix Markov chain (Figure 2): for every
+                                // hypothetical post-mutation base b_s (not just the path's own
+                                // reference base), chain deamination then sequencing error to get
+                                // P(readBase | b_s). This is independent of branch time t, so it
+                                // can be precomputed once per alignment; computeBaseLogLike (MCMC.h)
+                                // applies the t-dependent HKY mutation step (stage 1) at runtime by
+                                // weighting this vector with the HKY transition probabilities and
+                                // marginalizing over b_s.
+                                double newDamageSeqErrProb[4];
+                                double newDamageSeqErrProbNoDamage[4];
+                                {
+                                    int readBaseIX = nucleotide_index.count(partReadSeq[s]) ? nucleotide_index.at(partReadSeq[s]) : 0;
+                                    for (int bs = 0; bs < 4; bs++) {
+                                        double accDamage = 0.0;
+                                        double accNoDamage = 0.0;
+                                        for (int bd = 0; bd < 4; bd++) {
+                                            double pSeqErr = (bd == readBaseIX) ? (1 - qscore_vec[base_quality]) : (qscore_vec[base_quality] / 3);
+                                            accDamage += subDeamDiNuc[Lseq][baseIX].p[bs][bd] * pSeqErr;
+                                            accNoDamage += dta->dmg_none.subDeamDiNuc[Lseq][baseIX].p[bs][bd] * pSeqErr;
+                                        }
+                                        newDamageSeqErrProb[bs] = max(0.0001, min(1.0, accDamage));
+                                        newDamageSeqErrProbNoDamage[bs] = max(0.0001, min(1.0, accNoDamage));
+                                    }
+                                }
+
 
 #ifdef DEBUGDAMAGE
                                 {
@@ -420,6 +445,11 @@ log_lik_marg = log_prob_damage; //logSumExp(log_lik_marg, log_prob_damage);
 
                                 info.logLikelihood = log_lik_marg + log(p_correctly_mapped) + log(mappability);
                                 info.logLikelihoodNoDamage = log_lik_marg_no_damage + log(p_correctly_mapped) + log(mappability);
+
+                                for (int bs = 0; bs < 4; bs++) {
+                                    info.damageSeqErrProb[bs] = newDamageSeqErrProb[bs];
+                                    info.damageSeqErrProbNoDamage[bs] = newDamageSeqErrProbNoDamage[bs];
+                                }
 
                                 if (info.logLikelihood >= 1e-2) {
                                     cerr << "info.logLikelihood: " << info.logLikelihood << endl;
