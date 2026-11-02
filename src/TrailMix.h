@@ -36,6 +36,7 @@ void get_seed_source_estimates(shared_ptr<Trailmix_struct> &dta, const vector<st
 void compute_read_coverage(shared_ptr<Trailmix_struct> &dta);
 void writeDeconvolvedReads(shared_ptr<Trailmix_struct> &dta, const string &input_file, const string &output_file, vector<int> reads_to_include);
 void write_output(std::shared_ptr<Trailmix_struct> &dta);
+void write_summary(shared_ptr<Trailmix_struct> &dta);
 void create_path_node_map(shared_ptr<Trailmix_struct> &dta);
 void place_sources(shared_ptr<Trailmix_struct> &dta);
 void infer(shared_ptr<Trailmix_struct> &dta);

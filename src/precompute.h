@@ -74,6 +74,19 @@ static vector<AlignmentInfo*>* precompute_GAM(
 
     std::unordered_map<std::string, double> results_map;
 
+    // Graph path name -> index into dta->path_names. nodepaths holds the RAW graph path names
+    // (e.g. "HV2a1*1") while dta->path_names holds the sanitized ones ("HV2a1_1"), so register both
+    // spellings. Names that match neither are skipped; the old operator[] lookup silently inserted
+    // them as index 0, which made that unrelated path look supported on those nodes.
+    std::unordered_map<std::string, int> pathNameToID;
+    for (size_t pi = 0; pi < dta->path_names.size(); ++pi) {
+        pathNameToID[dta->path_names[pi]] = pi;
+        auto orig = dta->originalPathNames.find(dta->path_names[pi]);
+        if (orig != dta->originalPathNames.end()) {
+            pathNameToID[orig->second] = pi;
+        }
+    }
+
     // Define nucleotide to index mapping
     std::unordered_map<char, int> nucleotide_index = {{'A', 0}, {'C', 1}, {'G', 2}, {'T', 3}};
 
@@ -94,9 +107,25 @@ static vector<AlignmentInfo*>* precompute_GAM(
         if (a.identity() != 0) {
             using BaseInfo = AlignmentInfo::BaseInfo;
             auto&& [graph_seq, read_seq, mppg_sizes] = reconstruct_graph_sequence(graph, a.path(), a.sequence());
-            int baseIX = a.path().mapping()[0].position().is_reverse() ? a.sequence().size() - 1 : 0;
-            int baseOnRead = baseIX;
             size_t Lseq = a.sequence().size();
+
+            // reconstruct_graph_sequence() pushes one mppg_sizes entry per EDIT, not per mapping, and every
+            // mismatch/indel splits a node match into several edits. Entry i therefore belongs to the mapping
+            // (graph node) that owns the i-th edit -- NOT to mapping i.
+            vector<int> entry_to_mapping;
+            for (int mi = 0; mi < a.path().mapping_size(); ++mi) {
+                for (int ei = 0; ei < a.path().mapping(mi).edit_size(); ++ei) {
+                    entry_to_mapping.push_back(mi);
+                }
+            }
+            if (entry_to_mapping.size() != mppg_sizes.size()) {
+                throw std::runtime_error("precompute_GAM: edit count does not match the reconstructed segment count for read " + a.name());
+            }
+
+            // graph_seq/read_seq are laid out in alignment-path order, which is read order (5'->3') on both
+            // strands (checked on real GAMs: the path bases spell a.sequence() for forward and reverse alignments).
+            int colStart = 0;        // column offset of the current chunk in graph_seq/read_seq
+            int readPosAtChunk = 0;  // 0-based read position of the chunk's first base
 
             unordered_map<string, vector<vector<BaseInfo>>> detailMap;
 
@@ -126,46 +155,34 @@ static vector<AlignmentInfo*>* precompute_GAM(
                 int nID = 0;
                 int pangenome_base = 100;
                 double mappability = 1.0;
-                std::unordered_map<std::string, int> pathNameToID;
-                std::vector<std::string> idToPathName;
-
-                for (int i = 0; i < dta->path_names.size(); ++i) {
-                    pathNameToID[dta->path_names[i]] = i;
-                    idToPathName.push_back(dta->path_names[i]);
-                }
                 std::unordered_set<int> probPaths;
 
-                if (mppg_sizes.size() != a.path().mapping().size()) {
-                    if (i >= mppg_sizes.size() - (mppg_sizes.size() - a.path().mapping().size())) {
-                        probPaths.insert(-1);  // Insert an invalid ID to represent an empty path
-                    } else {
-                        nID = a.path().mapping()[i].position().node_id();
-                        pangenome_base = dta->pangenome_map.at(std::to_string(nID));
-                        mappability = max(0.1, dta->mappabilities[pangenome_base]);
-                        for (const auto& path : nodepaths.at(nID - minid)) {
-                            probPaths.insert(pathNameToID[path]);
-                        }
-                    }
-                } else {
-                    nID = a.path().mapping()[i].position().node_id();
-                    pangenome_base = dta->pangenome_map.at(std::to_string(nID));
-                    mappability = max(0.1, dta->mappabilities[pangenome_base]);
-                    for (const auto& path : nodepaths.at(nID - minid)) {
-                        probPaths.insert(pathNameToID[path]);
+                nID = a.path().mapping()[entry_to_mapping[i]].position().node_id();
+                pangenome_base = dta->pangenome_map.at(std::to_string(nID));
+                mappability = max(0.1, dta->mappabilities[pangenome_base]);
+                for (const auto& path : nodepaths.at(nID - minid)) {
+                    auto itID = pathNameToID.find(path);
+                    if (itID != pathNameToID.end()) {
+                        probPaths.insert(itID->second);
                     }
                 }
 
-                string nodeSeq;
-                string partReadSeq;
-                int startIndex = 0;
-                if (a.path().mapping()[0].position().is_reverse()) {
-                    startIndex = (baseIX - mppg_sizes.at(i) - 1 >= 0) ? (baseIX - mppg_sizes.at(i) - 1) : 0;
-                    nodeSeq = graph_seq.substr(startIndex, mppg_sizes.at(i));
-                    partReadSeq = read_seq.substr(startIndex, mppg_sizes.at(i));
-                } else {
-                    nodeSeq = graph_seq.substr(baseIX, mppg_sizes.at(i));
-                    partReadSeq = read_seq.substr(baseIX, mppg_sizes.at(i));
+                string nodeSeq = graph_seq.substr(colStart, mppg_sizes.at(i));
+                string partReadSeq = read_seq.substr(colStart, mppg_sizes.at(i));
+
+                // 0-based read position of every column in this chunk ('-' columns are deletions: no read base),
+                // used for the per-base quality score and the position-dependent deamination probabilities.
+                std::vector<int> readPosOf;
+                readPosOf.reserve(partReadSeq.size());
+                int readPosEnd = readPosAtChunk;
+                for (size_t s2 = 0; s2 < partReadSeq.size(); ++s2) {
+                    readPosOf.push_back(readPosEnd);
+                    if (partReadSeq[s2] != '-') {
+                        ++readPosEnd;
+                    }
                 }
+                auto qualityIndex = [&](size_t s) { return std::min<int>(readPosOf[s], (int)a.quality().size() - 1); };
+                auto damageIndex  = [&](size_t s) { return std::min<int>(readPosOf[s], (int)Lseq - 1); };
 
                 std::vector<BaseInfo> readInfo;
 
@@ -236,7 +253,7 @@ static vector<AlignmentInfo*>* precompute_GAM(
                         // cerr << "PATH SUPPORTED" << endl;
 
                         for (int s = 0; s < nodeSeq.size(); ++s) {
-                            int base_quality = a.quality()[s];
+                            int base_quality = a.quality()[qualityIndex(s)];
                             if (nodeSeq[s] == 'N' || partReadSeq[s] == 'N') {
 
 #ifdef DEBUGANALYSEGAM
@@ -324,8 +341,8 @@ static vector<AlignmentInfo*>* precompute_GAM(
                                 for (int bpd = 0; bpd < 4; bpd++) {
                                     // Post-damage = prob pre-damage * damage rate from bpo to bpd
                                     for (int bpo = 0; bpo < 4; bpo++) {
-                                        double probability = subDeamDiNuc[Lseq][baseIX].p[bpo][bpd];
-                                        double probability_contaminant = dta->dmg_none.subDeamDiNuc[Lseq][baseIX].p[bpo][bpd];
+                                        double probability = subDeamDiNuc[Lseq][damageIndex(s)].p[bpo][bpd];
+                                        double probability_contaminant = dta->dmg_none.subDeamDiNuc[Lseq][damageIndex(s)].p[bpo][bpd];
                                         probBasePostDamage[bpd] += probBasePreDamage[bpo] * probability;
                                         probBasePostDamage_none[bpd] += probBasePreDamage[bpo] * probability_contaminant;
                                     }
@@ -353,8 +370,8 @@ static vector<AlignmentInfo*>* precompute_GAM(
                                         double accNoDamage = 0.0;
                                         for (int bd = 0; bd < 4; bd++) {
                                             double pSeqErr = (bd == readBaseIX) ? (1 - qscore_vec[base_quality]) : (qscore_vec[base_quality] / 3);
-                                            accDamage += subDeamDiNuc[Lseq][baseIX].p[bs][bd] * pSeqErr;
-                                            accNoDamage += dta->dmg_none.subDeamDiNuc[Lseq][baseIX].p[bs][bd] * pSeqErr;
+                                            accDamage += subDeamDiNuc[Lseq][damageIndex(s)].p[bs][bd] * pSeqErr;
+                                            accNoDamage += dta->dmg_none.subDeamDiNuc[Lseq][damageIndex(s)].p[bs][bd] * pSeqErr;
                                         }
                                         newDamageSeqErrProb[bs] = max(0.0001, min(1.0, accDamage));
                                         newDamageSeqErrProbNoDamage[bs] = max(0.0001, min(1.0, accNoDamage));
@@ -423,7 +440,7 @@ log_lik_marg = log_prob_damage; //logSumExp(log_lik_marg, log_prob_damage);
 /*
     if (log_lik_marg != log_lik_marg_no_damage) {
         cerr << endl << endl;
-        cerr << "LSEQ: " << Lseq << "  baseIX: " << baseIX << endl;
+        cerr << "LSEQ: " << Lseq << "  readPos: " << damageIndex(s) << endl;
         cerr << std::setprecision(20) << "log_lik_marg:" << log_lik_marg << " p=" << exp(log_lik_marg) << endl;
         cerr << std::setprecision(20) << "log_lik_marg no damage " << log_lik_marg_no_damage << " p=" << exp(log_lik_marg_no_damage) << endl;
 
@@ -458,11 +475,6 @@ log_lik_marg = log_prob_damage; //logSumExp(log_lik_marg, log_prob_damage);
 
                                 readInfo.emplace_back(info);
 
-                                if (a.path().mapping()[0].position().is_reverse() && partReadSeq[s] != '-') {
-                                    baseOnRead--;
-                                } else if (!a.path().mapping()[0].position().is_reverse() && partReadSeq[s] != '-') {
-                                    baseOnRead++;
-                                }
                             }
                         }
 
@@ -470,7 +482,7 @@ log_lik_marg = log_prob_damage; //logSumExp(log_lik_marg, log_prob_damage);
                     } else if (!path_supported) {
                         unsigned int counter = 0;
                         for (size_t s = 0; s < nodeSeq.size(); ++s) {
-                            int base_quality = a.quality()[s];
+                            int base_quality = a.quality()[qualityIndex(s)];
 
                             // int choice = range_choice(gen);
 
@@ -519,11 +531,6 @@ log_lik_marg = log_prob_damage; //logSumExp(log_lik_marg, log_prob_damage);
 #endif
                             }
 
-                            if (a.path().mapping()[0].position().is_reverse() && partReadSeq[s] != '-') {
-                                baseOnRead--;
-                            } else if (!a.path().mapping()[0].position().is_reverse() && partReadSeq[s] != '-') {
-                                baseOnRead++;
-                            }
                         }
 
                     } else {
@@ -536,20 +543,10 @@ log_lik_marg = log_prob_damage; //logSumExp(log_lik_marg, log_prob_damage);
                         detailMap[pathNames[m]].emplace_back(move(readInfo));
                     }
 
-                    if (a.path().mapping()[0].position().is_reverse()) {
-                        baseOnRead = baseIX;
-                    } else {
-                        baseOnRead = baseIX;
-                    }
                 }
 
-                if (a.path().mapping()[0].position().is_reverse()) {
-                    baseIX = startIndex;
-                    baseOnRead = baseIX;
-                } else {
-                    baseIX += mppg_sizes.at(i);
-                    baseOnRead = baseIX;
-                }
+                colStart += mppg_sizes.at(i);
+                readPosAtChunk = readPosEnd;
             }
 
 #ifdef DEBUGANALYSEGAMMAP

@@ -430,5 +430,56 @@ void Trailmix::run_mcmc(shared_ptr<Trailmix_struct>& dta) {
     }
 
     diagnostics.close();
+
+    write_summary(dta);
+}
+
+void Trailmix::write_summary(shared_ptr<Trailmix_struct> &dta) {
+    const string path = dta->TM_outputfilename + "summary.txt";
+    ofstream out(path);
+    if (!out) {
+        cerr << "[TrailMix] Warning: could not write run summary: " << path << endl;
+        return;
+    }
+
+    time_t now = time(nullptr);
+    string timestamp = ctime(&now);
+    if (!timestamp.empty() && timestamp.back() == '\n') {timestamp.pop_back();}
+
+    // Plain "key: value" lines, one per line -- trivial for both humans and
+    // the plotting script (plot_trailmix_trees.py) to parse. "database_tree"
+    // is the field the plotting script relies on to auto-configure itself
+    // from just an output prefix: it is the exact tree (haps.treefile from
+    // the --tm-files database) that the MCMC placements' internal node names
+    // refer to, as opposed to any separately-rerooted tree used only for
+    // display.
+    out << "# TrailMix run summary\n";
+    out << "date: " << timestamp << "\n";
+    out << "output_prefix: " << dta->TM_outputfilename << "\n";
+    out << "sample: " << dta->samplename << "\n";
+    out << "input_fastq1: " << dta->fastq1filename << "\n";
+    out << "input_fastq2: " << dta->fastq2filename << "\n";
+    out << "input_gam: " << dta->gamfilename << "\n";
+    out << "k: " << dta->k << "\n";
+    out << "chains: " << dta->chains << "\n";
+    out << "iterations: " << dta->iter << "\n";
+    out << "burnin: " << dta->burnin << "\n";
+    out << "depth: " << dta->depth << "\n";
+    out << "contamination_mode: " << (dta->cont_mode ? "true" : "false") << "\n";
+    out << "rand_start: " << (dta->randStart ? "true" : "false") << "\n";
+
+    out << "is_ancient:";
+    for (size_t i = 0; i < dta->is_ancient_vec.size(); ++i) {
+        out << (i == 0 ? " " : ",") << (dta->is_ancient_vec[i] ? "1" : "0");
+    }
+    out << "\n";
+
+    out << "database_dir: " << dta->graph_dir << "\n";
+    out << "database_prefix: " << dta->graph_prefix << "\n";
+    out << "database_tree: " << dta->treePath << "\n";
+    out << "n_threads: " << dta->n_threads << "\n";
+
+    out.close();
+    cerr << "[TrailMix] Wrote run summary: " << path << endl;
 }
 

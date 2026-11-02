@@ -63,7 +63,9 @@ typedef struct MCMCiteration {
 class MCMC {
 
 double proposal_sd = 1.0; // proposal SD
-double kappa = 1/22;
+// HKY transition/transversion ratio. Must equal the 22 used to normalize mu (see initializeParams / soibean.cpp);
+// the previous "1/22" was integer division, i.e. 0, which made transitions far LESS likely than transversions.
+double kappa = 22.0;
 double factor = pow(15.0, 15);
 
 
