@@ -1,6 +1,9 @@
 # Does soibean have the same damage problem as TrailMix? Yes — and it's actually worse.
 
-This is a write-up only. Nothing in the code has been touched. The goal is to explain,
+**Status: the fixes described below have now been written** (`src/getLCAfromGAM.h`, `src/MCMC.h`, a note in `src/soibean.cpp`). The old lines are kept as `// OLD:` comments under explanatory headers, and
+`analyse_GAM` also got the alignment-indexing fixes from TrailMix (edit-to-mapping lookup, read-order slicing, per-base quality/damage positions). They have only been syntax-checked, not built or run.
+
+Original write-up (kept as written before the fix): nothing in the code had been touched. The goal is to explain,
 in plain terms, what's mathematically wrong with how soibean currently scores a
 read against a candidate species/haplotype when damage is involved, and what it
 would take to bring soibean's code up to the same standard as the TrailMix fix.
