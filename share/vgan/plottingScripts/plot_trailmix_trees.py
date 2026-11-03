@@ -50,6 +50,8 @@ Trees
                      in a rerooted file are NOT reliable on the path between
                      the old and the new root, and the new root may sit in the
                      middle of a branch; both are handled.)
+    --db-label TEXT  database name printed in the figure footer (default: directory name
+                     without a trailing _nohh; "" omits it)
     --no-rerooted    auto mode: draw haps.treefile instead of haps_rerooted.treefile
     --layout L       phylogram (default; true branch lengths) | unit (every
                      branch length 1, for trees whose long branches hide the
@@ -143,6 +145,7 @@ CHAIN_GRAYS = ["#2b2a28", "#5b5a56", "#85847e", "#a9a8a1", "#c9c8bf", "#dedcd5"]
 
 
 ANNOTATE = False     # set from --annotate
+DB_LABEL = None      # set from --db-label (None: derive from the database directory name)
 
 
 def src_color(i):
@@ -647,6 +650,19 @@ class SourcePost:
         return self.top.name if self.top else f"source {self.label_idx}"
 
 
+def _match_tree_name(name, known):
+    """MCMC rows carry the GBWT path name (e.g. 'HV2a1*1'); the tree tip is the sanitized
+    name ('HV2a1_1'). vgan replaces + ' * @ ( ) by '_' and drops a trailing .1/.2, so try
+    the same steps before declaring a placement 'absent from the plotted tree'."""
+    if name in known:
+        return name
+    c = re.sub(r"[+'*@()]", "_", name)
+    if c in known:
+        return c
+    c2 = re.sub(r"\.(1|2)$", "", c)
+    return c2 if c2 in known else name
+
+
 def load_mcmc(path):
     """Read a chain file. A chain that is still being written (truncated gzip)
     is read up to its last complete row, with a warning, rather than failing."""
@@ -679,7 +695,11 @@ def summarize_chain(mcmc, lay, sort_sources=False):
              if f"Source_{i}" in mcmc.columns and f"branch_position_derived_{i}" in mcmc.columns]
     posts = []
     for i in slots:
-        names = mcmc[f"Source_{i}"].astype(str).str.strip().to_numpy()
+        names = mcmc[f"Source_{i}"].astype(str).str.strip()
+        # was: names = mcmc[...].astype(str).str.strip().to_numpy()  -- placements on 'HV2a1*1' (tree tip 'HV2a1_1') were
+        # treated as absent from the tree and silently dropped
+        _alias = {u: _match_tree_name(u, lay.edge_map) for u in names.unique()}
+        names = names.map(_alias).to_numpy()
         t = pd.to_numeric(mcmc[f"branch_position_derived_{i}"], errors="coerce").to_numpy()
         ok = ~np.isnan(t)
         names, t = names[ok], t[ok]
@@ -953,14 +973,21 @@ def clade_bands(g, posts, min_p=0.5):
     stem and the reader cannot tell which tips it implicates)."""
     ax, lay = g.ax, g.lay
     row_of = {t.name: t.y for t in lay.tips}
+    below = tip_sets(lay.root)          # display node -> tips below it, in the DRAWN orientation
     for sp in posts:
         b = sp.top
         if not b or not b.mapped or b.p < min_p:
             continue
-        tips = [t for t in lay.clade_tips.get(b.name, ()) if t in row_of]
+        sg = _seg_at(lay, b.name, float(np.median(b.t)))
+        # The band must cover the tips BELOW the dot as drawn. lay.clade_tips holds the clade in the orientation of the
+        # DATABASE tree, which for branches between the database root (Node1) and the display root is the complement of
+        # what lies below the dot in the rerooted display (e.g. a Node44 placement shaded the 7 archaic tips instead of
+        # the modern-human clade the dot sits above). Taking the tips below the display node of the segment is
+        # correct in both orientations.
+        # OLD: tips = [t for t in lay.clade_tips.get(b.name, ()) if t in row_of]
+        tips = [t for t in below.get(sg[2], ()) if t in row_of]
         if len(tips) < 2 or len(tips) > 0.8 * len(lay.tips):
             continue
-        sg = _seg_at(lay, b.name, float(np.median(b.t)))
         x0 = sg[2].parent.x
         for r0, r1 in _runs([row_of[t] for t in tips]):
             ax.add_patch(Rectangle((x0, r0 - 0.5), g.lab_x + g.dx(g.label_w_mm + 2.0) - x0,
@@ -1668,10 +1695,44 @@ def _parse_branch_estimate(path):
     return df
 
 
-def select_best_chain(branch_path, chain_files):
-    """Best chain = highest min(Pi ESS, Placement ESS) over its sources
-    (a chain is only as good as its worst-mixing source); ties broken by
-    the lowest mean autocorrelation."""
+def _ess(x):
+    """Effective sample size of a trace (FFT autocorrelation, Geyer's initial positive sequence).
+    NaN for a constant trace."""
+    x = np.asarray(x, dtype=float)
+    x = x[np.isfinite(x)]
+    n = len(x)
+    if n < 10 or np.std(x) < 1e-12:
+        return float("nan")
+    x = x - x.mean()
+    f = np.fft.rfft(x, 2 * n)
+    acov = np.fft.irfft(f * np.conj(f))[:n] / n
+    rho = acov / acov[0]
+    tau = 1.0
+    for t in range(1, n - 1, 2):
+        pair = rho[t] + rho[t + 1]
+        if pair < 0:
+            break
+        tau += 2.0 * pair
+    return n / max(tau, 1.0)
+
+
+def proportion_ess(mcmc):
+    """min over the sources of the ESS of the mixture proportion trace (None if there is none)."""
+    vals = []
+    for c in mcmc.columns:
+        if re.fullmatch(r"proportion_\d+", str(c)):
+            e = _ess(pd.to_numeric(mcmc[c], errors="coerce").to_numpy())
+            if np.isfinite(e):
+                vals.append(e)
+    return min(vals) if vals else None
+
+
+def select_best_chain(branch_path, chain_files, theta_ess=None):
+    """Best chain = highest min(Pi ESS, Placement ESS, proportion ESS) over its sources
+    (a chain is only as good as its worst-mixing parameter); ties broken by the lowest
+    mean autocorrelation. theta_ess = {chain index: min ESS of the proportion traces}.
+    The proportions used to be ignored, so a chain whose proportions mixed badly (or
+    whose sources swapped labels part-way) could be chosen."""
     def default():
         print("  Defaulting to chain 0.", file=sys.stderr)
         idxs = [int(re.search(r"chain(\d+)\.mcmc", f).group(1)) for f in chain_files
@@ -1695,17 +1756,20 @@ def select_best_chain(branch_path, chain_files):
     agg = {}
     for ci_, grp in df.groupby(chc):
         a, b = grp[ess].min(), (grp[plc].min() if plc else grp[ess].min())
-        agg[int(ci_)] = {"score": min(a, b), "pi": a, "plc": b,
-                         "ac": grp[acc].mean() if acc else 1.0}
+        th = (theta_ess or {}).get(int(ci_))
+        agg[int(ci_)] = {"score": min(a, b) if th is None else min(a, b, th), "pi": a, "plc": b,
+                         "th": th, "ac": grp[acc].mean() if acc else 1.0}
     print("\nChain selection summary (aggregated across sources):")
-    print(f"  {'Chain':>6}  {'min(Pi_ESS)':>12}  {'min(Plc_ESS)':>13}  {'mean_Autocorr':>14}  {'score':>10}")
+    print(f"  {'Chain':>6}  {'min(Pi_ESS)':>12}  {'min(Plc_ESS)':>13}  {'min(Theta_ESS)':>15}  {'mean_Autocorr':>14}  {'score':>10}")
     for c in sorted(agg):
         a = agg[c]
-        print(f"  {c:>6}  {a['pi']:>12.1f}  {a['plc']:>13.1f}  {a['ac']:>14.4f}  {a['score']:>10.1f}")
+        th = "n/a" if a["th"] is None else f"{a['th']:.1f}"
+        print(f"  {c:>6}  {a['pi']:>12.1f}  {a['plc']:>13.1f}  {th:>15}  {a['ac']:>14.4f}  {a['score']:>10.1f}")
     best = max(agg, key=lambda c: (agg[c]["score"], -agg[c]["ac"]))
     b = agg[best]
+    th_s = "n/a" if b["th"] is None else f"{b['th']:.1f}"
     print(f"\nBest chain: chain{best}  (score={b['score']:.1f}, min_Pi_ESS={b['pi']:.1f}, "
-          f"min_Plc_ESS={b['plc']:.1f}, mean_Autocorr={b['ac']:.4f})")
+          f"min_Plc_ESS={b['plc']:.1f}, min_Theta_ESS={th_s}, mean_Autocorr={b['ac']:.4f})")
     idxs = [int(re.search(r"chain(\d+)\.mcmc", f).group(1)) for f in chain_files
             if re.search(r"chain(\d+)\.mcmc", f)]
     if best in idxs:
@@ -1734,8 +1798,13 @@ def meta_string(summary, chain_label, mcmc_rows, tree_note=""):
                 bits.append(f"{int(summary['iterations']):,} iterations")
             except ValueError:
                 pass
-        if summary.get("database_dir"):
-            bits.append("database: " + os.path.basename(summary["database_dir"].rstrip("/")))
+        if DB_LABEL is None and summary.get("database_dir"):
+            # The directory name is an internal build name; a trailing '_nohh' only says how the database was built
+            # (without the removed sequence) and is not meant for publication, so it is not printed.
+            nm = os.path.basename(summary["database_dir"].rstrip("/"))
+            bits.append("database: " + re.sub(r"_nohh$", "", nm))
+        elif DB_LABEL:
+            bits.append("database: " + DB_LABEL)
     if mcmc_rows:
         bits.append(f"{mcmc_rows:,} posterior samples")
     if tree_note:
@@ -1854,6 +1923,9 @@ def main():
     ap.add_argument("--min-prob", type=float, default=0.0)
     ap.add_argument("--pitch-mm", type=float, default=2.55, help="row height per tip, mm")
     ap.add_argument("--png", action="store_true", help="also write 300 dpi PNGs")
+    ap.add_argument("--db-label", default=None, metavar="TEXT",
+                    help="database name printed in the figure footer (default: the database directory name without a "
+                         "trailing _nohh; an empty string omits it)")
     ap.add_argument("--no-rerooted", action="store_true",
                     help="auto mode: draw the database tree itself instead of haps_rerooted.treefile")
     ap.add_argument("--annotate", action="store_true",
@@ -1864,8 +1936,9 @@ def main():
     opts = ap.parse_args()
 
     setup_style()
-    global ANNOTATE
+    global ANNOTATE, DB_LABEL
     ANNOTATE = opts.annotate
+    DB_LABEL = opts.db_label
 
     summary = None
     auto = (opts.tree is not None and opts.mcmc_file is None and opts.out_prefix is None
@@ -1949,10 +2022,8 @@ def main():
         print(f"Run prefix:       {run_pfx}\nBranchEstimate:   {branch_path}\n"
               f"Diagnostics:      {diag_path}\nChain files:      {len(chain_files)}\n"
               f"Output prefix:    {out_pfx}\nRPVG prefix:      {rpvg_pfx}")
-        list_pos, best_idx = select_best_chain(branch_path, chain_files)
-
         # pass 1: load + summarize every chain (the composite figure compares them)
-        chain_data, idx_of = {}, {}
+        chain_data, idx_of, theta_ess = {}, {}, {}
         for pos, cf in enumerate(chain_files):
             m = re.search(r"chain(\d+)\.mcmc", cf)
             ci_ = int(m.group(1)) if m else pos
@@ -1960,6 +2031,10 @@ def main():
             print(f"Reading chain {ci_}: {cf}")
             mc = load_mcmc(cf)
             chain_data[ci_] = (summarize_chain(mc, lay, opts.sort_sources), mc)
+            th = proportion_ess(mc)
+            if th is not None:
+                theta_ess[ci_] = th
+        list_pos, best_idx = select_best_chain(branch_path, chain_files, theta_ess)
         best_actual = idx_of[list_pos]
 
         # pass 2: draw
