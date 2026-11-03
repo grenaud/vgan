@@ -28,6 +28,47 @@ using namespace std;
 using namespace google::protobuf;
 namespace fs = std::filesystem;
 
+// =====================================================================================================================
+// SOIBEAN FIXES -- ported from the TrailMix fixes (precompute.h / MCMC.h)
+//
+// soibean reads alignments with its own copy of the TrailMix logic (this function), and that copy had the same bugs.
+// Every change is marked [FIX n]. The old lines are kept as comments ("// OLD: ...") right above the corrected code.
+//
+// [FIX 1] Which graph node does each piece of the alignment belong to?
+//     reconstruct_graph_sequence() returns one entry in mppg_sizes per EDIT, not per node mapping. A mismatch or an
+//     indel splits a node match into several edits, so mppg_sizes usually has MORE entries than the read has mappings.
+//     The old code used a.path().mapping()[i] for entry i. That is the wrong node as soon as a read has a mismatch, and
+//     for all trailing entries it gave up ("No_support": every path counted as unsupported). Now entry_to_mapping[i]
+//     gives the mapping that owns the i-th edit, so the node (and therefore the supporting paths) is right.
+//
+// [FIX 2] Slicing graph_seq / read_seq.
+//     Both strings are laid out in alignment-path order, which is read order (5'->3') for forward AND reverse
+//     alignments. The old code started reverse reads at the 3' end and walked backwards (startIndex = baseIX - size - 1),
+//     which cuts the wrong columns. Now each chunk is simply the next mppg_sizes[i] columns (colStart).
+//
+// [FIX 3] Per-base indices.
+//     The base quality was read at a.quality()[s], where s is the position inside the current chunk, not in the read.
+//     The damage profile was read at subDeamDiNuc[graph_seq.size()][baseIX]: baseIX is the start of the chunk (the same
+//     value for every base in it) and graph_seq.size() also counts gap columns. Now both use the real read position of
+//     the base (readPosOf, which skips deletion columns) and the fragment length is the read length.
+//
+// [FIX 4] The damage model. This was the main problem.
+//     The correct model is a chain of three events:
+//         reference base --mutation (HKY, depends on branch time t)--> b_s --deamination--> b_d --sequencing error--> read base
+//     b_s and b_d are never observed, so the likelihood of the base we see is the sum over all of their values:
+//         P(read | ref, t) = SUM_bs  P_HKY(bs | ref, t) * P(read | bs)
+//         P(read | bs)     = SUM_bd  P_deam(bd | bs, position in fragment) * P_seqerr(read | bd, quality)
+//     The old code (a) applied sequencing error BEFORE damage, (b) then "summed over the read base" with if/else branches
+//     that did the same thing, so it summed the four outcome probabilities of a distribution, which is always exactly 1,
+//     i.e. log(1) = 0 (clamped to log(0.9999999)): the damage information was computed and then thrown away, and
+//     (c) never summed over the post-mutation base b_s.
+//     Now this function stores P(read | bs) for the four possible bs in BaseInfo::damageSeqErrProb. It does not depend on t,
+//     so it is computed once per base here; MCMC::computeBaseLogLike (MCMC.h) multiplies it by the HKY term and sums.
+//     The scalar BaseInfo::logLikelihood (used for pathMap, i.e. the starting estimates, and for the consistency check
+//     at the end of this function) is now log P(read | ref, t = 0) = log damageSeqErrProb[ref], so mismatches and damage
+//     now influence it. Unlike TrailMix there is no per-source ancient/modern switch: soibean has one damage profile
+//     (--deam5p/--deam3p; the default is "no damage") and always uses it.
+// =====================================================================================================================
 static vector<AlignmentInfo*>* analyse_GAM(
     const bdsg::HashGraph& graph,
     string gamfilename,
@@ -89,6 +130,17 @@ static vector<AlignmentInfo*>* analyse_GAM(
     if (pathNames.size() != pathNamesS.size()){throw runtime_error("Path computation went wrong!");}
 
 
+    // base -> index (A,C,G,T = 0..3; anything else maps to 0, as in TrailMix's precompute_GAM)
+    auto nucToIX = [](char c) {
+        switch (toupper(static_cast<unsigned char>(c))) {
+            case 'A': return 0;
+            case 'C': return 1;
+            case 'G': return 2;
+            case 'T': return 3;
+            default:  return 0;
+        }
+    };
+
     for (; iter.has_current(); iter.advance())
     {
         ++n_reads;
@@ -104,9 +156,25 @@ static vector<AlignmentInfo*>* analyse_GAM(
 
             unordered_map<string, int> pathCounts;
             auto [graph_seq, read_seq, mppg_sizes] = reconstruct_graph_sequence(graph, a.path(), a.sequence());
-            int baseIX = a.path().mapping()[0].position().is_reverse() ? a.sequence().size() - 1 : 0;
-            int baseOnRead = baseIX;
-            int Lseq = graph_seq.size();
+            // [FIX 1,2,3] see the explanation above analyse_GAM
+            // OLD:             int baseIX = a.path().mapping()[0].position().is_reverse() ? a.sequence().size() - 1 : 0;
+            // OLD:             int baseOnRead = baseIX;
+            // OLD:             int Lseq = graph_seq.size();
+            int Lseq = a.sequence().size();   // fragment length = read length (graph_seq.size() also counts gap columns)
+
+            // reconstruct_graph_sequence() pushes one mppg_sizes entry per EDIT, not per mapping, and every mismatch/indel splits a
+            // node match into several edits. Entry i therefore belongs to the mapping (graph node) that owns the i-th edit.
+            vector<int> entry_to_mapping;
+            for (int mi = 0; mi < a.path().mapping_size(); ++mi) {
+                for (int ei = 0; ei < a.path().mapping(mi).edit_size(); ++ei) {
+                    entry_to_mapping.push_back(mi);
+                }
+            }
+            if (entry_to_mapping.size() != mppg_sizes.size()) {
+                throw std::runtime_error("analyse_GAM: edit count does not match the reconstructed segment count for read " + a.name());
+            }
+            int colStart = 0;          // first column of the current chunk in graph_seq/read_seq
+            int readPosAtChunk = 0;    // 0-based read position of the chunk's first base
 
             unordered_map<string, double> pathMap;
             unordered_map<string, bool> supportMap;
@@ -151,39 +219,62 @@ static vector<AlignmentInfo*>* analyse_GAM(
 
                 // extract all possible paths for a current node ID. There are discrptancies between the generated mapping lengths and the provided mapping length.
                 //nodepaths has all path names for each node IDs listed.
+                // [FIX 1] entry i of mppg_sizes belongs to the mapping that owns the i-th EDIT (not to mapping i)
+                // OLD:                 vector<string> probPaths;
+                // OLD:                 int nID = 0;
+                // OLD:                 if (mppg_sizes.size() != a.path().mapping().size())
+                // OLD:                 {
+                // OLD:                     if (i >= mppg_sizes.size() - (mppg_sizes.size() - a.path().mapping().size())){
+                // OLD:                         probPaths = {"No_support"};
+                // OLD:                     }else{
+                // OLD:                         nID = a.path().mapping()[i].position().node_id();
+                // OLD:                         for (int j = 0; j < nodepaths.at(nID - minid).size(); ++j) {
+                // OLD:                             probPaths.emplace_back(nodepaths.at(nID - minid).at(j)); 
+                // OLD:                         }
+                // OLD:                     }
+                // OLD:
+                // OLD:
+                // OLD:                 }else{
+                // OLD:                     nID = a.path().mapping()[i].position().node_id();
+                // OLD:                     for (int j = 0; j < nodepaths.at(nID - minid).size(); ++j) {
+                // OLD:                         probPaths.emplace_back(nodepaths.at(nID - minid).at(j)); 
+                // OLD:                     }
+                // OLD:                 }
                 vector<string> probPaths;
-                int nID = 0;
-                if (mppg_sizes.size() != a.path().mapping().size())
-                {
-                    if (i >= mppg_sizes.size() - (mppg_sizes.size() - a.path().mapping().size())){
-                        probPaths = {"No_support"};
-                    }else{
-                        nID = a.path().mapping()[i].position().node_id();
-                        for (int j = 0; j < nodepaths.at(nID - minid).size(); ++j) {
-                            probPaths.emplace_back(nodepaths.at(nID - minid).at(j)); 
-                        }
-                    }
-                    
-
-                }else{
-                    nID = a.path().mapping()[i].position().node_id();
-                    for (int j = 0; j < nodepaths.at(nID - minid).size(); ++j) {
-                        probPaths.emplace_back(nodepaths.at(nID - minid).at(j)); 
-                    }
+                int nID = a.path().mapping()[entry_to_mapping[i]].position().node_id();
+                for (int j = 0; j < nodepaths.at(nID - minid).size(); ++j) {
+                    probPaths.emplace_back(nodepaths.at(nID - minid).at(j));
                 }
 
                 
 
-                string nodeSeq, partReadSeq;
-                int startIndex = 0;
-                if (a.path().mapping()[0].position().is_reverse()) {
-                    startIndex = (baseIX - mppg_sizes.at(i) - 1 >= 0) ? (baseIX - mppg_sizes.at(i) - 1) : 0;
-                    nodeSeq = graph_seq.substr(startIndex, mppg_sizes.at(i));
-                    partReadSeq = read_seq.substr(startIndex, mppg_sizes.at(i));
-                } else {
-                    nodeSeq = graph_seq.substr(baseIX, mppg_sizes.at(i));
-                    partReadSeq = read_seq.substr(baseIX, mppg_sizes.at(i));
+                // [FIX 2,3] slice the next chunk (read order on both strands) and work out the read position of each column
+                // OLD:                 string nodeSeq, partReadSeq;
+                // OLD:                 int startIndex = 0;
+                // OLD:                 if (a.path().mapping()[0].position().is_reverse()) {
+                // OLD:                     startIndex = (baseIX - mppg_sizes.at(i) - 1 >= 0) ? (baseIX - mppg_sizes.at(i) - 1) : 0;
+                // OLD:                     nodeSeq = graph_seq.substr(startIndex, mppg_sizes.at(i));
+                // OLD:                     partReadSeq = read_seq.substr(startIndex, mppg_sizes.at(i));
+                // OLD:                 } else {
+                // OLD:                     nodeSeq = graph_seq.substr(baseIX, mppg_sizes.at(i));
+                // OLD:                     partReadSeq = read_seq.substr(baseIX, mppg_sizes.at(i));
+                // OLD:                 }
+                string nodeSeq = graph_seq.substr(colStart, mppg_sizes.at(i));
+                string partReadSeq = read_seq.substr(colStart, mppg_sizes.at(i));
+
+                // 0-based read position of every column of this chunk ('-' in the read = deletion = no read base); used for the
+                // per-base quality score and the position-dependent deamination probabilities
+                std::vector<int> readPosOf;
+                readPosOf.reserve(partReadSeq.size());
+                int readPosEnd = readPosAtChunk;
+                for (size_t s2 = 0; s2 < partReadSeq.size(); ++s2) {
+                    readPosOf.push_back(readPosEnd);
+                    if (partReadSeq[s2] != '-') {
+                        ++readPosEnd;
+                    }
                 }
+                auto qualityIndex = [&](size_t s) { return std::min<int>(readPosOf[s], (int)a.quality().size() - 1); };
+                auto damageIndex  = [&](size_t s) { return std::min<int>(readPosOf[s], Lseq - 1); };
                 int mismatch = 0;
                 int unsup = 0;
                 for (int m = 0; m < pathNames.size(); ++m)
@@ -208,7 +299,7 @@ static vector<AlignmentInfo*>* analyse_GAM(
         			        << s << '\t' 
         			        << nodeSeq[s] << '\t' 
          			        << a.sequence() << '\t' 
-        			        << baseIX + s << '\n'; 
+        			        << /* OLD: baseIX + s (start of the chunk, not the read index) */ readPosOf[s] << '\n'; 
 
 			        }
                             }
@@ -220,11 +311,14 @@ static vector<AlignmentInfo*>* analyse_GAM(
 #endif
 		            }
 #ifdef DEBUGDAMAGE
-                            cerr << "Base Index " << baseOnRead << endl;
+                            // OLD: cerr << "Base Index " << baseOnRead << endl;   (baseOnRead no longer exists, see [FIX 3])
+                            cerr << "Base Index " << readPosOf[s] << endl;
                             cerr << "Graph Base " << nodeSeq[s] << endl;
                             cerr << "Read Base " << partReadSeq[s] << endl;
 #endif
-                            int base_quality = a.quality()[s];
+                            // [FIX 3] s is the position inside the chunk, not in the read
+                            // OLD:                             int base_quality = a.quality()[s];
+                            int base_quality = a.quality()[qualityIndex(s)];
                             if (nodeSeq[s] == 'N' || partReadSeq[s] == 'N')
                             {
                                 pathMap[pathNames[m]] += log(0.25);
@@ -286,89 +380,122 @@ static vector<AlignmentInfo*>* analyse_GAM(
 #endif
                             } else
                             {
-                                double probBasePreDamage [4];
-                                for(int bpd=0;bpd<4;bpd++){
-                                    probBasePreDamage[bpd]=0.0;
-                                }
-
-                                // LEVEL 1 //
-                                // filling a substitution matrix with the propbabilities of observing a base pre damage.
-                                for(int bpo=0;bpo<4;bpo++){
-                                    if("ACGT"[bpo] == nodeSeq[s]){// no mutation
-                                        probBasePreDamage[bpo]= 1 - qscore_vec[base_quality];
-                                    }else{ // mutation
-                                        probBasePreDamage[bpo]= (qscore_vec[base_quality]/3);
+                                // [FIX 4] Damage + sequencing error, marginalized over the (unobserved) post-mutation base. See the explanation
+                                // above analyse_GAM. The old block below built the sequencing-error distribution BEFORE damage, then summed the four
+                                // outcomes with identical if/else branches (= exactly 1, log = 0), so damage never influenced anything.
+                                // OLD:                                 double probBasePreDamage [4];
+                                // OLD:                                 for(int bpd=0;bpd<4;bpd++){
+                                // OLD:                                     probBasePreDamage[bpd]=0.0;
+                                // OLD:                                 }
+                                // OLD:
+                                // OLD:                                 // LEVEL 1 //
+                                // OLD:                                 // filling a substitution matrix with the propbabilities of observing a base pre damage.
+                                // OLD:                                 for(int bpo=0;bpo<4;bpo++){
+                                // OLD:                                     if("ACGT"[bpo] == nodeSeq[s]){// no mutation
+                                // OLD:                                         probBasePreDamage[bpo]= 1 - qscore_vec[base_quality];
+                                // OLD:                                     }else{ // mutation
+                                // OLD:                                         probBasePreDamage[bpo]= (qscore_vec[base_quality]/3);
+                                // OLD:                                     }
+                                // OLD:
+                                // OLD:                                 }
+                                // OLD: #ifdef DEBUGDAMAGE 
+                                // OLD:                                 cerr << "Pre damage matrix" << endl;
+                                // OLD:                                 for(int bpo=0;bpo<4;bpo++){
+                                // OLD:                                     cerr<<setprecision(14)<<bpo<<"\t"<<probBasePreDamage[bpo]<<endl;
+                                // OLD:                                 }
+                                // OLD: #endif
+                                // OLD:
+                                // OLD:                                 // LEVEL 2 //
+                                // OLD:                                 //initializing a post damage substitution matrix. First filled with 0.
+                                // OLD:                                 double probBasePostDamage [4];
+                                // OLD:
+                                // OLD:                                 for(int bpd=0;bpd<4;bpd++){
+                                // OLD:                                     probBasePostDamage[bpd]=0.0;
+                                // OLD:                                 }
+                                // OLD:
+                                // OLD:
+                                // OLD:                                 // filling post-damage substitution matrix with the new probabilities of observing a base. The probabilities are based on the damage profile for --deam5p and --deam3p
+                                // OLD:
+                                // OLD:                                 // If no damage profile is provided the pre-damage substitution matrix is multiplied by 0 and stays the same.
+                                // OLD:                                 //cerr << "base index " << baseIX << " read size " << a.sequence().size() << endl;
+                                // OLD:                                 for(int bpd=0;bpd<4;bpd++){
+                                // OLD:                                     //post damage = prob pre damage * damage rate from bpo to bpd
+                                // OLD:                                     for(int bpo=0;bpo<4;bpo++){
+                                // OLD:                                         probBasePostDamage[bpd]+=probBasePreDamage[bpo]*subDeamDiNuc[Lseq][baseIX].p[bpo][bpd];
+                                // OLD:                                         //cerr << setprecision(14) <<bpd<<"\t"<< subDeamDiNuc[Lseq][baseIX].p[bpo][bpd];
+                                // OLD:                                     }
+                                // OLD:                                 }
+                                // OLD: #ifdef DEBUGDAMAGE 
+                                // OLD:                                 cerr << "After damage matrix " << endl;
+                                // OLD:                                 for(int bpd=0;bpd<4;bpd++){
+                                // OLD:
+                                // OLD:                                     cerr<<setprecision(14)<<bpd<<"\t"<<probBasePostDamage[bpd]<<endl;
+                                // OLD:                                 }
+                                // OLD: #endif
+                                // OLD:                                 double log_lik_marg = -std::numeric_limits<double>::infinity(); //sum of the likelihoods but in log space, this will be added to log_lik
+                                // OLD:
+                                // OLD:                                 for(int bpd=0;bpd<4;bpd++){
+                                // OLD:                                     if( "ACGT"[bpd]== partReadSeq[s]){// no sequencing error
+                                // OLD:                                     //                                                    Prob of bpd                no seq error
+                                // OLD:                                         log_lik_marg = oplusInitnatl( log_lik_marg , (log(probBasePostDamage[bpd]) ) );
+                                // OLD:
+                                // OLD:                                     }else{ // we are already marginalising over all possible bases, if the base is not matching it must be a seq error.
+                                // OLD:                                     //                                                    Prob of bpd                seq error
+                                // OLD:                                         log_lik_marg = oplusInitnatl( log_lik_marg , (log(    probBasePostDamage[bpd] ))) ;
+                                // OLD:                                     }
+                                // OLD:                                 }
+                                // OLD:
+                                // OLD:                                 if(log_lik_marg > log(0.9999999)){
+                                // OLD:                                     log_lik_marg = log(0.9999999);
+                                // OLD:                                 }
+                                // OLD:
+                                // OLD:                                 if(isnan(log_lik_marg) || isinf(log_lik_marg) || log_lik_marg > 1e-8){
+                                // OLD:                                     throw runtime_error("calculated log like is nan");
+                                // OLD:                                 }
+                                // OLD:
+                                // OLD:
+                                // OLD: #ifdef DEBUGDAMAGE                                
+                                // OLD:                                 cerr<<"postdamage:"<<endl;
+                                // OLD:
+                                // OLD:                                 for(int bpd=0;bpd<4;bpd++){
+                                // OLD:                                     cerr<<bpd<<"\t"<<probBasePostDamage[bpd]<<endl;
+                                // OLD:                                 }
+                                // OLD:
+                                // OLD:                                 cerr<<"log_lik_marg:"<<log_lik_marg<<" p="<<exp(log_lik_marg)<<endl;
+                                // OLD:                                 //cout <<"log_lik_marg " <<  log_lik_marg << endl;
+                                // OLD:
+                                // OLD:                                 cerr <<  pathMap[pathNames[m]] << endl;
+                                // OLD: #endif
+                                // OLD:                                 pathMap[pathNames[m]] += log_lik_marg;
+                                // OLD:
+                                // OLD:                                 BaseInfo info;
+                                // OLD:                                 info.readBase = partReadSeq[s];
+                                // OLD:                                 info.referenceBase = nodeSeq[s];
+                                // OLD:                                 info.pathSupport = true;
+                                // OLD:                                 info.logLikelihood = log_lik_marg;
+                                // OLD:                                 if(isnan(info.logLikelihood) || isinf(info.logLikelihood) || info.logLikelihood > 1e-8){throw runtime_error("damage info.logLikelihood is nan");}
+                                // OLD: #ifdef DEBUGPAIN2
+                                // OLD:                                 cerr<< std::setprecision(25) << "damage info.logLikelihood " << info.logLikelihood << " "<< log_lik_marg << endl;
+                                // OLD: #endif
+                                // OLD:                                 readInfo.push_back(info);
+                                int readBaseIX = nucToIX(partReadSeq[s]);
+                                int refBaseIX  = nucToIX(nodeSeq[s]);
+                                // damageSeqErr[bs] = P(read base | post-mutation base bs) = SUM_bd P_deam(bd | bs, position) * P_seqerr(read | bd, quality)
+                                double damageSeqErr[4];
+                                for (int bs = 0; bs < 4; bs++) {
+                                    double acc = 0.0;
+                                    for (int bd = 0; bd < 4; bd++) {
+                                        double pSeqErr = (bd == readBaseIX) ? (1 - qscore_vec[base_quality]) : (qscore_vec[base_quality] / 3);
+                                        acc += subDeamDiNuc[Lseq][damageIndex(s)].p[bs][bd] * pSeqErr;
                                     }
-
+                                    damageSeqErr[bs] = max(0.0001, min(1.0, acc));
                                 }
-#ifdef DEBUGDAMAGE 
-                                cerr << "Pre damage matrix" << endl;
-                                for(int bpo=0;bpo<4;bpo++){
-                                    cerr<<setprecision(14)<<bpo<<"\t"<<probBasePreDamage[bpo]<<endl;
-                                }
-#endif
-
-                                // LEVEL 2 //
-                                //initializing a post damage substitution matrix. First filled with 0.
-                                double probBasePostDamage [4];
-
-                                for(int bpd=0;bpd<4;bpd++){
-                                    probBasePostDamage[bpd]=0.0;
-                                }
-
-
-                                // filling post-damage substitution matrix with the new probabilities of observing a base. The probabilities are based on the damage profile for --deam5p and --deam3p
-
-                                // If no damage profile is provided the pre-damage substitution matrix is multiplied by 0 and stays the same.
-                                //cerr << "base index " << baseIX << " read size " << a.sequence().size() << endl;
-                                for(int bpd=0;bpd<4;bpd++){
-                                    //post damage = prob pre damage * damage rate from bpo to bpd
-                                    for(int bpo=0;bpo<4;bpo++){
-                                        probBasePostDamage[bpd]+=probBasePreDamage[bpo]*subDeamDiNuc[Lseq][baseIX].p[bpo][bpd];
-                                        //cerr << setprecision(14) <<bpd<<"\t"<< subDeamDiNuc[Lseq][baseIX].p[bpo][bpd];
-                                    }
-                                }
-#ifdef DEBUGDAMAGE 
-                                cerr << "After damage matrix " << endl;
-                                for(int bpd=0;bpd<4;bpd++){
-
-                                    cerr<<setprecision(14)<<bpd<<"\t"<<probBasePostDamage[bpd]<<endl;
-                                }
-#endif
-                                double log_lik_marg = -std::numeric_limits<double>::infinity(); //sum of the likelihoods but in log space, this will be added to log_lik
-                                
-                                for(int bpd=0;bpd<4;bpd++){
-                                    if( "ACGT"[bpd]== partReadSeq[s]){// no sequencing error
-                                    //                                                    Prob of bpd                no seq error
-                                        log_lik_marg = oplusInitnatl( log_lik_marg , (log(probBasePostDamage[bpd]) ) );
-
-                                    }else{ // we are already marginalising over all possible bases, if the base is not matching it must be a seq error.
-                                    //                                                    Prob of bpd                seq error
-                                        log_lik_marg = oplusInitnatl( log_lik_marg , (log(    probBasePostDamage[bpd] ))) ;
-                                    }
-                                }
-
-                                if(log_lik_marg > log(0.9999999)){
-                                    log_lik_marg = log(0.9999999);
-                                }
-
+                                // scalar used for pathMap (starting estimates) and the consistency check below: no mutation (t = 0), so the
+                                // post-mutation base is the reference base of this path. MCMC::computeBaseLogLike uses the full 4-vector instead.
+                                double log_lik_marg = log(damageSeqErr[refBaseIX]);
                                 if(isnan(log_lik_marg) || isinf(log_lik_marg) || log_lik_marg > 1e-8){
                                     throw runtime_error("calculated log like is nan");
                                 }
-                                
-
-#ifdef DEBUGDAMAGE                                
-                                cerr<<"postdamage:"<<endl;
-
-                                for(int bpd=0;bpd<4;bpd++){
-                                    cerr<<bpd<<"\t"<<probBasePostDamage[bpd]<<endl;
-                                }
-
-                                cerr<<"log_lik_marg:"<<log_lik_marg<<" p="<<exp(log_lik_marg)<<endl;
-                                //cout <<"log_lik_marg " <<  log_lik_marg << endl;
-                                
-                                cerr <<  pathMap[pathNames[m]] << endl;
-#endif
                                 pathMap[pathNames[m]] += log_lik_marg;
 
                                 BaseInfo info;
@@ -376,6 +503,9 @@ static vector<AlignmentInfo*>* analyse_GAM(
                                 info.referenceBase = nodeSeq[s];
                                 info.pathSupport = true;
                                 info.logLikelihood = log_lik_marg;
+                                for (int bs = 0; bs < 4; bs++) {
+                                    info.damageSeqErrProb[bs] = damageSeqErr[bs];
+                                }
                                 if(isnan(info.logLikelihood) || isinf(info.logLikelihood) || info.logLikelihood > 1e-8){throw runtime_error("damage info.logLikelihood is nan");}
 #ifdef DEBUGPAIN2
                                 cerr<< std::setprecision(25) << "damage info.logLikelihood " << info.logLikelihood << " "<< log_lik_marg << endl;
@@ -391,12 +521,13 @@ static vector<AlignmentInfo*>* analyse_GAM(
 
                                 
                             
-                                if (a.path().mapping()[0].position().is_reverse() && partReadSeq[s] != '-' )
-                                {
-                                    baseOnRead--;
-                                } else if(!a.path().mapping()[0].position().is_reverse() && partReadSeq[s] != '-') {
-                                    baseOnRead++;
-                                }
+                                // [FIX 3] no running base counter any more (positions come from readPosOf)
+                                // OLD:                                 if (a.path().mapping()[0].position().is_reverse() && partReadSeq[s] != '-' )
+                                // OLD:                                 {
+                                // OLD:                                     baseOnRead--;
+                                // OLD:                                 } else if(!a.path().mapping()[0].position().is_reverse() && partReadSeq[s] != '-') {
+                                // OLD:                                     baseOnRead++;
+                                // OLD:                                 }
                             }
                         }
 
@@ -407,7 +538,9 @@ static vector<AlignmentInfo*>* analyse_GAM(
                         for (int s = 0; s < nodeSeq.size(); ++s)
                         {
                             unsup++;
-                            int base_quality = a.quality()[s];
+                            // [FIX 3] s is the position inside the chunk, not in the read
+                            // OLD:                             int base_quality = a.quality()[s];
+                            int base_quality = a.quality()[qualityIndex(s)];
                             if (nodeSeq[s] == 'N' || partReadSeq[s] == 'N')
                             {
 
@@ -470,7 +603,9 @@ static vector<AlignmentInfo*>* analyse_GAM(
                             
                             }else
                             {
-                                if (abs(baseOnRead) % PENALTY  == 0)
+                                // [FIX 3] was the running counter baseOnRead (counted from the wrong end on reverse reads); now the real read position
+                                // OLD:                                 if (abs(baseOnRead) % PENALTY  == 0)
+                                if (abs(readPosOf[s]) % PENALTY  == 0)
                                 {   
                                     pathMap[pathNames[m]] += log(1 - (qscore_vec[base_quality]));
                                     BaseInfo info;
@@ -512,11 +647,12 @@ static vector<AlignmentInfo*>* analyse_GAM(
                                 }
                             }
 
-                            if (a.path().mapping()[0].position().is_reverse() && partReadSeq[s] != '-') {
-                                baseOnRead--;
-                            } else if(!a.path().mapping()[0].position().is_reverse() && partReadSeq[s] != '-'){
-                                baseOnRead++;
-                            }
+                            // [FIX 3] no running base counter any more (positions come from readPosOf)
+                            // OLD:                             if (a.path().mapping()[0].position().is_reverse() && partReadSeq[s] != '-') {
+                            // OLD:                                 baseOnRead--;
+                            // OLD:                             } else if(!a.path().mapping()[0].position().is_reverse() && partReadSeq[s] != '-'){
+                            // OLD:                                 baseOnRead++;
+                            // OLD:                             }
 
 
                         }
@@ -529,23 +665,27 @@ static vector<AlignmentInfo*>* analyse_GAM(
                     
                     detailMap[pathNamesS[m]].push_back(readInfo);
 
-                    if (a.path().mapping()[0].position().is_reverse()) {
-                        baseOnRead = baseIX;
-                    } else {
-                        baseOnRead = baseIX;
-                    }
+                    // [FIX 3] no running base counter any more (positions come from readPosOf)
+                    // OLD:                     if (a.path().mapping()[0].position().is_reverse()) {
+                    // OLD:                         baseOnRead = baseIX;
+                    // OLD:                     } else {
+                    // OLD:                         baseOnRead = baseIX;
+                    // OLD:                     }
 
                     
                 }
                 //cout << readInfo.size() << endl;
 
-                if (a.path().mapping()[0].position().is_reverse()) {
-                    baseIX = startIndex;
-                    baseOnRead = baseIX;
-                } else {
-                    baseIX += mppg_sizes.at(i);
-                    baseOnRead = baseIX;
-                }
+                // [FIX 2,3] advance to the next chunk of graph_seq/read_seq and of the read
+                // OLD:                 if (a.path().mapping()[0].position().is_reverse()) {
+                // OLD:                     baseIX = startIndex;
+                // OLD:                     baseOnRead = baseIX;
+                // OLD:                 } else {
+                // OLD:                     baseIX += mppg_sizes.at(i);
+                // OLD:                     baseOnRead = baseIX;
+                // OLD:                 }
+                colStart += mppg_sizes.at(i);
+                readPosAtChunk = readPosEnd;
 
             }
 

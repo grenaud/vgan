@@ -271,6 +271,22 @@ pair<unordered_map<string, vector<vector<double>>>, double> MCMC::processMCMCite
             }
         }
 
+        // The "Source" column of BranchEstimate.txt / BaseProportionEstimates.txt (and the key of branchStatisticsMap) was
+        // whatever branch this source slot happened to be on in the LAST iteration processed, while the statistics are pooled
+        // over every branch the slot visited. Label the row with the MOST VISITED branch instead, which is the source's
+        // best-supported placement (ties: the lexicographically smaller name, so the output is deterministic).
+        if (!branch_names.empty()) {
+            unordered_map<string, int> visits;
+            for (const auto &bn : branch_names) { ++visits[bn]; }
+            int bestCount = -1;
+            for (const auto &kv : visits) {
+                if (kv.second > bestCount || (kv.second == bestCount && kv.first < branchName)) {
+                    bestCount = kv.second;
+                    branchName = kv.first;
+                }
+            }
+        }
+
         string parent_path;
         if(dta->tree->nodes[dta->path_node_map[branchName]] != dta->tree->root){
             parent_path = dta->tree->nodes[dta->path_node_map[branchName]]->parent->longname;

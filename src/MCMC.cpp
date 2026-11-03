@@ -56,6 +56,7 @@ pair<unordered_map<string, vector<vector<double>>>, double> MCMC::processMCMCite
         vector<double> initialPatristicDistances;
         vector<long double> euc_distances;
         initialPatristicDistances = vector<double>(numofleafs, 1.0);
+        unordered_map<string, size_t> branchVisits;   // [FIX 6] visits per branch for this source slot
         
         size_t totalIterations = MCMCiterations.size();
         size_t startIdx = totalIterations > 500 ? totalIterations - 500 : 0;
@@ -68,6 +69,7 @@ pair<unordered_map<string, vector<vector<double>>>, double> MCMC::processMCMCite
                 chainloglike = iteration.logLike;
             }
             branchName = iteration.positions_tree[source].pos->longname;
+            ++branchVisits[branchName];   // [FIX 6] count how often this source slot sits on each branch (see below the loop)
             if (branchStatisticsMap.find(branchName) == branchStatisticsMap.end()) {
                 // If not, initialize it with an empty vector of vectors
                 branchStatisticsMap[branchName] = vector<vector<double>>();
@@ -89,7 +91,25 @@ pair<unordered_map<string, vector<vector<double>>>, double> MCMC::processMCMCite
 
         }
 
-        
+
+        // [FIX 6] Which branch is this row about? (ported from the TrailMix fix in MCMC_functions.h)
+        // The "Source" column of ProportionEstimates<k>.txt / BranchEstimate<k>.txt, the key of branchStatisticsMap and the branch
+        // named in the effective-sample-size warnings below was whatever branch this source slot was on in the LAST iteration of
+        // the chain, while the statistics themselves are pooled over every branch the slot visited. That label is arbitrary: a
+        // source that spent 94% of the run on one branch could be reported under the unrelated branch it happened to be on at
+        // the end. The row is now labelled with the MOST VISITED branch, i.e. the source's best-supported placement
+        // (ties: the lexicographically smaller name, so the output is deterministic).
+        // OLD: (branchName was left as the branch of the last iteration processed)
+        if (!branchVisits.empty()) {
+            size_t bestCount = 0;
+            for (const auto &kv : branchVisits) {
+                if (kv.second > bestCount || (kv.second == bestCount && kv.first < branchName)) {
+                    bestCount = kv.second;
+                    branchName = kv.first;
+                }
+            }
+        }
+
         //unsorted vec
         long double meanTheta = mean(proportionVec);
         long double meanPos = mean(positionVec);
@@ -1469,6 +1489,7 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams &pa
     double likelihood_t_1;
     std::random_device rd;
     std::mt19937 gen(rd());
+    std::srand(rd());   // seed rand() ONCE per chain (see the note at the top of the iteration loop)
     std::uniform_real_distribution<> dis(0.0, 1.0);
     std::vector<PosTree> current_positions(n_sources);
     std::vector<double> random_numbers(n_sources);
@@ -1496,7 +1517,9 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams &pa
     mcmcout << endl;
 
     ogzstream mcmcdetail;
-    mcmcdetail.open((num+"Trace"+to_string(n_sources)+".detail.mcmc.gz").c_str(), ios::out);
+    // The file name used to be  Trace<k>.detail.mcmc.gz  for every chain, so each chain reopened (truncated) the previous
+    // chain's file and only the last chain survived. The chain index is now part of the name.
+    mcmcdetail.open((num+"Trace"+to_string(n_sources)+"_chain"+to_string(chain)+".detail.mcmc.gz").c_str(), ios::out);
     for (int sou = 1; sou< n_sources + 1; ++sou){
         mcmcdetail << "Source_" << sou << '\t' << "Node_" << sou << '\t' << "Likelihood" << '\t' << "proportion_" << sou << '\t' << \
                       "branch_position_derived_" << sou << '\t' << "Acceptance_prob" << '\t' << "Move";
@@ -1517,7 +1540,9 @@ std::vector<MCMCiteration> MCMC::run_tree_proportion(RunTreeProportionParams &pa
 
  get_proposal_sd(proposal_sd, acceptance_rate, iteration, params.maxIter, params.burn);
 
- srand(time(0)); // Initialize random seed
+// (srand(time(0)) used to be here, i.e. re-seeded at EVERY iteration: all rand() calls made within the same wall-clock second
+// -- which source to move, the random float, which child to enter at a fork in updatePosition -- replayed the same sequence.
+// The generator is now seeded once, before the loop.)
 
 // Choose a random component index
 unsigned int componentIndex = std::rand() % state_t_1.n_components;
@@ -1538,20 +1563,31 @@ float randomFloat = 0.01 + static_cast<float>(rand()) / (static_cast<float>(RAND
                 if (state_t_1.positions_tree[componentIndex].pos->parent == nullptr) {
 
                     const auto rootChildren = state_t_1.positions_tree[componentIndex].pos->children;
-                    std::uniform_int_distribution<int> distribution(0.0, state_t_1.positions_tree[componentIndex].pos->nchildren);
+                    // uniform_int_distribution is INCLUSIVE at both ends, so the upper limit must be nchildren - 1
+                    // (it was nchildren, which can select one past the last child).
+                    std::uniform_int_distribution<int> distribution(0, state_t_1.positions_tree[componentIndex].pos->nchildren - 1);
                     const unsigned int selectedChildIndex = distribution(gen);
                     state_t_1.positions_tree[componentIndex].pos = rootChildren[selectedChildIndex];
                     double proposed_position_abs = abs(proposed_position);
                     state_t_1.positions_tree[componentIndex].pos_branch = proposed_position_abs;
                 } else {
-                        updatePosition(state_t_1.positions_tree[componentIndex], -proposed_position, false);
+                        // proposed_position is the NEW absolute position on the branch (drawn around the current one) and is
+                        // negative here, so the source must move back by (current position - proposed position), i.e. the
+                        // distance to the start of the branch plus the overshoot |proposed_position|. It used to move back by
+                        // only |proposed_position|, which made the backward and forward moves different kernels.
+                        updatePosition(state_t_1.positions_tree[componentIndex], state_t_1.positions_tree[componentIndex].pos_branch - proposed_position, false);
                 }
             } else {
                 if (proposed_position > state_t_1.positions_tree[componentIndex].pos_branch) {
                     if (state_t_1.positions_tree[componentIndex].pos->isLeaf() && state_t_1.positions_tree[componentIndex].pos_branch == 0.9999999) {
                         continue;
                     } else {
-                        updatePosition(state_t_1.positions_tree[componentIndex], proposed_position, true);
+                        // Forward by the DIFFERENCE between the proposed and the current position. It used to move forward by the
+                        // full proposed position (e.g. from 0.50 with proposal 0.52 it moved by 0.52 instead of 0.02), so the
+                        // forward kernel was much wider than the backward one and the proposal was not symmetric; the acceptance
+                        // ratio has no Hastings correction, so the chain did not target the posterior. With displacements measured
+                        // from the current position the proposal is a symmetric random walk on the tree.
+                        updatePosition(state_t_1.positions_tree[componentIndex], proposed_position - state_t_1.positions_tree[componentIndex].pos_branch, true);
                     }
                 } else {
                     state_t_1.positions_tree[componentIndex].pos_branch = proposed_position;
@@ -1677,8 +1713,11 @@ while (!pruned && iteration_counter < max_prune_iterations) {
 ////////////////////////////////////////////////////////////// SINGLE SOURCE //////////////////////////////////////////////////////////
 
 // Apply bounds to readLogLikeP
-const double minLogValue = log(0.0000001); // Lower bound to prevent extremely small values
-const double maxLogValue = log(0.9999999); // Upper bound
+// The clamps used to differ between this single-source branch (1e-7 / 0.9999999) and the multi-source branch below
+// (1e-10 / 0.9999999999), so log-likelihoods of k = 1 and k >= 2 runs were on different scales and could not be compared.
+// Both now use the multi-source values.
+const double minLogValue = log(0.0000000001); // Lower bound to prevent extremely small values
+const double maxLogValue = log(0.9999999999); // Upper bound
 
             if (pathNames.size() == 1)
             {
@@ -1768,9 +1807,12 @@ if (!pruned && dta->depth != -1){logLike = -std::numeric_limits<double>::max();}
 
 //////////////////////////////////////////////// CONT MODE ///////////////////////////////////////
 
-if (pathNames.size() == 2) {
+// Was `if (pathNames.size() == 2)`: with k >= 3 no branch was taken, logLike stayed 0 for every proposal and the chain sampled
+// the prior (every row of every k=3 chain file had Loglikelihood = 0). The loop below already iterates over all sources and
+// sums  theta_y * P(read | source y)  over them, so it is valid for any k >= 2.
+if (pathNames.size() >= 2) {
 
-    // Handling the specific case when there are exactly two sources and cont_mode is true
+    // Mixture likelihood for k >= 2 sources (the name of this block is historical: it does not depend on cont_mode)
     for (unsigned int y = 0; y < pathNames.size(); ++y) {
         double readLogLike = 0.0;
         double readLogLikeP = 0.0;
@@ -1920,7 +1962,9 @@ double acceptance_prob = (std::isinf(state_t_1.logLike) && state_t_1.logLike < 0
                 int source_counter=0;
                 for (auto & p : state_t_1.positions_tree){
 
-                    mcmcout << setprecision(14) << dta->originalPathNames[p.pos->longname] << '\t' << p.pos->name  << '\t' << state_t.logLike << '\t' << p.theta << '\t' << p.pos_branch;
+                    // state_t is still the PREVIOUS state here; the row holds the parameters of the NEW state (state_t_1), so its
+                    // log-likelihood must be state_t_1.logLike (it used to log the previous state's value).
+                    mcmcout << setprecision(14) << dta->originalPathNames[p.pos->longname] << '\t' << p.pos->name  << '\t' << state_t_1.logLike << '\t' << p.theta << '\t' << p.pos_branch;
                     mcmcdetail << std::setprecision(14) << dta->originalPathNames[p.pos->longname]  << '\t' << p.pos->name  << '\t' << state_t_1.logLike << '\t' << p.theta << \
                                                    '\t' <<  p.pos_branch << '\t' << acceptance_prob << '\t' << "accepted";
 
@@ -1963,6 +2007,14 @@ double acceptance_prob = (std::isinf(state_t_1.logLike) && state_t_1.logLike < 0
     }
     mcmcdetail << std::endl;
 }
+
+            // A rejected proposal means the chain STAYS in state_t for this iteration, so that state must be counted again.
+            // state_t_vec used to get a row only on acceptance, so the summary statistics (BaseProportionEstimates.txt,
+            // BranchEstimate.txt, ESS, R-hat) were computed over accepted states only, which is not a sample from the posterior
+            // (states from which moves are rarely accepted were under-counted). The .mcmc.gz files already had one row per iteration.
+            if (iteration >= params.burn) {
+                state_t_vec.emplace_back(state_t);
+            }
 
             total_proposals++;
         }

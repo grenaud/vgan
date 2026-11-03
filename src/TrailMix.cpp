@@ -399,29 +399,67 @@ std::string Trailmix::usage() const {
           << "\t-fq1 [STR]\t\t\t     FASTQ input file\n"
           << "\t-fq2 [STR]\t\t\t     FASTQ second input file (for paired-end reads)\n"
           << "\t-g [STR]\t\t\t     GAM input file\n"
-          << "\t-i\t\t\t\t     Input FASTQ (-fq1) is interleaved\n"
           << "\t-k\t\t\t\t     Number of distinct contributing haplogroups\n"
-          << "\t-o [STR]\t\t\t     Output file (default: stdout)\n"
+          << "\t-o [STR]\t\t\t     Output file PREFIX; results are written to <PREFIX>Result<k>_chain<N>.mcmc.gz, <PREFIX>summary.txt, ... (default: TM_out)\n"
           << "\t--depth [INT]\t\t\t     Tree depth to whitelist the MCMC search space (-1 for no restriction)\n"
           << "Non-algorithm parameters:\n"
-          << "\t-s [STR]\t\t\t     Sample name\n"
           << "\t--dbprefix <prefix>\t\t     Specify the prefix for the database files\n"
           << "\t--tm-files [STR]\t\t      Specify the TrailMix file directory (default: \"../share/vgan/tmfiles/\") \n"
           << "\t-t\t\t\t\t     Number of threads\n"
           << "\t-v\t\t\t\t     Verbose mode\n"
           << "\t-z\t\t\t\t     Temporary directory (default: /tmp/)\n"
           << "Markov chain Monte Carlo options:\n"
-          << "  \t--chains [INT]\t\t             Define the number of chains for the MCMC (default: 4)\n"
-          << "  \t--iter [INT]\t\t             Define the number of iterations for the MCMC (default: 1.000.000)\n"
+          << "  \t--chains [INT]\t\t             Define the number of chains for the MCMC (default: 1)\n"
+          << "  \t--iter [INT]\t\t             Define the number of iterations for the MCMC (default: 10.000)\n"
           << "  \t--randStart [bool]          Set to get random starting nodes in the tree instead of the signature nodes (default: false)\n"
-          << "  \t--burnin [INT]\t\t             Define the burn-in period for the MCMC (default: 100.000)\n"
+          << "  \t--burnin [INT]\t\t             Define the burn-in period for the MCMC (default: 100)\n"
           << "Initialization options:\n"
           << "  \t--library-type [STR] \t\t     Strand-specific library type (fr: read1 forward, rf: read1 reverse) (default: unstranded)\n"
           << "Contamination Mode Options:\n"
-          << "  \t--contamination-mode, --cont-mode    Enable contamination mode, requires exactly two sources\n"
-          << "  \t--is-ancient [BOOL_VECTOR]   Assignments of sources, represented as a boolean vector, comma-delimited, where 1 means ancient (e.g. 0,1).\n";
+          << "  \t--contamination-mode, --cont-mode    Requires exactly two sources. Accepted for compatibility; it no longer changes the likelihood (use --is-ancient)\n"
+          << "  \t--is-ancient [BOOL_VECTOR]   One 0/1 per source (-k entries), comma-delimited, where 1 means ancient and 0 modern (e.g. 1,0). Default: all 1.\n";
 
     return usage.str();
+}
+
+// bam2prof writes "-nan" (0/0) at positions where no C/G was observed. The standalone safari mapper that TrailMix runs as a
+// subprocess (dep/safari_vg/bin/vg, prebuilt, not part of this source tree) cannot parse it ("Libgab.cpp: destringify() Unable to
+// convert string="-nan"") and the whole run aborted right after the GBWT was loaded. vgan's own loader now reads nan as 0, but
+// safari is handed the profile FILE, so write a copy with every nan field replaced by 0 into the run's temporary directory and use
+// that copy for both. A profile without nan is returned unchanged (same path, nothing written).
+static string sanitize_damage_profile(const string &path, const string &tmpdir, const string &tag) {
+    igzstream in;
+    in.open(path.c_str(), ios::in);
+    if (!in.good()) { return path; }          // let the normal loader report the problem
+    vector<string> lines;
+    string line;
+    unsigned long replaced = 0;
+    while (getline(in, line)) {
+        string out;
+        size_t start = 0;
+        while (true) {
+            size_t tab = line.find('\t', start);
+            string tok = line.substr(start, tab == string::npos ? string::npos : tab - start);
+            string low = tok;
+            for (auto &ch : low) { ch = tolower(static_cast<unsigned char>(ch)); }
+            if (low == "nan" || low == "-nan" || low == "+nan") { tok = "0"; ++replaced; }
+            out += tok;
+            if (tab == string::npos) { break; }
+            out += '\t';
+            start = tab + 1;
+        }
+        lines.emplace_back(out);
+    }
+    in.close();
+    if (replaced == 0) { return path; }
+    const string newpath = tmpdir + tag + ".prof";
+    ofstream outf(newpath);
+    if (!outf) { return path; }
+    for (const auto &l : lines) { outf << l << "\n"; }
+    outf.close();
+    cerr << "[TrailMix] Warning: " << replaced << " 'nan' entries in the damage profile " << path
+         << " (positions without C/G observations) were set to 0; using the copy " << newpath << endl;
+    return newpath;
 }
 
 const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
@@ -465,6 +503,7 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     // sedaDNA mixtures of two ancient individuals, both carrying the same
     // blended deamination profile) needs both sources damage-aware.
     std::vector<bool> isAncient = {true, true};
+    bool isAncientSpecified = false;   // set by --is-ancient; otherwise the vector is resized to k entries (all ancient) below
     string deam5pfreqE  = getFullPath(cwdProg+"../share/vgan/damageProfiles/none.prof");
     string deam3pfreqE  =  getFullPath(cwdProg+"../share/vgan/damageProfiles/none.prof");
     string none_prof = getFullPath(cwdProg+"../share/vgan/damageProfiles/none.prof");
@@ -631,6 +670,7 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
        if (std::string(argv[i]) == "--is-ancient") {
         if(i + 1 < argc) {
             isAncient = parseBoolVector(argv[++i], ','); // Assume parseBoolVector is correct
+            isAncientSpecified = true;
         } else {
             throw std::runtime_error(std::string("Option ") + argv[i] + " requires an argument.");
         }
@@ -663,6 +703,16 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     //Haplocart hc;
     //dta->running_trailmix=true;
 
+    // One ancient/modern flag per source. The default vector has two entries, so with k >= 3 the likelihood read
+    // is_ancient_vec[2] past the end of the vector. Default: every source ancient; a user-supplied vector must have k entries.
+    if (!isAncientSpecified) {
+        isAncient.assign(k, true);
+    } else if (isAncient.size() < k) {
+        throw runtime_error("[TrailMix] --is-ancient has " + to_string(isAncient.size()) + " entries but -k is " + to_string(k) + "; give one 0/1 per source");
+    } else if (isAncient.size() > k) {
+        cerr << "[TrailMix] Warning: --is-ancient has more entries (" << isAncient.size() << ") than sources (" << k << "); extra entries ignored" << endl;
+        isAncient.resize(k);
+    }
     dta->is_ancient_vec = isAncient;
     dta->strand_specific = strand_specific;
     dta->strand_specific_library_type = strand_specific_library_type;
@@ -707,6 +757,8 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     dta->graph_prefix=graph_prefix;
     dta->graph_dir = graph_dir;
     readPHG(dta);
+    deam5pfreqE = sanitize_damage_profile(deam5pfreqE, dta->tmpdir, "deam5p_nan_to_0");
+    deam3pfreqE = sanitize_damage_profile(deam3pfreqE, dta->tmpdir, "deam3p_nan_to_0");
     dta->deam5pfreqE = deam5pfreqE;
     dta->deam3pfreqE = deam3pfreqE;
     dta->dmg.initDeamProbabilities(deam5pfreqE,deam3pfreqE);

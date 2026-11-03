@@ -168,6 +168,11 @@ static void readNucSubstitionRatesFreq(const string filename,vector<substitution
 	}
 
 
+	// Damage profiles written by bam2prof contain "-nan" (0/0) at positions where no C/G was observed. destringify<long double>()
+	// throws on "-nan" ("Unable to convert string"), which aborted the whole run after the database had been loaded. Those entries
+	// are read as 0 (no deamination observed at that position) and the number of replaced entries is reported once below.
+	unsigned long nanEntries = 0;
+
 	//probs
 	while ( getline (subFP,line)){
 
@@ -183,7 +188,17 @@ static void readNucSubstitionRatesFreq(const string filename,vector<substitution
 
 	    for(unsigned int k=0;k<12;k++){
 		//for(unsigned int t=0;t<=2;t++){
-		tempFreq.s[k]=destringify<long double>(fields[k]);
+		// OLD: tempFreq.s[k]=destringify<long double>(fields[k]);
+		{
+		    string tok = fields[k];
+		    for (auto &ch : tok) { ch = tolower(static_cast<unsigned char>(ch)); }
+		    if (tok == "nan" || tok == "-nan" || tok == "+nan") {
+			tempFreq.s[k] = 0.0;
+			++nanEntries;
+		    } else {
+			tempFreq.s[k]=destringify<long double>(fields[k]);
+		    }
+		}
 		//}
 	    }
 
@@ -192,6 +207,10 @@ static void readNucSubstitionRatesFreq(const string filename,vector<substitution
 	    subVec.emplace_back( tempFreq );
 	}
 	subFP.close();
+	if (nanEntries > 0) {
+	    cerr << "Warning: " << nanEntries << " 'nan' entries in the damage profile " << filename
+		 << " (positions without C/G observations) were read as 0." << endl;
+	}
     }else{
 	throw std::runtime_error("Unable to open file "+filename);
     }

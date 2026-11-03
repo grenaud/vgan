@@ -131,6 +131,25 @@ public:
 
 
 
+    // =================================================================================================================
+    // SOIBEAN FIX [FIX 5] -- ported from the TrailMix overload below (see also the [FIX 1-4] notes above analyse_GAM in
+    // getLCAfromGAM.h, which produces the per-base data used here).
+    //
+    // Per-base likelihood of the read base given the reference base of this path and the time t spent on the branch:
+    //     P(read | ref, t) = SUM_bs  P_HKY(bs | ref, t) * P(read | bs)
+    // P_HKY is computed below. P(read | bs) = deamination then sequencing error, for each of the four possible
+    // post-mutation bases bs, comes precomputed from analyse_GAM in detail.damageSeqErrProb[bs].
+    //
+    // What was wrong:
+    //   (1) The loop that combined the HKY probabilities used  (1 - branch_len)  when the base matched and  branch_len/3
+    //       when it did not. branch_len is `con`, which soibean.cpp sets to the SHORTEST BRANCH OF THE REFERENCE TREE
+    //       (or 0.01). That is a property of how finely the tree is resolved, not of this read, its quality, or its
+    //       damage; it was standing in for a sequencing error rate.
+    //   (2) detail.logLikelihood was then added. That value came from analyse_GAM, where the damage term always summed to
+    //       exactly 1 (log = 0), so the damage profile never influenced the result.
+    //   Both are replaced by the sum over bs above, which contains sequencing error and damage in the right order.
+    //   The branch_len argument is kept so the callers do not change, but it is no longer used.
+    // =================================================================================================================
     inline double computeBaseLogLike(const AlignmentInfo* read, RunTreeProportionParams &params, const int basevec, const int base, const string &pathName, const double t, const double branch_len)
     {
         // Store the repeated map lookup in a reference
@@ -277,16 +296,22 @@ public:
             }
         } // end filling probability matrix.
 
-        double log_lik_marg = -std::numeric_limits<double>::infinity();
-        for (int bpd = 0; bpd < 4; bpd++) {
-            if ("ACGT"[bpd] == readb) {
-                log_lik_marg = oplusInitnatl(log_lik_marg, (log(probBaseHKY[bpd])  + log((1 -branch_len) ))); //+ log((1- (branch_len*0.1)) )
-                
-            } else {
-                log_lik_marg = oplusInitnatl(log_lik_marg, (log(probBaseHKY[bpd])  + log((branch_len/3)))); //+ log(((branch_len*0.1)/3))
-                
-            }
+        // [FIX 5] sum over the post-mutation base bs of  P_HKY(bs | ref, t) * P(read | bs)  (see the explanation above)
+        // OLD: double log_lik_marg = -std::numeric_limits<double>::infinity();
+        // OLD: for (int bpd = 0; bpd < 4; bpd++) {
+        // OLD: if ("ACGT"[bpd] == readb) {
+        // OLD: log_lik_marg = oplusInitnatl(log_lik_marg, (log(probBaseHKY[bpd])  + log((1 -branch_len) ))); //+ log((1- (branch_len*0.1)) )
+        // OLD:
+        // OLD: } else {
+        // OLD: log_lik_marg = oplusInitnatl(log_lik_marg, (log(probBaseHKY[bpd])  + log((branch_len/3)))); //+ log(((branch_len*0.1)/3))
+        // OLD:
+        // OLD: }
+        // OLD: }
+        double prob_total = 0.0;
+        for (int bs = 0; bs < 4; bs++) {
+            prob_total += probBaseHKY[bs] * detail.damageSeqErrProb[bs];
         }
+        double log_lik_marg = log(prob_total);
         if (log_lik_marg > 1e-8){
             log_lik_marg = log(0.999999999);
         }
@@ -309,7 +334,9 @@ public:
         cerr << setprecision(15) << "detail map log like " << detail.logLikelihood << endl;
         //if (readb != refb){throw std::runtime_error("Mismatch ");}
 #endif
-        log_lik_marg = log_lik_marg + detail.logLikelihood;
+        // [FIX 5] the precomputed scalar (detail.logLikelihood) is NOT added any more: the damage and sequencing-error evidence
+        // is already inside prob_total above, adding it again would count it twice.
+        // OLD: log_lik_marg = log_lik_marg + detail.logLikelihood;
         if (isnan(log_lik_marg) || isinf(log_lik_marg) || log_lik_marg > 1e-8){
             cerr << setprecision(15) << "log_lik_marg:" << log_lik_marg << " p=" << exp(log_lik_marg) << endl;
             cerr << setprecision(15) << "detail map log like " << detail.logLikelihood << endl;
@@ -339,7 +366,13 @@ public:
         const char refb = detail.referenceBase;
         const char readb = detail.readBase;
 
-        if (readb == 'S' || refb == 'S' || readb == 'N' || refb == 'N' || readb == '-' || refb == '-'){return log(1e-9);}
+        // Soft-clipped / N / gap columns on a supported path have no HKY term. They used to return log(1e-9) = -20.7 per column,
+        // far worse than the same column on an UNSUPPORTED path (~0), so a read with a soft clip or an indel made the true path
+        // look worse than the others. Since the Figure-2 change they must use the precomputed per-column likelihood from
+        // precompute_GAM (log(0.02) for a gap, log((1-q)/3) + log(P(correctly mapped)) for N and S), which is what the
+        // likelihood used before, when log(1e-9) was added on top of it as a value close to probability 1.
+        // OLD: if (readb == 'S' || refb == 'S' || readb == 'N' || refb == 'N' || readb == '-' || refb == '-'){return log(1e-9);}
+        if (readb == 'S' || refb == 'S' || readb == 'N' || refb == 'N' || readb == '-' || refb == '-'){return detail.logLikelihood;}
 
 #ifdef DEBUGPAIN3  // Debugging block start
         cerr << "Debugging Information START" << endl;
@@ -523,6 +556,12 @@ public:
 
 //cerr << setprecision(15) << "log_lik_marg:" << log_lik_marg << " p=" << exp(log_lik_marg) << endl;
 
+        // NOTE on MAPQ / GenMap mappability: they are deliberately NOT added here. Adding log(P(correctly mapped)) + log(mappability)
+        // to every supported base (the old behavior, before the Figure-2 change) was tried again and breaks the placements: for a
+        // low-MAPQ read it sums to hundreds of log units over the read, which then hits the per-read clamp in
+        // MCMC::run_tree_proportion (log 1e-10) for EVERY path, so such reads carry no information (L2a1d + U6a6a became
+        // Neanderthal_Stajnia + Node6, mean logL -21.9k -> -63.9k). The manuscript describes a per-base mixture, not a product;
+        // see CLAUDE.md before changing this.
         return log_lik_marg;
     }
 

@@ -592,6 +592,11 @@ const int soibean::run(int argc, char *argv[], const string & cwdProg)
             parentMap[taxatree.nodes[j]->longname] = taxatree.nodes[j]->parent->longname;
         }   
     }
+    // NOTE (soibean damage-model fix): `con` (the shortest branch of the reference tree, or 0.01) used to be plugged into the
+    // per-base likelihood in MCMC::computeBaseLogLike as if it were a sequencing error rate: (1 - con) for a matching base,
+    // con/3 for a mismatching one. That number says nothing about the read, its quality scores or its damage, so it was
+    // removed from the likelihood (see [FIX 5] in MCMC.h and [FIX 4] in getLCAfromGAM.h). `con` is still computed and passed
+    // along so the function signatures stay unchanged, but nothing uses its value any more.
     if (shortestBranch != 0 && shortestBranch < 1){
         con = shortestBranch;
     }else{
