@@ -457,8 +457,8 @@ static string sanitize_damage_profile(const string &path, const string &tmpdir, 
     if (!outf) { return path; }
     for (const auto &l : lines) { outf << l << "\n"; }
     outf.close();
-    cerr << "[TrailMix] Warning: " << replaced << " 'nan' entries in the damage profile " << path
-         << " (positions without C/G observations) were set to 0; using the copy " << newpath << endl;
+    cerr << "[WARNING] " << replaced << " 'nan' entries in the damage profile " << path
+         << " (positions without C/G observations) were interpreted as 0; using the copy " << newpath << endl;
     return newpath;
 }
 

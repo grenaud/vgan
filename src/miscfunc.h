@@ -208,8 +208,8 @@ static void readNucSubstitionRatesFreq(const string filename,vector<substitution
 	}
 	subFP.close();
 	if (nanEntries > 0) {
-	    cerr << "Warning: " << nanEntries << " 'nan' entries in the damage profile " << filename
-		 << " (positions without C/G observations) were read as 0." << endl;
+	    cerr << "[WARNING] " << nanEntries << " 'nan' entries in the damage profile " << filename
+		 << " (positions without C/G observations) were interpreted as 0." << endl;
 	}
     }else{
 	throw std::runtime_error("Unable to open file "+filename);
