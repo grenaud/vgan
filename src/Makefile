@@ -100,18 +100,21 @@ autocomp:
 #${VGDIR}include/vg/vg.pb.h vgmade: ${VGDIR}
 #	(cd ${VGDIR} && git checkout de51eb534394bb93a406baa809ac079ed2223eeb && . ./source_me.sh && ${MAKE} -j ${NPROCS}) && touch vgmade
 
+# The database files are .tar.gz archives on Google Drive; each unpacks into a folder of the same name in ../share/vgan/
+GDRIVE = https://drive.usercontent.google.com/download
+
 hcfiles hcfilesmade: vgmade
-	wget -nc -l1 --recursive --no-parent -P ../share/vgan/ ftp://ftp.healthtech.dtu.dk:/public/haplocart/hcfiles/ && \
-        mv -fv ../share/vgan/ftp.healthtech.dtu.dk/public/haplocart/hcfiles/* ../share/vgan/hcfiles && rm -rf ../share/vgan/ftp.healthtech.dtu.dk && touch hcfilesmade
+	wget -O ../share/vgan/hcfiles.tar.gz "${GDRIVE}?id=1gPue0IKdEz3UpY2KMbAHnXZXKvEcCdmQ&export=download&confirm=t" && \
+	tar -xzf ../share/vgan/hcfiles.tar.gz -C ../share/vgan/ && rm -f ../share/vgan/hcfiles.tar.gz && touch hcfilesmade
 
 eukafiles eukafilesmade: vgmade
-	wget -nc -l0 --recursive --no-parent -P ../share/vgan/ ftp://ftp.healthtech.dtu.dk:/public/euka_files/ && \
-	mv -fv ../share/vgan/ftp.healthtech.dtu.dk/public/euka_files/* ../share/vgan/euka_dir && rm -rf ../share/vgan/ftp.healthtech.dtu.dk && touch eukafilesmade
+	wget -O ../share/vgan/euka_dir.tar.gz "${GDRIVE}?id=1cHDZujMQaMiJxZHhSD56BqlziJWthhPk&export=download&confirm=t" && \
+	tar -xzf ../share/vgan/euka_dir.tar.gz -C ../share/vgan/ && rm -f ../share/vgan/euka_dir.tar.gz && touch eukafilesmade
 
 soibeanfiles soibeanfilesmade: vgmade
 	rm -rf ../share/vgan/soibean_dir/tree_dir
-	wget -nc -l0 --recursive --no-parent -P ../share/vgan/ ftp://ftp.healthtech.dtu.dk:/public/soibean_files/ && \
-	mv -fv ../share/vgan/ftp.healthtech.dtu.dk/public/soibean_files/* ../share/vgan/soibean_dir && rm -rf ../share/vgan/ftp.healthtech.dtu.dk && touch soibeanfilesmade
+	wget -O ../share/vgan/soibean_dir.tar.gz "${GDRIVE}?id=1Hzjs4Bc8V71OYp8vY7waI2Q2x4vi8fSP&export=download&confirm=t" && \
+	tar -xzf ../share/vgan/soibean_dir.tar.gz -C ../share/vgan/ && rm -f ../share/vgan/soibean_dir.tar.gz && touch soibeanfilesmade
 
 ../lib/libgab/libgab.a: libgabmade
 	echo ""

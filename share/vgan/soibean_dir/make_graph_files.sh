@@ -92,9 +92,7 @@ CLADE_FILE="${SCRIPT_DIR}/soibean_db.clade"
 # Check for the soibean_db.clade file, download if not exists
 if [ ! -f "$CLADE_FILE" ]; then
     echo "soibean_db.clade file not found. Downloading..."
-    wget -nc --recursive --no-parent -P "${SCRIPT_DIR}" ftp://ftp.healthtech.dtu.dk:/public/soibean_files/soibean_db.clade
-    mv ftp.healthtech.dtu.dk/public/soibean_files/soibean_db.clade ${SCRIPT_DIR} 
-    rm -r ftp.healthtech.dtu.dk/public/soibean_files/
+    wget -O "${CLADE_FILE}" https://raw.githubusercontent.com/grenaud/vgan/main/share/vgan/soibean_dir/soibean_db.clade
 else
     echo ""
 fi
