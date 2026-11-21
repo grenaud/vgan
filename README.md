@@ -82,7 +82,7 @@ The database files are hosted on Google Drive as `.tar.gz` archives. Each archiv
 | `hcfiles.tar.gz` | 91 MB | [HaploCart](#haplocart) | [download](https://drive.google.com/file/d/1gPue0IKdEz3UpY2KMbAHnXZXKvEcCdmQ/view?usp=sharing) |
 | `soibean_dir.tar.gz` | 459 MB | [soibean](#soibean) | [download](https://drive.google.com/file/d/1Hzjs4Bc8V71OYp8vY7waI2Q2x4vi8fSP/view?usp=sharing) |
 | `tmfiles.tar.gz` | 558 MB | [TrailMix](#trailmix) | [download](https://drive.google.com/file/d/1jPs3artDM_tpKSo0WQgDrqnV9WIk3_Nh/view?usp=sharing) |
-| `publication_tmfiles.tar.gz` | 2.4 MB | [TrailMix](#trailmix) (database of the publication) | [download](https://drive.google.com/file/d/1VrFP9ImM7ocN5HR0ppVp2Kp2aVmUo7fX/view?usp=sharing) |
+| `publication_tmfiles.tar.gz` | 2.9 MB | [TrailMix](#trailmix) (database of the publication) | [download](https://drive.google.com/file/d/1VN4AWAj2J-YQ-5NZXcXTxSTBJiYHaOFB/view?usp=sharing) |
 
 You can download in a browser from these links. To download on the command line, each section below has a `curl` command for its archive; `gdown [file id]` (`pip install gdown`) works as well. The `.tar.gz` can be deleted after unpacking.
 
@@ -695,7 +695,7 @@ The database of the publication is a separate archive. Its files start with `pub
 
 ```
 cd $HOME/share/vgan
-curl -L -o publication_tmfiles.tar.gz "https://drive.usercontent.google.com/download?id=1VrFP9ImM7ocN5HR0ppVp2Kp2aVmUo7fX&export=download&confirm=t"
+curl -L -o publication_tmfiles.tar.gz "https://drive.usercontent.google.com/download?id=1VN4AWAj2J-YQ-5NZXcXTxSTBJiYHaOFB&export=download&confirm=t"
 tar -xzf publication_tmfiles.tar.gz && rm publication_tmfiles.tar.gz
 ```
 
