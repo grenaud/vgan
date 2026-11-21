@@ -59,6 +59,11 @@ if [ ! -f "$VG_DIR/lib/libvg.a" ]; then
     say "vg $PINNED_VG_COMMIT (the long step)"
     [ -d "$VG_DIR/.git" ] || git clone https://github.com/vgteam/vg.git "$VG_DIR"
     git -C "$VG_DIR" checkout "$PINNED_VG_COMMIT"
+    # vg's cairo and pixman submodules use git://anongit.freedesktop.org, which is blocked by many firewalls (the clone then
+    # hangs without an error). The gitlab mirrors have the same commits and use https.
+    git -C "$VG_DIR" submodule init deps/cairo deps/pixman
+    git -C "$VG_DIR" config submodule.deps/cairo.url https://gitlab.freedesktop.org/cairo/cairo.git
+    git -C "$VG_DIR" config submodule.deps/pixman.url https://gitlab.freedesktop.org/pixman/pixman.git
     git -C "$VG_DIR" submodule update --init --recursive
     $NICE make -C "$VG_DIR" -j"$JOBS" lib/libvg.a
 fi
