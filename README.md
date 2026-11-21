@@ -24,41 +24,47 @@ Paths below assume the vgan folder structure in `$HOME/share/vgan/` (created in 
 
 ### Release build (recommended)
 
-The easiest way to run vgan is to download the static binary.
+The easiest way to run vgan is the static binary of a [release](https://github.com/grenaud/vgan/releases). It is a single file for **Linux on x86_64** (64-bit Intel/AMD; `uname -m` prints `x86_64`) with no dependencies: no compiler, no libraries, no root. It does not run on macOS or on ARM machines (including Apple silicon and Raspberry Pi); use [Bioconda](#bioconda) or [build from source](#building-vgan-from-source) there.
 
-**Step 1**: Download the static binary.
+**Where vgan looks for its files.** vgan finds its database files relative to the folder that holds the executable: the databases in `../share/vgan/` and, for TrailMix, the SAFARI mapper in `../dep/safari_vg/bin/vg`. If the executable is `$HOME/bin/vgan`, that is `$HOME/share/vgan/` and `$HOME/dep/safari_vg/bin/vg`, which is what the steps below create. A symbolic link is followed to the real file, so link to `vgan` from elsewhere if you like, but keep the real file next to the `share` and `dep` folders. The database folders can also be given with `--euka_dir`, `--hc-files`, `--soibean_dir` and `--tm-files`; the SAFARI mapper and the default damage profile `share/vgan/damageProfiles/none.prof` cannot be moved.
 
-The list of releases is here: https://github.com/grenaud/vgan/tags. Each release comes with a static binary. Find the URL of the static binary by right-clicking and selecting "copy link"
-
-```
-wget [URL TO RELEASE BINARY]
-```
-
-Where you paste the URL of the binary, copy the executable in a bin/ directory in your home directory:
+**Step 1**: Download the binary. Use `curl -L` (the link redirects; without `-L` you save a small HTML file instead of the program).
 
 ```
-mkdir -p $HOME/bin/
-cp vgan $HOME/bin/
-```
-
-**Step 2**: Mark the binary executable:
-
-```
+mkdir -p $HOME/bin
+curl -L -o $HOME/bin/vgan https://github.com/grenaud/vgan/releases/download/v4.0.0/vgan-linux-x86_64
 chmod +x $HOME/bin/vgan
 ```
+
+The release page lists the SHA-256 of the file. Compare it with `sha256sum $HOME/bin/vgan`. Older releases are listed at https://github.com/grenaud/vgan/tags.
+
+**Step 2**: Put the folder on your `PATH` (add the second line to `~/.bashrc` to keep it) and test:
+
+```
+export PATH=$HOME/bin:$PATH
+vgan version
+```
+
+This should print the version (`vgan v4.0.0`) and nothing else. If you get `Permission denied`, the `chmod` was skipped, or the folder is on a file system mounted `noexec` (use another folder, for example one in `/opt` or `/scratch`). `cannot execute binary file: Exec format error` means the machine is not x86_64. An output of a few bytes or an error that mentions HTML means the download did not follow the redirect.
 
 **Step 3**: Create the vgan folder structure:
 
 ```
-mkdir -p $HOME/share/vgan/euka_dir/
-mkdir -p $HOME/share/vgan/hcfiles/
-mkdir -p $HOME/share/vgan/soibean_dir/
-mkdir -p $HOME/share/vgan/tmfiles/
-mkdir -p $HOME/share/vgan/damageProfiles/
-mkdir -p $HOME/share/vgan/plottingScripts/
+mkdir -p $HOME/share/vgan/{euka_dir,hcfiles,soibean_dir,tmfiles,damageProfiles,plottingScripts}
+mkdir -p $HOME/dep/safari_vg/bin
+wget -O $HOME/share/vgan/damageProfiles/none.prof https://raw.githubusercontent.com/grenaud/vgan/main/share/vgan/damageProfiles/none.prof
 ```
 
-Once the folder structure is created, download the database files of the subcommands you want to use, see [Database files](#database-files).
+`none.prof` ("no damage") is the damage profile that euka, soibean and TrailMix use when you do not give one with `--deam5p`/`--deam3p`.
+
+**Step 4** (TrailMix only): Download the SAFARI mapper, a separate 790 MB static program that TrailMix starts to map the reads. HaploCart, euka and soibean do not need it.
+
+```
+curl -L -o $HOME/dep/safari_vg/bin/vg https://github.com/grenaud/SAFARI/releases/download/v1.0.1/vg
+chmod +x $HOME/dep/safari_vg/bin/vg
+```
+
+**Step 5**: Download the database files of the subcommands you want to use, see [Database files](#database-files). To try TrailMix, continue with the [TrailMix quick start](#trailmix-quick-start).
 
 ### Bioconda
 
@@ -70,7 +76,7 @@ To install vgan, use:
 conda install -c bioconda vgan
 ```
 
-When using vgan via conda, you also must download the database files, see [Database files](#database-files). You can find detailed instructions for each subcommand in its section below.
+When using vgan via conda, you also must download the database files, see [Database files](#database-files). vgan looks for them relative to its executable, so with conda the folders are `$CONDA_PREFIX/share/vgan/` (and `$CONDA_PREFIX/dep/safari_vg/bin/vg` for TrailMix), not `$HOME/share/vgan/`; or point to the folders with `--euka_dir`, `--hc-files`, `--soibean_dir` and `--tm-files`. The Bioconda package can be older than the latest release (check `vgan version`); for TrailMix use the release binary or build from source. You can find detailed instructions for each subcommand in its section below.
 
 ### Database files
 
@@ -84,13 +90,38 @@ The database files are hosted on Google Drive as `.tar.gz` archives. Each archiv
 | `tmfiles.tar.gz` | 558 MB | [TrailMix](#trailmix) | [download](https://drive.google.com/file/d/1jPs3artDM_tpKSo0WQgDrqnV9WIk3_Nh/view?usp=sharing) |
 | `publication_tmfiles.tar.gz` | 2.9 MB | [TrailMix](#trailmix) (database of the publication) | [download](https://drive.google.com/file/d/1VN4AWAj2J-YQ-5NZXcXTxSTBJiYHaOFB/view?usp=sharing) |
 
-You can download in a browser from these links. To download on the command line, each section below has a `curl` command for its archive; `gdown [file id]` (`pip install gdown`) works as well. The `.tar.gz` can be deleted after unpacking.
+**Download and unpack.** Each section below has the commands for its archive. They all have the same form, here for the publication database:
+
+```
+cd $HOME/share/vgan
+curl -L -o publication_tmfiles.tar.gz "https://drive.usercontent.google.com/download?id=1VN4AWAj2J-YQ-5NZXcXTxSTBJiYHaOFB&export=download&confirm=t"
+tar -xzf publication_tmfiles.tar.gz && rm publication_tmfiles.tar.gz
+ls publication_tmfiles
+```
+
+You can also download in a browser from the links in the table, and `gdown [file id]` (`pip install gdown`) works as well. The `.tar.gz` can be deleted after unpacking. If `tar` says `not in gzip format`, Google returned a web page instead of the file (the file has been downloaded too often in the last 24 hours, or it is not shared): download it in a browser and copy it over, or use `gdown`.
+
+**Disk space.** Unpacked, the folders take 8.9 GB (`euka_dir`, 6.9 GB of it is the distance index), 0.3 GB (`hcfiles`), 1.5 GB (`soibean_dir`), 1.7 GB (`tmfiles`) and 13 MB (`publication_tmfiles`); the archives are smaller. Leave room for the archive as well, until you delete it. TrailMix also writes temporary files to `/tmp/` (or the folder given with `-z`).
+
+**Permissions.** Unpack the databases into a folder that you own and can write to. Two things need write access, and a read-only copy fails without a helpful message:
+* TrailMix opens the distance index of its database (`pub.graph.dist`, `graph.dist`) for writing, although it does not change the contents. Without write permission on that file the mapper stops with a bare `Permission denied` and TrailMix reports `no reads found in GAM file`. Euka has the same requirement for `euka_db.dist`.
+* On first use, HaploCart, euka and soibean write two cache files (`*.shortread.withzip.min` and `*.shortread.zipcodes`) next to the graph in the database folder. If the folder is not writable, the run aborts. The files are created once, so the first run takes longer (HaploCart: about 15 seconds more); later runs only read them.
+
+If you unpacked the archive as another user (for example as root) or you share one copy between users:
+
+```
+chown -R $USER $HOME/share/vgan/publication_tmfiles          # if another user owns the files
+chmod -R u+rwX,go+rX $HOME/share/vgan/publication_tmfiles    # read for everybody, write for the owner
+chmod g+w $HOME/share/vgan/publication_tmfiles/*.dist       # shared by a group: that group needs write on the index
+```
+
+In the folder `$HOME/share/vgan/damageProfiles/`, `none.prof` must exist (see the release build, step 3), even if you give your own damage profiles.
 
 ### Building vgan from source
 
 vgan links against vg internals, so the build is more than `make`: it needs libgab, spimap, rpvg (our fork [grenaud/rpvg](https://github.com/grenaud/rpvg), tag `vgan-1`), one exact commit of vg (`6193310e3`,
 v1.75.0-258) and, for TrailMix, the SAFARI binary. `build_deps.sh` fetches and builds all of them and then vgan. Tested on Ubuntu 24.04
-(g++ 13.3) and on a desktop with g++ 15.2.
+(g++ 13.3) and on a desktop with g++ 15.2; older compilers were not tried. You need Linux, `git`, about 3 GB of free disk space and internet access during the build (GitHub and gitlab.freedesktop.org). Everything is built inside the clone; nothing is installed system-wide.
 
 **1. System packages**
 
@@ -130,7 +161,13 @@ cd vgan && ./build_deps.sh        # JOBS=8 sets the number of parallel jobs; it 
 
 The result is `bin/vgan`. After a change to vgan itself, `make -C src vgan` is enough.
 
-**3. Database files** are downloaded separately, see [Database files](#database-files). A quick test: `bin/vgan haplocart -f test/input_files/rCRS.fa`.
+**3. Database files** are downloaded separately, see [Database files](#database-files). Inside the clone they go to `share/vgan/`, the same layout as in the release build; `build_deps.sh` has already put the SAFARI mapper (TrailMix) in `dep/safari_vg/bin/vg`. A quick test, from the `vgan` folder:
+
+```
+export PATH=$PWD/bin:$PATH
+make -C src hcfilesmade              # downloads and unpacks the HaploCart database (91 MB)
+vgan haplocart -f test/input_files/rCRS.fa
+```
 
 If you build from source, you can download the requisite files for HaploCart (from the `src` directory) with
 
@@ -158,7 +195,15 @@ make soibeanfilesmade
 
 ### Potential issues
 
-vgan requires VG as a dependency. If there are issues with making vg, please see https://github.com/vgteam/vg for further documentation. vg requires several packages to install.
+- `build_deps.sh` stops at the start with `missing: ...`: install those packages (step 1), or use the no-sudo recipe.
+- `make vgan` in `src/` stops with `error: ... is missing. Run ../build_deps.sh first`: the dependencies are not built yet. Run `./build_deps.sh` from the vgan folder; do not run `make` in `src/` first.
+- The build stops or the machine runs out of memory: use fewer parallel jobs, `JOBS=2 ./build_deps.sh`. The script can be started again at any time; it skips the steps that are finished. After a change in the vgan sources, `make -C src vgan` is enough.
+- Cloning vg's submodules hangs: the script already uses `https://gitlab.freedesktop.org/` for cairo and pixman (vg itself asks for `git://`, which many firewalls block). Do not interrupt a submodule clone: it leaves empty working folders. If that happened, run `git reset --hard HEAD` inside that folder under `vg_newest/deps/`, then `git -C vg_newest submodule update --init --recursive`, then start the script again.
+- `gzstream/version: invalid digit "8" in octal constant`: a file in libgab shadows the C++20 header `<version>`. The script renames it; if you build libgab yourself, rename `lib/libgab/gzstream/version` to `version.txt`.
+- No sudo: see the "No sudo" block above. `meson` and `ninja` are needed to build vg's cairo and pixman, and they are the packages that most often are missing.
+- The pinned vg commit (`6193310e3`) matters: vgan's index formats and link flags were verified against it only. Other vg versions are not supported.
+
+If vg itself does not build, see https://github.com/vgteam/vg for further documentation.
 
 ---
 
@@ -698,7 +743,7 @@ TrailMix deconvolves a mixture of hominin mitochondrial DNA from ancient sedimen
 
 ### TrailMix download instructions
 
-The default database is `tmfiles`; vgan looks for it in `$HOME/share/vgan/tmfiles/` (or the folder given with `--tm-files`).
+TrailMix needs the SAFARI mapper (`$HOME/dep/safari_vg/bin/vg`, release build step 4; `build_deps.sh` installs it for a source build) and `none.prof` (release build step 3), in addition to a database. The default database is `tmfiles`; vgan looks for it in `$HOME/share/vgan/tmfiles/` (or the folder given with `--tm-files`).
 
 ```
 cd $HOME/share/vgan
@@ -719,6 +764,53 @@ To download the plotting script (it needs Python with numpy, pandas, biopython, 
 ```
 wget -O $HOME/share/vgan/plottingScripts/plot_trailmix_trees.py https://raw.githubusercontent.com/grenaud/vgan/main/share/vgan/plottingScripts/plot_trailmix_trees.py
 ```
+
+### TrailMix quick start
+
+This runs TrailMix on a small test mixture and plots the result. It needs the vgan binary, the SAFARI mapper (release build step 4, or `build_deps.sh`), `none.prof` (release build step 3), the publication database (above, 3 MB) and the plotting script with its Python packages. The test mixture is 782 single-end reads (mean length 65 bp) with deamination profiles for the 5' and 3' ends. With 4 threads it runs for about 7 minutes.
+
+```
+pip install numpy pandas biopython matplotlib scipy     # for the plot; any Python 3 will do
+
+mkdir -p $HOME/trailmix_test/out && cd $HOME/trailmix_test
+curl -L -o chagyrskaya8_mix_50_c4.fq.gz     "https://drive.usercontent.google.com/download?id=1vuIsxVg89i6ZhH9lQODmY0QxP1N4dVxn&export=download&confirm=t"
+curl -L -o chagyrskaya8_mix_50_c4_5p.prof   "https://drive.usercontent.google.com/download?id=1wqlIht6WqIMSaXM_yGCi21oftOVnvZ8o&export=download&confirm=t"
+curl -L -o chagyrskaya8_mix_50_c4_3p.prof   "https://drive.usercontent.google.com/download?id=17_BeeQ2aBnR5RiK7XwH2hKmjvh6G6gVW&export=download&confirm=t"
+
+vgan trailmix -t 4 -fq1 chagyrskaya8_mix_50_c4.fq.gz -k 2 --chains 4 --iter 20000 \
+  --deam5p chagyrskaya8_mix_50_c4_5p.prof --deam3p chagyrskaya8_mix_50_c4_3p.prof \
+  --tm-files $HOME/share/vgan/publication_tmfiles/ --dbprefix pub.graph -o out/qs_
+
+python3 $HOME/share/vgan/plottingScripts/plot_trailmix_trees.py out/qs_ --png --best-only
+```
+
+What the options mean: `-k 2` looks for two sources (contributors) in the mixture; `--chains 4 --iter 20000` runs four independent MCMC chains of 20,000 iterations, so that they can be compared; `--deam5p/--deam3p` give the deamination (damage) profiles of the 5' and 3' ends of the reads, without them TrailMix assumes no damage; `--tm-files` and `--dbprefix` select the publication database (without them, the default `tmfiles` database is used); `-o out/qs_` is a file name prefix, and the folder `out/` must exist. For a real sample use more iterations and chains, for example `--chains 5 --iter 100000`. The log ends with `[TrailMix] Wrote run summary`, and `out/` then holds the files described in [TrailMix output files](#trailmix-output-files). The plot script needs about 20 seconds and writes a PDF and (with `--png`) a PNG for every figure, using only the best-mixing chain with `--best-only`.
+
+**Interpretation.** The numbers below are from one run; yours differ in the second digit, because the chains use random numbers.
+
+The mixture proportions are in `out/qs_BaseProportionEstimates.txt` (one block per chain). They are 0.51 for `Node20` and 0.49 for `Neanderthal_Lescottes` (90% intervals 0.45 to 0.56 and 0.44 to 0.55). The file name says `mix_50`, and the estimates are close to that 50:50. The two sources are interchangeable in the sampler, so the order of the rows differs between chains.
+
+The placements are in `out/qs_BranchEstimate.txt`. Each source is placed on one branch of the database tree, named by the tip or the internal node at its end, together with a position along that branch (`Mean Pi`: 0 at the parent node, 1 at the node named in `Source`).
+* `Neanderthal_Lescottes` is the one Neanderthal contributor. All iterations put it on the branch to the tip `Neanderthal_Lescottes` (posterior probability 1.00), at about 0.27 of the way from the parent (interval 0.16 to 0.44). The database has no tip for Chagyrskaya 8 (the Neanderthal tips are Hohlenstein, Lescottes, Siberia and Stajnia), so the source is placed on the branch of the closest tip. The position along that branch tells how far the source has diverged from the ancestor of that tip.
+* `Node20` is a modern human source, placed on the internal branches next to the tips U2a1a, U4b1b1, U7a4 and U6a6a (panel a below). Its placement is much less certain. Its posterior is spread over the internal branches `Node20` (0.37), `Node22` (0.26), `Node21` (0.22) and four more branches (0.15 together), and its position along the branch is almost unconstrained (interval 0.02 to 0.97). The data do not pin down one branch or one position. The posterior says which branches are plausible; it is not a single best haplogroup.
+
+`out/qs_Diagnostics.txt` has R-hat, which compares the chains: both sources are at 1.001 (proportions) and 1.004 or lower (placements). Values below about 1.01 mean that the chains agree. The effective sample sizes in the same files (hundreds for the placements here) are small, so for a real sample, increase `--iter`.
+
+The first figure, `out/qs__chainBest_figure.png`, summarizes the best chain (in the file name `qs_` is followed by `_chainBest`):
+
+![TrailMix quick start: tree and posterior summaries](docs/images/trailmix_quickstart_figure.png)
+
+* **a**: the database tree with the posterior of each source drawn on the branch it landed on. The dot is the median position; its area is the posterior probability of that branch. The swelling along the branch is the posterior of the position along the branch. The best-supported tip is in bold. Here the orange source sits on the Neanderthal branch with a single large dot, and the blue source has several smaller dots on the internal branches next to U2a1a to U6a6a.
+* **b**: the posterior of the mixture proportions. The two sources overlap around 0.5, as the table says.
+* **c**: the posterior probability of every branch each source visited (the table above, as bars).
+* **d**: the trace of the proportions over the iterations. It should look like noise around a level, without trends or long stretches.
+* **e**: the mean proportion in every chain. The chains should agree; here they do.
+
+`out/qs__chainBest_combined_collapsed.png` (and `..._figure_collapsed.png`) draws the same tree with the lineages that no iteration landed in collapsed to a bar: the Denisovans, the Neanderthals, L0 to L6, M and N, whichever the run did not visit. The bar is labeled with the lineage and its number of tips, for example "M haplogroup (10)". Positions and branch lengths are those of the full tree. The collapsed figures are extra files; the full tree is always written.
+
+![Collapsed version of the tree](docs/images/trailmix_quickstart_tree_collapsed.png)
+
+`--no-collapsed` omits the collapsed figures. The plot script has more options (`--png`, `--layout`, `--keep`, ...); they are described at the top of the script.
 
 ### TrailMix usage
 
@@ -744,7 +836,7 @@ Algorithm parameters:
         -fq2 [STR]              FASTQ second input file (for paired-end reads)
         -g [STR]                GAM input file
         -k                      Number of distinct contributing haplogroups
-        -o [STR]                Output file prefix (default: TM_out)
+        -o [STR]                Output file prefix, not a folder; the folder it points into must exist (default: TM_out)
         --depth [INT]           Tree depth to whitelist the MCMC search space (-1 for no restriction)
 
 Non-algorithm parameters:
@@ -753,6 +845,10 @@ Non-algorithm parameters:
         -t                      Number of threads
         -v                      Verbose mode
         -z                      Temporary directory (default: /tmp/)
+
+Damage options:
+        --deam5p [STR]          5' deamination profile (default: share/vgan/damageProfiles/none.prof, no damage)
+        --deam3p [STR]          3' deamination profile (default: none.prof)
 
 Markov chain Monte Carlo options:
         --chains [INT]          Number of chains for the MCMC (default: 1)
