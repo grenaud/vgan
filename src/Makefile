@@ -89,65 +89,33 @@ autocomp:
 
 #.NOTPARALLEL: hcfiles libgab
 
-#vg vgmade:
-#	mkdir ${VGDIR}
-#	wget -nc -l0 --recursive --no-parent -P ${VGDIR} ftp://ftp.healthtech.dtu.dk:/public/vg/ && \
-#	mv -fv ${VGDIR}ftp.healthtech.dtu.dk/public/vg/* ${VGDIR} && rm -rf ${VGDIR}ftp.healthtech.dtu.dk && touch vgmade
-
-#${VGDIR}:
-#	rm -rf ${VGDIR} && git clone --recurse-submodules -j ${NPROCS} https://github.com/vgteam/vg.git ${VGDIR}
-
-#${VGDIR}include/vg/vg.pb.h vgmade: ${VGDIR}
-#	(cd ${VGDIR} && git checkout de51eb534394bb93a406baa809ac079ed2223eeb && . ./source_me.sh && ${MAKE} -j ${NPROCS}) && touch vgmade
-
 # The database files are .tar.gz archives on Google Drive; each unpacks into a folder of the same name in ../share/vgan/
 GDRIVE = https://drive.usercontent.google.com/download
 
-hcfiles hcfilesmade: vgmade
+hcfiles hcfilesmade:
 	wget -O ../share/vgan/hcfiles.tar.gz "${GDRIVE}?id=1gPue0IKdEz3UpY2KMbAHnXZXKvEcCdmQ&export=download&confirm=t" && \
 	tar -xzf ../share/vgan/hcfiles.tar.gz -C ../share/vgan/ && rm -f ../share/vgan/hcfiles.tar.gz && touch hcfilesmade
 
-eukafiles eukafilesmade: vgmade
+eukafiles eukafilesmade:
 	wget -O ../share/vgan/euka_dir.tar.gz "${GDRIVE}?id=1cHDZujMQaMiJxZHhSD56BqlziJWthhPk&export=download&confirm=t" && \
 	tar -xzf ../share/vgan/euka_dir.tar.gz -C ../share/vgan/ && rm -f ../share/vgan/euka_dir.tar.gz && touch eukafilesmade
 
-soibeanfiles soibeanfilesmade: vgmade
+soibeanfiles soibeanfilesmade:
 	rm -rf ../share/vgan/soibean_dir/tree_dir
 	wget -O ../share/vgan/soibean_dir.tar.gz "${GDRIVE}?id=1Hzjs4Bc8V71OYp8vY7waI2Q2x4vi8fSP&export=download&confirm=t" && \
 	tar -xzf ../share/vgan/soibean_dir.tar.gz -C ../share/vgan/ && rm -f ../share/vgan/soibean_dir.tar.gz && touch soibeanfilesmade
 
-../lib/libgab/libgab.a: libgabmade
-	echo ""
+# Dependencies (libgab, spimap, rpvg, vg) are fetched and built by ../build_deps.sh. make never downloads them;
+# if one is missing it stops here and says what to run.
+DEP_FILES = ../lib/libgab/libgab.a ../dep/rpvg/lib/librpvg.a ../dep/vg/lib/libvg.a ../dep/spimap/src/newick.o
 
+${DEP_FILES}:
+	@echo "error: $@ is missing. Run ../build_deps.sh first (see ../README.md, 'Building vgan from source')." >&2; false
 
-libgabmade:
-
-	# Removing and cloning spimap repository
-	rm -rf ${SPIMAPDIR}
-	git clone --recursive https://github.com/mdrasmus/spimap.git ../dep/spimap/
-	(cd ${SPIMAPDIR} && make -j ${NPROCS}) && touch spimapmade
-
-	# Setting up RPVG directory and downloading its contents
-	mkdir -p ${RPVGDIR}
-	wget -nc -l0 --recursive --no-parent -P ${RPVGDIR} ftp://ftp.healthtech.dtu.dk:/public/rpvg/
-	mv -fv ${RPVGDIR}ftp.healthtech.dtu.dk/public/rpvg/* ${RPVGDIR}
-	rm -rf ${RPVGDIR}ftp.healthtech.dtu.dk && touch rpvgmade
-
-	# Removing and cloning libgab repository
-	rm -rf ../lib/libgab/
-	git clone --recursive https://github.com/grenaud/libgab.git ../lib/libgab/
-	(cd ../lib/libgab/ && make -j ${NPROCS} && make -j ${NPROCS} -C gzstream/) && touch libgabmade
-
-	mkdir ${VGDIR}
-	wget -nc -l0 --recursive --no-parent -P ${VGDIR} ftp://ftp.healthtech.dtu.dk:/public/vg/ && \
-	mv -fv ${VGDIR}ftp.healthtech.dtu.dk/public/vg/* ${VGDIR} && rm -rf ${VGDIR}ftp.healthtech.dtu.dk && touch vgmade
-
-	${MAKE} vgan -j ${NPROCS}
-
-static:	libgabmade rpvgmade spimapmade ${VGAN_PREREQS}
+static:	${DEP_FILES} ${VGAN_PREREQS}
 	${CXX} -o ${BIN_DIR}vgan $(FLAGS_STATIC)
 
-vgan: libgabmade ${VGAN_PREREQS}
+vgan: ${DEP_FILES} ${VGAN_PREREQS}
 	${MAKE} autocomp && ${CXX} ${CLUSTER_FLAGS} -o ${BIN_DIR}vgan ${FLAGS_DYNAMIC} ${CLUSTER_LINKER_FLAGS}
 
 test: ${TEST_PREREQS}
