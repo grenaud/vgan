@@ -88,34 +88,49 @@ You can download in a browser from these links. To download on the command line,
 
 ### Building vgan from source
 
-Please ensure that git is installed on your system.
-You can check by typing "git --version".
+vgan links against vg internals, so the build is more than `make`: it needs libgab, spimap, rpvg (our fork [grenaud/rpvg](https://github.com/grenaud/rpvg), tag `vgan-1`), one exact commit of vg (`6193310e3`,
+v1.75.0-258) and, for TrailMix, the SAFARI binary. `build_deps.sh` fetches and builds all of them and then vgan. Tested on Ubuntu 24.04
+(g++ 13.3) and on a desktop with g++ 15.2.
 
-If you wish to build from source, you will need the build-essential package. If it is not already installed, please run
-
-```
-sudo apt-get install build-essential
-```
-
-You will also need wget. If you do not have it please run
+**1. System packages**
 
 ```
-sudo apt-get install wget
+sudo apt-get install build-essential cmake meson ninja-build pkg-config bc autoconf automake libtool \
+  protobuf-compiler libprotobuf-dev libboost-dev libboost-program-options-dev libjansson-dev libncurses-dev \
+  libbz2-dev liblzma-dev libzstd-dev libssl-dev libffi-dev libbrotli-dev libfontconfig-dev libpng-dev \
+  libraptor2-dev libgsl-dev zlib1g-dev libdw-dev libelf-dev libdeflate-dev nasm curl patch git
 ```
 
-vgan requires vg https://github.com/vgteam/vg. vg requires several packages to be installed; please refer to the README in vg.
+<details><summary>No sudo</summary>
+
+Download the missing `-dev` packages and unpack them into a prefix, and install meson and ninja with pip into the same prefix:
+
+```
+PREFIX=$HOME/local-root; mkdir -p $PREFIX /tmp/debs && cd /tmp/debs
+apt-get download libdw-dev libelf-dev libdeflate-dev nasm
+for f in *.deb; do dpkg -x $f $PREFIX; done
+cd $PREFIX/usr/lib/x86_64-linux-gnu && for l in libdw libelf libdeflate; do ln -sf /usr/lib/x86_64-linux-gnu/$(readlink $l.so) $l.so; done
+python3 -m pip install --prefix $PREFIX meson ninja        # Debian/Ubuntu put the scripts in $PREFIX/local/bin
+
+R=$PREFIX/usr           # put these in the shell that runs build_deps.sh
+export PATH=$R/bin:$PREFIX/local/bin:$PATH
+export PYTHONPATH=$(echo $PREFIX/local/lib/python3*/dist-packages)
+export CPATH=$R/include C_INCLUDE_PATH=$R/include CPLUS_INCLUDE_PATH=$R/include
+export LIBRARY_PATH=$R/lib/x86_64-linux-gnu
+export PKG_CONFIG_PATH=$R/lib/x86_64-linux-gnu/pkgconfig:$R/share/pkgconfig
+```
+</details>
+
+**2. Build** (about 10 minutes for vg with 6 cores, a minute for the rest; the script skips what already exists)
 
 ```
 git clone https://github.com/grenaud/vgan.git
-cd vgan/src && make
+cd vgan && ./build_deps.sh        # JOBS=8 sets the number of parallel jobs; it runs under nice -n 19
 ```
 
-Please be patient, this will take some time.
+The result is `bin/vgan`. After a change to vgan itself, `make -C src vgan` is enough.
 
-If you are building on a WSL subsystem you may receive an error due to VG not building entirely.
-This is likely to be a permissions issue. Please run the above command as a root user. (i.e. `cd vgan/src && sudo make`)
-
-If the build has been successful, the executable will be found in the bin folder.
+**3. Database files** are downloaded separately, see [Database files](#database-files). A quick test: `bin/vgan haplocart -f test/input_files/rCRS.fa`.
 
 If you build from source, you can download the requisite files for HaploCart (from the `src` directory) with
 
