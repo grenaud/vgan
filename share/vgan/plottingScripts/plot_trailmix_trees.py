@@ -11,6 +11,10 @@ Figures (per MCMC chain, plus a copy of the best-mixing chain as "chainBest"):
     {prefix}_chainN_combined.pdf     the tree panel alone, all sources
     {prefix}_chainN_Source_K.pdf     the tree panel for one source
     {prefix}_chainN_proportions.pdf  posterior of the mixture proportions
+    {prefix}_chainN_combined_collapsed.pdf, {prefix}_chainN_figure_collapsed.pdf
+                                     the tree panel / the multi-panel summary with the clades
+                                     that no MCMC iteration landed in collapsed (see below);
+                                     extra files, the figures above are not changed
 and once per run:
     {prefix}_chains.pdf              do the chains agree? (proportions + placements)
     {prefix}_rpvg_*.pdf              RPVG's initial (pre-MCMC) estimate, as an
@@ -28,6 +32,23 @@ source's posterior is drawn ON the branch it landed on:
     * the best-supported tip is set in bold with a color swatch; when the
       best placement is an internal branch its whole clade is shaded;
     * sources sharing a branch are stacked slightly apart so none hides another.
+
+Collapsed tree
+--------------
+The *_collapsed figures are drawn from the same data with a shorter tree. A named lineage
+(Denisovans, Neanderthals, L0-L6, M, N; told from the tip names: M = M, C, D, E, G, Q, Z;
+N = everything else that is not L, i.e. also A, I, O, S, W, X, Y and R with B, F, H/HV, J, K,
+P, T, U, V) is replaced by ONE row, a vertical bar labeled with the lineage and its number of
+tips (e.g. "M haplogroup (10)"), when (1) all its tips form one clade of the drawn tree, (2) it
+has at least two tips and (3) no post-burn-in iteration of this chain placed any source on a
+branch inside that clade. The branch that leads to the clade stays, with any placement on it.
+A lineage that was visited stays expanded as a whole, and so does one that is not a single
+clade in the drawn tree (L3; N in the unrerooted database tree). Positions, branch lengths and
+scale are those of the full tree.
+    --no-collapsed         do not write the collapsed figures
+    --collapse-groups L    comma list of the lineages that may be collapsed (default: all of
+                           Denisovans,Neanderthals,L0,L1,L2,L3,L4,L5,L6,M,N)
+    --collapse-min-tips K  smallest clade that is collapsed (default 2)
 
 Usage
 -----
@@ -278,7 +299,7 @@ def save_fig(fig, path, png=False):
 
 class Node:
     """Light tree node (so pruning/collapsing never fights Biopython)."""
-    __slots__ = ("name", "length", "children", "parent", "x", "y", "broken")
+    __slots__ = ("name", "length", "children", "parent", "x", "y", "broken", "collapsed")
 
     def __init__(self, name=None, length=0.0):
         self.name = name.strip() if isinstance(name, str) and name.strip() else None
@@ -288,6 +309,7 @@ class Node:
         self.x = 0.0
         self.y = 0.0
         self.broken = False
+        self.collapsed = None          # (lineage, number of tips) on the tip that stands for a collapsed clade
 
     @property
     def is_tip(self):
@@ -742,6 +764,138 @@ def ci(v, lo=2.5, hi=97.5):
 
 
 # --------------------------------------------------------------------------- #
+#  Collapsed tree
+# --------------------------------------------------------------------------- #
+# A second, shorter version of the tree for figures in which most of the phylogeny is not involved: a clade of one
+# named lineage that no MCMC iteration landed in is replaced by ONE row (a vertical bar, labeled with the lineage and
+# its number of tips). The full tree is never changed; the collapsed one is drawn as extra files.
+
+COLLAPSE_GROUPS = ("Denisovans", "Neanderthals", "L0", "L1", "L2", "L3", "L4", "L5", "L6", "M", "N")
+_GROUP_TITLE = {"Denisovans": "Denisovans", "Neanderthals": "Neanderthals"}     # the others: "<name> haplogroup"
+_M_LETTERS = frozenset("MCDEGQZ")                   # M and the haplogroups below it: C, D, E, G, Q, Z (CZ)
+_N_LETTERS = frozenset("ABFHIJKNOPRSTUVWXY")        # N and everything below it: A, I, O, S, W, X, Y and R (B, F, HV, H, J, K, P, R, T, U, V)
+
+
+def tip_group(name):
+    """Named lineage of a tip, from its haplogroup name; None when it is none of COLLAPSE_GROUPS."""
+    if not name:
+        return None
+    if name.startswith("Denisova"):
+        return "Denisovans"
+    if name.startswith("Neanderthal"):
+        return "Neanderthals"
+    m = re.match(r"L([0-6])", name)
+    if m:
+        return "L" + m.group(1)
+    c = name[0].upper()
+    if c in _M_LETTERS:
+        return "M"
+    if c in _N_LETTERS:
+        return "N"
+    return None
+
+
+def collapse_label(group, n):
+    return f"{_GROUP_TITLE.get(group, f'{group} haplogroup')} ({n})"
+
+
+def find_collapsible(lay, posts, groups=COLLAPSE_GROUPS, min_tips=2):
+    """The lineages of `groups` that can be collapsed in the drawn tree: ALL tips of the lineage form one clade (the
+    lineage is monophyletic in this tree), it has at least `min_tips` tips, and no iteration of any source landed on a
+    branch inside that clade (the branch that leads to the clade is not inside it and stays drawn). A lineage that was
+    visited, or that is not one clade (L3, or N in a rooting that splits it), stays expanded as a whole.
+    Returns ({id(node): (node, lineage, number of tips)}, [lineages that are not one clade in this tree])."""
+    mass = set()                                    # display nodes whose parent branch carries posterior mass
+    for sp in posts:
+        for b in sp.branches:
+            if b.mapped and b.p > 0:
+                for sg in lay.edge_map.get(b.name, ()):
+                    mass.add(id(sg[2]))
+    root = lay.root
+    ts = tip_sets(root)
+    inner = {}                                      # posterior mass strictly inside the clade (branches of its descendants)
+    for n in root.postorder():
+        inner[id(n)] = (not n.is_tip) and any(id(c) in mass or inner[id(c)] for c in n.children)
+    by_set = {}
+    for n in root.preorder():
+        if not n.is_tip and n is not root:
+            by_set.setdefault(ts[n], n)
+    members = {}
+    for t in root.tips():
+        members.setdefault(tip_group(t.name), set()).add(t.name)
+    found, split = {}, []
+    for g in groups:
+        tips = frozenset(members.get(g, ()))
+        if len(tips) < max(min_tips, 2):
+            continue
+        n = by_set.get(tips)
+        if n is None:
+            split.append(g)
+        elif not inner[id(n)]:
+            found[id(n)] = (n, g, len(tips))
+    return found, split
+
+
+def build_collapsed_layout(lay, posts, groups=COLLAPSE_GROUPS, min_tips=2):
+    """Layout of the same tree with every clade from find_collapsible() replaced by one tip (Node.collapsed is set on
+    it). x positions, truncation marks and scale come from `lay`: a collapsed clade ends in a bar at the mean x of its
+    tips, and a placement on the branch that leads to it stays exactly where it was. `lay` is not modified. Returns
+    None when nothing can be collapsed."""
+    found, split = find_collapsible(lay, posts, groups, min_tips)
+    if split:
+        print("  Not one clade in the drawn tree (kept expanded): " + ", ".join(split))
+    if not found:
+        return None
+    mapping = {}                                    # id(original node) -> its copy in the collapsed tree
+
+    def clone(n, parent):
+        if id(n) in found:
+            _, g, cnt = found[id(n)]
+            c = Node(collapse_label(g, cnt), n.length)
+            c.x = float(np.mean([t.x for t in n.tips()]))
+            c.collapsed = (g, cnt)
+        else:
+            c = Node(n.name, n.length)
+            c.x = n.x
+        c.parent, c.broken = parent, n.broken
+        mapping[id(n)] = c
+        if id(n) not in found:
+            c.children = [clone(k, c) for k in n.children]
+        return c
+
+    root = clone(lay.root, None)
+    em = {}
+    for name, segs in lay.edge_map.items():
+        new = []
+        for (t0, t1, node, a0, a1) in segs:
+            c = mapping.get(id(node))
+            if c is None:                           # inside a collapsed clade: no posterior mass there by construction
+                continue
+            if id(node) in found:                   # the branch now ends at the bar; keep each position where it was
+                full, stem = c.x - node.parent.x, node.x - node.parent.x
+                s = stem / full if full > 0 else 1.0
+                a0, a1 = a0 * s, a1 * s
+            new.append((t0, t1, c, a0, a1))
+        if new:
+            em[name] = new
+    tips = root.tips()
+    for i, t in enumerate(tips):
+        t.y = float(i)
+    for n in root.postorder():
+        if not n.is_tip:
+            n.y = 0.5 * (n.children[0].y + n.children[-1].y)
+    nodes = list(root.preorder())
+    by_name = {n.name: n for n in nodes if n.name}
+    n_broken = sum(1 for n in nodes if n.broken and n.parent is not None)
+    return Layout(root, tips, nodes, by_name, em, lay.clade_tips, lay.mode, lay.xmax, lay.cap, n_broken)
+
+
+def collapse_note(lay_c):
+    """Footer text that explains the bars."""
+    return "bar = collapsed clade (no iteration landed inside)" if any(t.collapsed for t in lay_c.tips) else ""
+
+
+# --------------------------------------------------------------------------- #
 #  The tree panel
 # --------------------------------------------------------------------------- #
 
@@ -801,6 +955,12 @@ def draw_tree_skeleton(g, internal_labels=False):
     ax.add_collection(LineCollection(segs, colors=TREE_INK, linewidths=0.55,
                                      capstyle="butt", joinstyle="miter", zorder=2))
 
+    # collapsed clades (only in the *_collapsed figures): a vertical bar closes the branch, the label names the clade
+    for t in lay.tips:
+        if t.collapsed:
+            ax.plot([t.x, t.x], [t.y - 0.40, t.y + 0.40], color=TREE_INK, lw=1.6,
+                    solid_capstyle="butt", zorder=3)
+
     # // marks on truncated long branches
     for n in lay.nodes:
         if n.broken and n.parent is not None:
@@ -838,7 +998,7 @@ def draw_tip_labels(g, hilite):
                                    facecolor=c, edgecolor="none", zorder=4))
         ax.text(x, t.y, t.name, fontsize=FS_TIP, va="center", ha="left",
                 color=INK if c else INK_2, fontweight="bold" if c else "normal",
-                zorder=5)
+                fontstyle="italic" if t.collapsed else "normal", zorder=5)
 
 
 def nice_bar(target):
@@ -1848,6 +2008,26 @@ def run_single_chain(lay, mcmc_path, out_prefix, chain_label, opts, summary=None
                       png=opts.png, chain_data=chain_data, best_idx=best_idx)
     if p:
         out["figure"] = p
+    # Extra files: the same two figures with the clades that no iteration landed in collapsed. The figures above are
+    # drawn first and are not affected.
+    if getattr(opts, "collapsed", True):
+        lay_c = build_collapsed_layout(lay, posts, getattr(opts, "collapse_groups", None) or COLLAPSE_GROUPS,
+                                       getattr(opts, "collapse_min_tips", 2))
+        if lay_c is None:
+            print("  Nothing to collapse: every lineage was visited, or no clade is large enough.")
+        else:
+            note = collapse_note(lay_c)
+            meta_c = (meta + "  ·  " + note) if meta else note
+            print(f"  Collapsed tree: {len(lay.tips)} -> {len(lay_c.tips)} rows")
+            p = fig_tree(lay_c, posts, f"{out_prefix}_combined_collapsed.pdf", meta=meta_c, pitch_mm=opts.pitch_mm,
+                         internal=opts.intern, min_prob=opts.min_prob, png=opts.png)
+            if p:
+                out["combined_collapsed"] = p
+            p = fig_composite(lay_c, posts, mcmc, f"{out_prefix}_figure_collapsed.pdf", meta=meta_c,
+                              pitch_mm=opts.pitch_mm, internal=opts.intern, min_prob=opts.min_prob,
+                              png=opts.png, chain_data=chain_data, best_idx=best_idx)
+            if p:
+                out["figure_collapsed"] = p
     return out, posts, mcmc
 
 
@@ -1933,7 +2113,20 @@ def main():
     ap.add_argument("--best-only", action="store_true",
                     help="only draw the best chain (as chainBest) plus the chain comparison; "
                          "skips the per-chain figures")
+    ap.add_argument("--no-collapsed", dest="collapsed", action="store_false",
+                    help="do not write the *_collapsed figures (tree with the clades no iteration landed in collapsed)")
+    ap.add_argument("--collapse-groups", metavar="LIST",
+                    help="comma list of the lineages that may be collapsed (default: " + ",".join(COLLAPSE_GROUPS) + ")")
+    ap.add_argument("--collapse-min-tips", type=int, default=2, metavar="K",
+                    help="smallest clade that is collapsed (default 2)")
     opts = ap.parse_args()
+    if opts.collapse_groups:
+        canon = {g.lower(): g for g in COLLAPSE_GROUPS}
+        asked = [x.strip() for x in opts.collapse_groups.split(",") if x.strip()]
+        bad = [x for x in asked if x.lower() not in canon]
+        if bad:
+            sys.exit(f"Error: --collapse-groups: unknown lineage {', '.join(bad)}; choose from {', '.join(COLLAPSE_GROUPS)}")
+        opts.collapse_groups = tuple(canon[x.lower()] for x in asked)
 
     setup_style()
     global ANNOTATE, DB_LABEL
