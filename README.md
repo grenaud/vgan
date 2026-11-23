@@ -32,7 +32,7 @@ The easiest way to run vgan is the static binary of a [release](https://github.c
 
 ```
 mkdir -p $HOME/bin
-curl -L -o $HOME/bin/vgan https://github.com/grenaud/vgan/releases/download/v4.0.0/vgan-linux-x86_64
+curl -L -o $HOME/bin/vgan https://github.com/grenaud/vgan/releases/download/v4.0.1/vgan-linux-x86_64
 chmod +x $HOME/bin/vgan
 ```
 
@@ -45,7 +45,7 @@ export PATH=$HOME/bin:$PATH
 vgan version
 ```
 
-This should print the version (`vgan v4.0.0`) and nothing else. If you get `Permission denied`, the `chmod` was skipped, or the folder is on a file system mounted `noexec` (use another folder, for example one in `/opt` or `/scratch`). `cannot execute binary file: Exec format error` means the machine is not x86_64. An output of a few bytes or an error that mentions HTML means the download did not follow the redirect.
+This should print the version (`vgan v4.0.1`) and nothing else. If you get `Permission denied`, the `chmod` was skipped, or the folder is on a file system mounted `noexec` (use another folder, for example one in `/opt` or `/scratch`). `cannot execute binary file: Exec format error` means the machine is not x86_64. An output of a few bytes or an error that mentions HTML means the download did not follow the redirect.
 
 **Step 3**: Create the vgan folder structure:
 
