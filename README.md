@@ -101,7 +101,7 @@ ls publication_tmfiles
 
 You can also download in a browser from the links in the table, and `gdown [file id]` (`pip install gdown`) works as well. The `.tar.gz` can be deleted after unpacking. If `tar` says `not in gzip format`, Google returned a web page instead of the file (the file has been downloaded too often in the last 24 hours, or it is not shared): download it in a browser and copy it over, or use `gdown`.
 
-**Disk space.** Unpacked, the folders take 8.9 GB (`euka_dir`, 6.9 GB of it is the distance index), 0.3 GB (`hcfiles`), 1.5 GB (`soibean_dir`), 1.7 GB (`tmfiles`) and 13 MB (`publication_tmfiles`); the archives are smaller. Leave room for the archive as well, until you delete it. TrailMix also writes temporary files to `/tmp/` (or the folder given with `-z`).
+**Disk space.** Unpacked, the folders take 8.9 GB (`euka_dir`, 6.9 GB of it is the distance index), 0.3 GB (`hcfiles`), 1.5 GB (`soibean_dir`), 1.7 GB (`tmfiles`) and 13 MB (`publication_tmfiles`); the archives are smaller. Leave room for the archive as well, until you delete it. While it runs, TrailMix writes temporary files (the mapped reads as a GAM stream and RPVG's raw output) into a folder next to its results, `<output prefix>tmp_XXXXXXX/`; it is removed when the run finishes, so leave room for it on the file system of your output folder.
 
 **Permissions.** Unpack the databases into a folder that you own and can write to. Two things need write access, and a read-only copy fails without a helpful message:
 * TrailMix opens the distance index of its database (`pub.graph.dist`, `graph.dist`) for writing, although it does not change the contents. Without write permission on that file the mapper stops with a bare `Permission denied` and TrailMix reports `no reads found in GAM file`. Euka has the same requirement for `euka_db.dist`.
@@ -772,7 +772,7 @@ This runs TrailMix on a small test mixture and plots the result. It needs the vg
 ```
 pip install numpy pandas biopython matplotlib scipy     # for the plot; any Python 3 will do
 
-mkdir -p $HOME/trailmix_test/out && cd $HOME/trailmix_test
+mkdir -p $HOME/trailmix_test && cd $HOME/trailmix_test
 curl -L -o chagyrskaya8_mix_50_c4.fq.gz     "https://drive.usercontent.google.com/download?id=1vuIsxVg89i6ZhH9lQODmY0QxP1N4dVxn&export=download&confirm=t"
 curl -L -o chagyrskaya8_mix_50_c4_5p.prof   "https://drive.usercontent.google.com/download?id=1wqlIht6WqIMSaXM_yGCi21oftOVnvZ8o&export=download&confirm=t"
 curl -L -o chagyrskaya8_mix_50_c4_3p.prof   "https://drive.usercontent.google.com/download?id=17_BeeQ2aBnR5RiK7XwH2hKmjvh6G6gVW&export=download&confirm=t"
@@ -784,7 +784,7 @@ vgan trailmix -t 4 -fq1 chagyrskaya8_mix_50_c4.fq.gz -k 2 --chains 4 --iter 2000
 python3 $HOME/share/vgan/plottingScripts/plot_trailmix_trees.py out/qs_ --png --best-only
 ```
 
-What the options mean: `-k 2` looks for two sources (contributors) in the mixture; `--chains 4 --iter 20000` runs four independent MCMC chains of 20,000 iterations, so that they can be compared; `--deam5p/--deam3p` give the deamination (damage) profiles of the 5' and 3' ends of the reads, without them TrailMix assumes no damage; `--tm-files` and `--dbprefix` select the publication database (without them, the default `tmfiles` database is used); `-o out/qs_` is a file name prefix, and the folder `out/` must exist. For a real sample use more iterations and chains, for example `--chains 5 --iter 100000`. The log ends with `[TrailMix] Wrote run summary`, and `out/` then holds the files described in [TrailMix output files](#trailmix-output-files). The plot script needs about 20 seconds and writes a PDF and (with `--png`) a PNG for every figure, using only the best-mixing chain with `--best-only`.
+What the options mean: `-k 2` looks for two sources (contributors) in the mixture; `--chains 4 --iter 20000` runs four independent MCMC chains of 20,000 iterations, so that they can be compared; `--deam5p/--deam3p` give the deamination (damage) profiles of the 5' and 3' ends of the reads, without them TrailMix assumes no damage; `--tm-files` and `--dbprefix` select the publication database (without them, the default `tmfiles` database is used); `-o out/qs_` is a file name prefix (the folder `out/` is created if it does not exist). For a real sample use more iterations and chains, for example `--chains 5 --iter 100000`. The log ends with `[TrailMix] Wrote run summary`, and `out/` then holds the files described in [TrailMix output files](#trailmix-output-files). The plot script needs about 20 seconds and writes a PDF and (with `--png`) a PNG for every figure, using only the best-mixing chain with `--best-only`.
 
 **Interpretation.** The numbers below are from one run; yours differ in the second digit, because the chains use random numbers.
 
@@ -836,7 +836,8 @@ Algorithm parameters:
         -fq2 [STR]              FASTQ second input file (for paired-end reads)
         -g [STR]                GAM input file
         -k                      Number of distinct contributing haplogroups
-        -o [STR]                Output file prefix, not a folder; the folder it points into must exist (default: TM_out)
+        -o [STR]                Output file prefix, not a folder; the folder it points into is created if needed (default: TM_out).
+                                Temporary files go to <prefix>tmp_XXXXXXX/ and are removed when the run finishes.
         --depth [INT]           Tree depth to whitelist the MCMC search space (-1 for no restriction)
 
 Non-algorithm parameters:
@@ -844,7 +845,6 @@ Non-algorithm parameters:
         --tm-files [STR]        TrailMix file directory (default: "../share/vgan/tmfiles/")
         -t                      Number of threads
         -v                      Verbose mode
-        -z                      Temporary directory (default: /tmp/)
 
 Damage options:
         --deam5p [STR]          5' deamination profile (default: share/vgan/damageProfiles/none.prof, no damage)

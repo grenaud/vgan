@@ -38,7 +38,7 @@ Subcommands need their reference database dir:
 ./bin/vgan soibean   --soibean_dir share/vgan/soibean_dir/ ...
 ./bin/vgan trailmix  -t 4 -fq1 reads.fq.gz -k 2 --chains 5 --iter 100000 --depth 10 \
     --tm-files <db_dir>/ --dbprefix pub.graph --deam5p x_5p.prof --deam3p x_3p.prof \
-    -z <tmpdir> -o <out_prefix>          # -k = number of sources; -o is a filename PREFIX
+    -o <out_prefix>          # -k = number of sources; -o is a filename PREFIX (temp files: <prefix>tmp_XXXXXXX/, removed after the run)
 ```
 Test inputs live in `test/input_files/` (e.g. `rCRS.fa` → expected haplogroup `H2a2a1`; `euka/*.fq.gz`; `soibean/*.fq.gz`).
 

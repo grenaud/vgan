@@ -400,14 +400,13 @@ std::string Trailmix::usage() const {
           << "\t-fq2 [STR]\t\t\t     FASTQ second input file (for paired-end reads)\n"
           << "\t-g [STR]\t\t\t     GAM input file\n"
           << "\t-k\t\t\t\t     Number of distinct contributing haplogroups\n"
-          << "\t-o [STR]\t\t\t     Output file PREFIX; results are written to <PREFIX>Result<k>_chain<N>.mcmc.gz, <PREFIX>summary.txt, ... (default: TM_out)\n"
+          << "\t-o [STR]\t\t\t     Output file PREFIX; results are written to <PREFIX>Result<k>_chain<N>.mcmc.gz, <PREFIX>summary.txt, ... (default: TM_out). The folder is created if it does not exist. Temporary files go to <PREFIX>tmp_XXXXXXX/ and are removed when the run finishes\n"
           << "\t--depth [INT]\t\t\t     Tree depth to whitelist the MCMC search space (-1 for no restriction)\n"
           << "Non-algorithm parameters:\n"
           << "\t--dbprefix <prefix>\t\t     Specify the prefix for the database files\n"
           << "\t--tm-files [STR]\t\t      Specify the TrailMix file directory (default: \"../share/vgan/tmfiles/\") \n"
           << "\t-t\t\t\t\t     Number of threads\n"
           << "\t-v\t\t\t\t     Verbose mode\n"
-          << "\t-z\t\t\t\t     Temporary directory (default: /tmp/)\n"
           << "Markov chain Monte Carlo options:\n"
           << "  \t--chains [INT]\t\t             Define the number of chains for the MCMC (default: 1)\n"
           << "  \t--iter [INT]\t\t             Define the number of iterations for the MCMC (default: 10.000)\n"
@@ -488,7 +487,6 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     bool debug=false;
     string gamfilename, samplename, fastafilename, fastq1filename, fastq2filename, posteriorfilename;
     string TM_outputfilename = "TM_out";
-    string tmpdir = "/tmp/";
     // NOT resolved via getFullPath() here on purpose: getFullPath() exit(1)s
     // if the path doesn't exist, and this default is only ever actually
     // used when --tm-files is NOT given (see the deferred resolution right
@@ -591,15 +589,10 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
                                  }
 
         if(string(argv[i]) == "-z"){
-            // getFullPath() calls realpath() and exit(1)s if the path
-            // doesn't already exist -- create it first (mkdir -p style) so
-            // a not-yet-existing -z directory is set up instead of being a
-            // hard failure.
-            if (!fs::exists(argv[i+1])) {
-                fs::create_directories(argv[i+1]);
-            }
-            tmpdir = getFullPath(argv[i+1]);
-            //if (tmpdir.back() != '/') {tmpdir += '/';}
+            // Removed option: the temporary directory is now derived from the -o prefix. Still accepted (and its
+            // value skipped) so that existing command lines keep working.
+            cerr << "[TrailMix] Warning: -z is no longer used and is ignored. Temporary files are written to <output prefix>tmp_XXXXXXX/ and removed at the end of the run." << endl;
+            i++;
             continue;
                                }
 
@@ -725,11 +718,20 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
     dta->fastq2filename=fastq2filename;
     dta->randStart = randStart;
     dta->none_prof=none_prof;
-    dta->tmpdir = tmpdir + "vgan_" + random_string(7) + "/";
-    dta->rpvg_gamfilename = dta->tmpdir + random_string(7);
-    if (!fs::is_directory(dta->tmpdir) || !fs::exists(dta->tmpdir)) {
-      std::filesystem::create_directory(dta->tmpdir);
+    // Temporary files (FIFOs, the GAM stream, RPVG's raw output, sanitized damage profiles) live in a folder next to the
+    // outputs, named from the -o prefix; it is removed after a successful run (kept when the run fails, for debugging).
+    // create_directories also creates the folder that the -o prefix points into.
+    {
+        const string tmp_rel = TM_outputfilename + "tmp_" + random_string(7);
+        std::error_code ec;
+        fs::create_directories(tmp_rel, ec);
+        if (ec || !fs::is_directory(tmp_rel)) {
+            throw runtime_error("[TrailMix] Cannot create the temporary folder " + tmp_rel + " (derived from -o " + TM_outputfilename + "): " + ec.message());
+        }
+        dta->tmpdir = fs::absolute(tmp_rel).string() + "/";
     }
+    dta->rpvg_gamfilename = dta->tmpdir + random_string(7);
+    cerr << "[TrailMix] Temporary files: " << dta->tmpdir << " (removed when the run finishes)" << endl;
     dta->gamfilename=gamfilename;
     dta->TM_outputfilename=TM_outputfilename;
     dta->n_threads=n_threads;
@@ -774,6 +776,13 @@ for (int Q=0; Q!=100; ++Q) {
                            }
 
     Trailmix::run_mcmc(dta);
+
+    // run_mcmc returned normally: everything that matters has been written next to the -o prefix.
+    {
+        std::error_code ec;
+        fs::remove_all(dta->tmpdir, ec);
+        if (ec) { cerr << "[TrailMix] Warning: could not remove the temporary folder " << dta->tmpdir << ": " << ec.message() << endl; }
+    }
 
 /*
     // Check the validity of the paths in dta->path_node_map
