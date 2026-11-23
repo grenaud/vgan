@@ -845,6 +845,7 @@ Non-algorithm parameters:
         --tm-files [STR]        TrailMix file directory (default: "../share/vgan/tmfiles/")
         -t                      Number of threads
         -v                      Verbose mode
+        --keep-gam              Keep the mapped reads as <prefix>reads.gam (default: deleted with the temporary files)
 
 Damage options:
         --deam5p [STR]          5' deamination profile (default: share/vgan/damageProfiles/none.prof, no damage)

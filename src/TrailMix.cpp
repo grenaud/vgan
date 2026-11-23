@@ -407,6 +407,7 @@ std::string Trailmix::usage() const {
           << "\t--tm-files [STR]\t\t      Specify the TrailMix file directory (default: \"../share/vgan/tmfiles/\") \n"
           << "\t-t\t\t\t\t     Number of threads\n"
           << "\t-v\t\t\t\t     Verbose mode\n"
+          << "\t--keep-gam\t\t\t     Keep the mapped reads as <PREFIX>reads.gam (default: deleted with the temporary files)\n"
           << "Markov chain Monte Carlo options:\n"
           << "  \t--chains [INT]\t\t             Define the number of chains for the MCMC (default: 1)\n"
           << "  \t--iter [INT]\t\t             Define the number of iterations for the MCMC (default: 10.000)\n"
@@ -485,6 +486,7 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
 
     bool verbose = true;
     bool debug=false;
+    bool keepGam=false;
     string gamfilename, samplename, fastafilename, fastq1filename, fastq2filename, posteriorfilename;
     string TM_outputfilename = "TM_out";
     // NOT resolved via getFullPath() here on purpose: getFullPath() exit(1)s
@@ -593,6 +595,11 @@ const int Trailmix::run(int argc, char *argv[], const string & cwdProg){
             // value skipped) so that existing command lines keep working.
             cerr << "[TrailMix] Warning: -z is no longer used and is ignored. Temporary files are written to <output prefix>tmp_XXXXXXX/ and removed at the end of the run." << endl;
             i++;
+            continue;
+                               }
+
+    if(string(argv[i]) == "--keep-gam"){
+            keepGam=true;
             continue;
                                }
 
@@ -780,6 +787,13 @@ for (int Q=0; Q!=100; ++Q) {
     // run_mcmc returned normally: everything that matters has been written next to the -o prefix.
     {
         std::error_code ec;
+        if (keepGam) {
+            const string gam_out = TM_outputfilename + "reads.gam";
+            fs::rename(dta->rpvg_gamfilename, gam_out, ec);
+            if (ec) { cerr << "[TrailMix] Warning: could not keep the GAM file as " << gam_out << ": " << ec.message() << endl; }
+            else    { cerr << "[TrailMix] Mapped reads kept in " << gam_out << endl; }
+            ec.clear();
+        }
         fs::remove_all(dta->tmpdir, ec);
         if (ec) { cerr << "[TrailMix] Warning: could not remove the temporary folder " << dta->tmpdir << ": " << ec.message() << endl; }
     }
