@@ -105,7 +105,13 @@ You can also download in a browser from the links in the table, and `gdown [file
 
 **Permissions.** Unpack the databases into a folder that you own and can write to. Two things need write access, and a read-only copy fails without a helpful message:
 * TrailMix opens the distance index of its database (`pub.graph.dist`, `graph.dist`) for writing, although it does not change the contents. Without write permission on that file the mapper stops with a bare `Permission denied` and TrailMix reports `no reads found in GAM file`. Euka has the same requirement for `euka_db.dist`.
-* On first use, HaploCart, euka and soibean write two cache files (`*.shortread.withzip.min` and `*.shortread.zipcodes`) next to the graph in the database folder. If the folder is not writable, the run aborts. The files are created once, so the first run takes longer (HaploCart: about 15 seconds more); later runs only read them.
+* On first use, HaploCart, euka and soibean write two cache files (`*.shortread.withzip.min` and `*.shortread.zipcodes`) next to the graph in the database folder. If the folder is not writable, the run aborts. The first run takes longer (HaploCart: about 15 seconds more). **Known issue:** a later run that finds these cache files crashes (HaploCart: `Caught signal 6` or `11`, or it hangs; tested with the release binary and with a source build). It is a bug of the vg giraffe version vgan uses. Until it is fixed, delete the cache files before every run; they are rebuilt each time:
+
+```
+rm -f $HOME/share/vgan/hcfiles/*.shortread.withzip.min $HOME/share/vgan/hcfiles/*.shortread.zipcodes
+```
+
+(use the folder of the database you run: `euka_dir`, `soibean_dir`, or the one given with `--hc-files`). TrailMix is not affected; it maps with SAFARI. I tested the workaround only for HaploCart.
 
 If you unpacked the archive as another user (for example as root) or you share one copy between users:
 
