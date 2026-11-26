@@ -1,5 +1,10 @@
-[![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?styl=flat)](http://bioconda.github.io/recipes/vgan/README.html)
 # vgan
+
+[![GitHub release](https://img.shields.io/github/v/release/grenaud/vgan)](https://github.com/grenaud/vgan/releases/latest)
+[![install with bioconda](https://img.shields.io/conda/vn/bioconda/vgan.svg?label=bioconda&color=brightgreen)](https://bioconda.github.io/recipes/vgan/README.html)
+[![Bioconda downloads](https://img.shields.io/conda/dn/bioconda/vgan.svg?label=bioconda%20downloads)](https://anaconda.org/bioconda/vgan)
+[![License](https://img.shields.io/github/license/grenaud/vgan)](LICENSE)
+[![How to cite](https://img.shields.io/badge/how%20to-cite-blue.svg)](#how-to-cite)
 
 vgan is a suite of tools for pangenomics. We currently support four main subcommands: [HaploCart](#haplocart) (for modern human mtDNA haplogroup classification), [euka](#euka) (for bilaterian taxa detection and abundance estimation of ancient environmental DNA), [soibean](#soibean) (for species identification and multiple source estimation of filtered bilateria data from ancient environmental DNA) and [TrailMix](#trailmix) (for the deconvolution and phylogenetic placement of hominin sedaDNA mixtures). The underlying data structure is the VG graph (see https://github.com/vgteam/vg).
 
@@ -14,7 +19,8 @@ vgan is a suite of tools for pangenomics. We currently support four main subcomm
 5. [TrailMix](#trailmix)
 6. [aeDNA example workflow](#aedna-example-workflow)
 7. [Unit tests](#unit-tests)
-8. [Support](#support)
+8. [How to cite](#how-to-cite)
+9. [Support](#support)
 
 ---
 
@@ -278,7 +284,7 @@ For paired-end FASTQ (gzipped okay):
 vgan euka -fq1 [FASTQ file] -fq2 [FASTQ file]
 ```
 
-euka can take different minimizer files for mapping, which increase/decrease sensitivity and specificity (for a detailed explanation, please see [SAFARI, Rubin, Joshua, et al.](https://doi.org/10.1101/2024.08.12.607489)).
+euka can take different minimizer files for mapping, which increase/decrease sensitivity and specificity (for a detailed explanation, please see [SAFARI, Rubin, Joshua, et al.](https://doi.org/10.1093/nargab/lqaf170)).
 We generally recommend the ```euka_db.rec.min``` minimizer file, which provides the best ratio of sensitivity and specificity. With very noisy datasets, we recommend the ```euka_db.con.min``` minimizer file, which is more specific, but less sensitive. The ```euka_db.sen.min``` file is very sensitive, but can be very unspecific:
 
 ```
@@ -970,6 +976,85 @@ or
 
 ```
 ../bin/test --run_test=Soibean
+```
+
+---
+
+## How to cite
+
+Please cite the paper for each subcommand that you use. TrailMix maps reads with SAFARI, so cite SAFARI along with it, and cite SAFARI whenever you use it as your mapper.
+
+| If you use | Please cite |
+|---|---|
+| HaploCart | Rubin JD, Vogel NA, Gopalakrishnan S, Sackett PW, Renaud G. *PLOS Computational Biology* 2023;19(6):e1011148. [doi:10.1371/journal.pcbi.1011148](https://doi.org/10.1371/journal.pcbi.1011148) |
+| euka | Vogel NA, Rubin JD, Swartz M, Vlieghe J, Sackett PW, Pedersen AG, Pedersen MW, Renaud G. *Methods in Ecology and Evolution* 2023;14(11):2717–2727. [doi:10.1111/2041-210X.14214](https://doi.org/10.1111/2041-210X.14214) |
+| soibean | Vogel NA, Rubin JD, Pedersen AG, Sackett PW, Pedersen MW, Renaud G. *Molecular Biology and Evolution* 2024;41(10):msae203. [doi:10.1093/molbev/msae203](https://doi.org/10.1093/molbev/msae203) |
+| TrailMix | Boucher J, Vogel NA, Slon V, Sackett PW, Zavala EI, Renaud G. *bioRxiv* 2026 (preprint). [doi:10.64898/2026.11.21.768339](https://doi.org/10.64898/2026.11.21.768339) |
+| SAFARI | Rubin J, van Waaij J, Kraft L, Sirén J, Sackett PW, Renaud G. *NAR Genomics and Bioinformatics* 2025;7(4):lqaf170. [doi:10.1093/nargab/lqaf170](https://doi.org/10.1093/nargab/lqaf170) |
+
+BibTeX:
+
+```bibtex
+@article{Rubin2023HaploCart,
+  author    = {Rubin, Joshua Daniel and Vogel, Nicola Alexandra and Gopalakrishnan, Shyam and Sackett, Peter Wad and Renaud, Gabriel},
+  title     = {{{HaploCart}: Human {mtDNA} haplogroup classification using a pangenomic reference graph}},
+  journal   = {PLOS Computational Biology},
+  year      = {2023},
+  volume    = {19},
+  number    = {6},
+  pages     = {e1011148},
+  publisher = {Public Library of Science},
+  doi       = {10.1371/journal.pcbi.1011148},
+  url       = {https://doi.org/10.1371/journal.pcbi.1011148}
+}
+
+@article{Vogel2023euka,
+  author    = {Vogel, Nicola Alexandra and Rubin, Joshua Daniel and Swartz, Mikkel and Vlieghe, Juliette and Sackett, Peter Wad and Pedersen, Anders Gorm and Pedersen, Mikkel Winther and Renaud, Gabriel},
+  title     = {{{euka}: Robust tetrapodic and arthropodic taxa detection from modern and ancient environmental {DNA} using pangenomic reference graphs}},
+  journal   = {Methods in Ecology and Evolution},
+  year      = {2023},
+  volume    = {14},
+  number    = {11},
+  pages     = {2717--2727},
+  publisher = {Wiley},
+  doi       = {10.1111/2041-210X.14214},
+  url       = {https://doi.org/10.1111/2041-210X.14214}
+}
+
+@article{Vogel2024soibean,
+  author    = {Vogel, Nicola Alexandra and Rubin, Joshua Daniel and Pedersen, Anders Gorm and Sackett, Peter Wad and Pedersen, Mikkel Winther and Renaud, Gabriel},
+  title     = {{{soibean}: High-Resolution Taxonomic Identification of Ancient Environmental {DNA} Using Mitochondrial Pangenome Graphs}},
+  journal   = {Molecular Biology and Evolution},
+  year      = {2024},
+  volume    = {41},
+  number    = {10},
+  pages     = {msae203},
+  publisher = {Oxford University Press},
+  doi       = {10.1093/molbev/msae203},
+  url       = {https://doi.org/10.1093/molbev/msae203}
+}
+
+@article{Boucher2026TrailMix,
+  author    = {Boucher, Jolan and Vogel, Nicola Alexandra and Slon, Viviane and Sackett, Peter Wad and Zavala, Elena Irene and Renaud, Gabriel},
+  title     = {{{TrailMix}: Mixture Proportion and Placement Estimation of Ancient Hominin {mtDNA} Samples using a Pangenomic Reference}},
+  journal   = {bioRxiv},
+  year      = {2026},
+  doi       = {10.64898/2026.11.21.768339},
+  url       = {https://doi.org/10.64898/2026.11.21.768339}
+}
+
+@article{Rubin2025SAFARI,
+  author    = {Rubin, Joshua and van Waaij, Jan and Kraft, Louis and Sir{\'e}n, Jouni and Sackett, Peter Wad and Renaud, Gabriel},
+  title     = {{{SAFARI}: pangenome alignment of ancient {DNA} using purine/pyrimidine encodings}},
+  journal   = {NAR Genomics and Bioinformatics},
+  year      = {2025},
+  volume    = {7},
+  number    = {4},
+  pages     = {lqaf170},
+  publisher = {Oxford University Press},
+  doi       = {10.1093/nargab/lqaf170},
+  url       = {https://doi.org/10.1093/nargab/lqaf170}
+}
 ```
 
 ---
